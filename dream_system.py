@@ -430,11 +430,22 @@ Respond in JSON:
                     v1 = str(m1.get("value", ""))[:200]
                     v2 = str(m2.get("value", ""))[:200]
 
-                    # Check for high overlap
-                    if self._simple_similarity(v1, v2) > self.config.compression_similarity_threshold:
+                    # Check for high overlap using cached similarity
+                    similarity = self._get_cached_similarity(m1["key"], m2["key"], v1, v2)
+                    if similarity > self.config.compression_similarity_threshold:
                         redundant.append((m1["key"], m2["key"]))
 
         return redundant[:20]  # Limit results
+
+    def _get_cached_similarity(self, key1: str, key2: str, v1: str, v2: str) -> float:
+        """Get similarity from cache or calculate and cache it"""
+        cache_key = (key1, key2) if key1 < key2 else (key2, key1)
+        if cache_key in self._similarity_cache:
+            return self._similarity_cache[cache_key]
+
+        similarity = self._simple_similarity(v1, v2)
+        self._similarity_cache[cache_key] = similarity
+        return similarity
 
     def _simple_similarity(self, s1: str, s2: str) -> float:
         """Calculate simple word overlap similarity"""

@@ -826,16 +826,20 @@ class EnhancedOrchestrator:
                         health.status = AgentHealthStatus.DEGRADED
 
                 # Update success rate based on total successes and failures
+                # Use min to ensure rate doesn't exceed 1.0 if there's data inconsistency
                 if health.total_tasks > 0:
-                    health.success_rate = max(0, health.total_successes / health.total_tasks)
+                    health.success_rate = min(1.0, health.total_successes / health.total_tasks)
 
             if latency_ms > 0:
-                # Rolling average
+                # Rolling average using exponential moving average
+                LATENCY_HISTORY_WEIGHT = 0.8
+                LATENCY_CURRENT_WEIGHT = 0.2
                 if health.average_latency_ms == 0:
                     health.average_latency_ms = latency_ms
                 else:
                     health.average_latency_ms = (
-                        health.average_latency_ms * 0.8 + latency_ms * 0.2
+                        health.average_latency_ms * LATENCY_HISTORY_WEIGHT +
+                        latency_ms * LATENCY_CURRENT_WEIGHT
                     )
 
     def create_channel(self, participants: List[str]) -> str:

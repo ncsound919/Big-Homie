@@ -551,7 +551,8 @@ class KairosDaemon:
             health["checks"]["skills"] = f"{len(skills)} skills available"
 
             # Check cost budget
-            health["checks"]["cost_budget"] = f"${self.config.max_background_cost_per_hour - self.hourly_cost:.2f} remaining this hour"
+            remaining_budget = max(0, self.config.max_background_cost_per_hour - self.hourly_cost)
+            health["checks"]["cost_budget"] = f"${remaining_budget:.2f} remaining this hour"
 
         except Exception as e:
             health["status"] = "degraded"

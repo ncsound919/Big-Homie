@@ -716,12 +716,14 @@ Provide refinement suggestions in JSON:
                         )
 
         # Calculate validation score
+        # Each issue reduces score fully, warnings count partially
+        WARNING_PENALTY_WEIGHT = 0.5
+        MINIMUM_VALIDITY_SCORE = 0.6
         total_checks = 3 + len(plan.phases) * 2
-        # Warnings count as half an issue
-        passed_checks = total_checks - len(validation["issues"]) - (len(validation["warnings"]) * 0.5)
+        passed_checks = total_checks - len(validation["issues"]) - (len(validation["warnings"]) * WARNING_PENALTY_WEIGHT)
         validation["score"] = max(0, passed_checks / total_checks)
 
-        if validation["score"] < 0.6:
+        if validation["score"] < MINIMUM_VALIDITY_SCORE:
             validation["is_valid"] = False
 
         return validation
