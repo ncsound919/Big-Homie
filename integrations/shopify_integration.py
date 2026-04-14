@@ -272,6 +272,9 @@ class ShopifyIntegration:
         """
         if not settings.shopify_enabled:
             return ShopifyResult(success=False, error="Shopify integration not enabled")
+        import datetime as _dt
+        # Use now as the start date so the discount is immediately active
+        starts_at = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             price_rule: Dict[str, Any] = {
                 "title": title,
@@ -281,7 +284,7 @@ class ShopifyIntegration:
                 "target_type": "line_item",
                 "target_selection": "all",
                 "allocation_method": "across",
-                "starts_at": "2000-01-01T00:00:00Z",
+                "starts_at": starts_at,
             }
             if usage_limit:
                 price_rule["usage_limit"] = usage_limit

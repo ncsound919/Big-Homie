@@ -420,7 +420,7 @@ class Settings(BaseSettings):
     mcp_enabled: bool = False
 
     # ---- Revenue Engine Settings ----
-    revenue_engine_enabled: bool = True
+    revenue_engine_enabled: bool = False
     revenue_goal_daily_usd: float = 0.0        # Target daily revenue (0 = no goal)
     revenue_goal_monthly_usd: float = 0.0      # Target monthly revenue
     revenue_auto_reinvest_pct: float = 0.0     # Auto-reinvest % of profits (0–100)
