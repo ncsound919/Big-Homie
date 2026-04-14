@@ -130,6 +130,45 @@ class Settings(BaseSettings):
     # RL Feedback (Tier 6)
     enable_rl_feedback: bool = True
 
+    # ============================================================
+    # Karpathy LLM Methods (Tier 6.5)
+    # Advanced inference-time compute techniques
+    # ============================================================
+    enable_karpathy_methods: bool = True
+
+    # Temperature Calibration
+    karpathy_temperature_calibration: bool = True  # Auto-tune temperature per task
+    karpathy_temp_factual: float = 0.0             # Deterministic (math, facts)
+    karpathy_temp_analytical: float = 0.2          # Structured (code, logic)
+    karpathy_temp_balanced: float = 0.5            # Mixed (Q&A, summarization)
+    karpathy_temp_creative: float = 0.9            # Open-ended (brainstorm)
+    karpathy_temp_exploratory: float = 1.0         # Maximum diversity
+
+    # Scratchpad Reasoning
+    karpathy_scratchpad_enabled: bool = True        # Private thinking before answering
+    karpathy_scratchpad_show_to_user: bool = False  # Whether to expose scratchpad
+
+    # Best-of-N Sampling
+    karpathy_best_of_n: int = 3           # Number of drafts to generate
+    karpathy_bon_temperature: float = 0.7  # Temperature for draft generation
+    karpathy_bon_enabled: bool = True
+
+    # Few-Shot Library
+    karpathy_few_shot_enabled: bool = True
+    karpathy_few_shot_k: int = 3  # Examples to retrieve per query
+
+    # Process Reward Model
+    karpathy_prm_enabled: bool = True
+    karpathy_prm_threshold: float = 0.6  # Min step score to pass
+
+    # Self-Play Debate
+    karpathy_debate_enabled: bool = True
+    karpathy_debate_rounds: int = 2  # Debate rounds before verdict
+
+    # Constitutional Review
+    karpathy_constitutional_enabled: bool = True
+    karpathy_constitutional_max_revisions: int = 2
+
     # KAIROS - Persistent Autonomous Daemon (Tier 7)
     kairos_enabled: bool = True
     kairos_idle_threshold_seconds: int = 300  # 5 minutes idle = background mode
