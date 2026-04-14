@@ -277,6 +277,36 @@ class GSDQueue:
         return {r["stage"]: r["n"] for r in rows}
 
 
+async def push_gsd_step(
+    objective_id: str,
+    order: int,
+    action: str,
+    tool: str,
+    params: dict,
+):
+    """
+    Persist a single GSD task step to the Draymond ``bm_mission_steps`` table.
+
+    Args:
+        objective_id: Parent objective/goal UUID in Draymond.
+        order: Step sequence number within the objective.
+        action: Human-readable action description.
+        tool: Tool name to invoke for this step.
+        params: Tool parameters as a dict (stored as JSONB).
+    """
+    from supabase_client import get_supabase
+    db = get_supabase()
+    db.table("bm_mission_steps").insert({
+        "id": f"{objective_id}_{order}",
+        "objective_id": objective_id,
+        "step_order": order,
+        "action": action,
+        "tool": tool,
+        "params": params,
+        "status": "pending",
+    }).execute()
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     q = GSDQueue()

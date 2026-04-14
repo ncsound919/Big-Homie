@@ -12,6 +12,36 @@ from enum import Enum
 from loguru import logger
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Draymond session helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def start_session(agent_id: str, trigger: str = "heartbeat") -> str:
+    """Open a Draymond session row and return its UUID."""
+    from supabase_client import get_supabase
+    db = get_supabase()
+    res = db.table("draymond_sessions").insert({
+        "agent_id": agent_id,
+        "trigger_source": trigger,
+        "is_active": True,
+    }).execute()
+    return res.data[0]["id"]
+
+
+async def close_session(session_id: str, stats: dict):
+    """Close a Draymond session and write summary statistics."""
+    from supabase_client import get_supabase
+    db = get_supabase()
+    db.table("draymond_sessions").update({
+        "is_active": False,
+        "ended_at": "now()",
+        "total_actions": stats.get("total", 0),
+        "successful_actions": stats.get("success", 0),
+        "failed_actions": stats.get("failed", 0),
+        "avg_confidence": stats.get("avg_confidence"),
+    }).eq("id", session_id).execute()
+
+
 class LoopStatus(str, Enum):
     """Status of an autonomous loop"""
     RUNNING = "running"

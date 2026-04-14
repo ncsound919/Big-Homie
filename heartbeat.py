@@ -513,3 +513,35 @@ Provide specific code changes or configuration updates to resolve these issues."
 
 # Global heartbeat instance
 heartbeat = HeartbeatSystem()
+
+
+def handle_reactive_event(payload: dict):
+    """
+    Handle an inbound Supabase Realtime event from ``draymond_reactive_events``.
+    Schedules an immediate heartbeat cycle so Big Homie reacts without waiting
+    for the next 45-minute wakeup.
+    """
+    logger.info(f"⚡ Reactive event received: {payload}")
+    try:
+        asyncio.run(heartbeat._execute_heartbeat())
+    except Exception as e:
+        logger.error(f"Reactive heartbeat failed: {e}")
+
+
+def setup_realtime(agent_id: str):
+    """
+    Subscribe to the ``draymond_reactive_events`` table via Supabase Realtime.
+    Call once at startup to enable event-driven wakeups for Big Homie.
+    """
+    from supabase_client import get_supabase
+    db = get_supabase()
+    db.realtime.channel("big-homie-events") \
+        .on(
+            "postgres_changes",
+            event="INSERT",
+            schema="public",
+            table="draymond_reactive_events",
+            callback=lambda payload: handle_reactive_event(payload),
+        ) \
+        .subscribe()
+    logger.info(f"🔔 Realtime subscription active for agent {agent_id}")
