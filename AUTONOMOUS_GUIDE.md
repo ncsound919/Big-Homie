@@ -614,6 +614,167 @@ result = await orchestrator.execute_workflow(workflow, parallel=False)
 - `router.py` - Multi-model orchestration implementation
 - `sub_agents.py` - Sub-agent spawning system
 - `heartbeat.py` - Autonomous heartbeat implementation
+- `kairos_daemon.py` - KAIROS persistent daemon mode
+- `ultraplan.py` - ULTRAPLAN complex planning system
+- `dream_system.py` - autoDream memory consolidation
+
+---
+
+## 🔮 Advanced Features (Tier 7)
+
+### KAIROS - Persistent Autonomous Daemon
+
+KAIROS (Knowledge-Augmented Intelligent Responsive Operating System) operates as a continuous background process:
+
+```python
+from kairos_daemon import kairos, start_kairos, stop_kairos
+
+# Start the daemon
+start_kairos()
+
+# Check status
+status = kairos.get_status()
+print(f"State: {status['state']}, Tasks executed: {status['tasks_executed']}")
+
+# Register custom background task
+from kairos_daemon import DaemonTask, TaskPriority
+
+custom_task = DaemonTask(
+    id="my_custom_task",
+    name="Custom Background Task",
+    description="Runs periodically in background",
+    priority=TaskPriority.LOW,
+    interval_seconds=3600,  # Every hour
+    handler=my_async_handler
+)
+kairos.register_task(custom_task)
+
+# Stop when done
+stop_kairos()
+```
+
+**Key Features:**
+- ✅ Always-on background operation
+- ✅ Priority-based task scheduling
+- ✅ Automatic memory consolidation
+- ✅ Cost-aware resource management
+- ✅ Quiet hours respect
+
+### ULTRAPLAN - Complex Planning System
+
+ULTRAPLAN handles deep planning sessions for complex objectives:
+
+```python
+from ultraplan import ultraplan, create_ultraplan
+
+# Create a comprehensive plan
+plan = await create_ultraplan(
+    goal="Build a complete e-commerce platform",
+    context={"budget": "$50k", "timeline": "3 months"},
+    constraints=["Must use Python", "Cloud-native architecture"],
+    time_limit_seconds=1800  # 30 minutes max
+)
+
+print(f"Plan: {plan.title}")
+print(f"Phases: {len(plan.phases)}")
+print(f"Complexity: {plan.complexity.value}")
+
+# Access detailed phases
+for phase in plan.phases:
+    print(f"\n{phase.name}:")
+    for milestone in phase.milestones:
+        print(f"  - {milestone.name}")
+        for step in milestone.output.get("steps", []):
+            print(f"    • {step}")
+```
+
+**Key Features:**
+- ✅ Multi-phase decomposition
+- ✅ Milestone tracking
+- ✅ Session persistence & resumption
+- ✅ Automatic checkpointing
+- ✅ Cloud-offloaded computation
+
+### autoDream - Memory Consolidation
+
+The Dream System optimizes memory during idle periods:
+
+```python
+from dream_system import dream_system, run_dream_cycle, should_dream
+
+# Check if conditions are right for dreaming
+if should_dream():
+    cycle = await run_dream_cycle()
+    print(f"Processed: {cycle.memories_processed}")
+    print(f"Consolidated: {cycle.memories_consolidated}")
+    print(f"Pruned: {cycle.memories_pruned}")
+
+# Get dream system status
+status = dream_system.get_status()
+
+# Access knowledge graph
+graph = dream_system.get_knowledge_graph_summary()
+print(f"Knowledge nodes: {graph['nodes']}")
+print(f"Connections: {graph['connections']}")
+```
+
+**Dream Cycle Phases:**
+1. **Collection** - Gather all memories
+2. **Analysis** - Identify patterns & clusters
+3. **Consolidation** - Merge similar memories
+4. **Compression** - Reduce redundancy
+5. **Knowledge Graph** - Build connections
+6. **Pruning** - Remove stale data
+7. **Insights** - Generate observations
+
+### Enhanced Multi-Agent Coordination
+
+Advanced orchestration with health monitoring and failover:
+
+```python
+from sub_agents import enhanced_orchestrator
+
+# Spawn parallel workers
+tasks = [
+    {"description": "Research topic A", "role": "researcher"},
+    {"description": "Research topic B", "role": "researcher"},
+    {"description": "Analyze data", "role": "worker"},
+]
+results = await enhanced_orchestrator.spawn_workers(tasks, max_parallel=3)
+
+# Execute with automatic failover
+result = await enhanced_orchestrator.execute_with_failover(
+    task="Complex analysis task",
+    primary_role=AgentRole.RESEARCHER,
+    fallback_roles=[AgentRole.WORKER, AgentRole.CODER]
+)
+
+# Coordinate a team with communication
+team_result = await enhanced_orchestrator.coordinate_team(
+    goal="Build and deploy feature X",
+    team_config=[
+        {"role": "researcher", "specialization": "requirements"},
+        {"role": "coder", "specialization": "implementation"},
+        {"role": "architect", "specialization": "review"}
+    ],
+    enable_communication=True
+)
+
+# Check agent health
+health = enhanced_orchestrator.get_agent_health()
+for agent_id, status in health.items():
+    print(f"{agent_id}: {status['status']} ({status['success_rate']*100:.0f}% success)")
+
+# Scale workers dynamically
+enhanced_orchestrator.scale_workers(new_max=8)
+```
+
+**Key Features:**
+- ✅ Dynamic worker scaling
+- ✅ Health monitoring & failover
+- ✅ Inter-agent communication channels
+- ✅ Load balancing
+- ✅ Automatic retry & recovery
 
 ---
 
@@ -629,6 +790,10 @@ result = await orchestrator.execute_workflow(workflow, parallel=False)
 | Desktop GUI | ✅ Native | ❌ Web | ❌ CLI |
 | Persistent Soul | ✅ SOUL.md | ❌ | ✅ Memory |
 | Local Fallback | ✅ Ollama | ❌ | ✅ Local |
+| **KAIROS Daemon** | ✅ Always-on | ❌ | ❌ |
+| **ULTRAPLAN** | ✅ 30min plans | ❌ | ❌ |
+| **autoDream** | ✅ Memory opt | ❌ | ❌ |
+| **Multi-Agent** | ✅ Enhanced | ✅ Basic | ❌ |
 
 ---
 

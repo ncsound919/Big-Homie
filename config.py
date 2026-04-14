@@ -130,6 +130,39 @@ class Settings(BaseSettings):
     # RL Feedback (Tier 6)
     enable_rl_feedback: bool = True
 
+    # KAIROS - Persistent Autonomous Daemon (Tier 7)
+    kairos_enabled: bool = True
+    kairos_idle_threshold_seconds: int = 300  # 5 minutes idle = background mode
+    kairos_consolidation_interval_seconds: int = 3600  # Consolidate memory every hour when idle
+    kairos_max_background_cost_per_hour: float = 1.0  # USD limit for background operations
+    kairos_max_concurrent_tasks: int = 3
+    kairos_enable_proactive_tasks: bool = True
+
+    # ULTRAPLAN - Complex Planning System (Tier 7)
+    ultraplan_enabled: bool = True
+    ultraplan_max_session_duration_seconds: int = 1800  # 30 minutes max
+    ultraplan_checkpoint_interval_seconds: int = 300  # Checkpoint every 5 minutes
+    ultraplan_cost_limit_per_plan: float = 5.0  # USD
+    ultraplan_quality_threshold: float = 0.8
+    ultraplan_enable_cloud_offload: bool = True
+
+    # autoDream - Memory Consolidation System (Tier 7)
+    dream_system_enabled: bool = True
+    dream_hours_start: str = "02:00"  # 2 AM
+    dream_hours_end: str = "05:00"  # 5 AM
+    dream_min_idle_minutes: int = 30  # Min idle time before dreaming
+    dream_consolidation_threshold: int = 100  # Min memories before consolidation
+    dream_max_memories_per_cycle: int = 500
+    dream_importance_decay_rate: float = 0.1  # Per day decay for unused memories
+    dream_enable_knowledge_graph: bool = True
+
+    # Enhanced Multi-Agent Coordination (Tier 7)
+    enhanced_orchestrator_enabled: bool = True
+    orchestrator_max_parallel_workers: int = 10
+    orchestrator_health_check_interval: int = 60  # seconds
+    orchestrator_failover_threshold: int = 3  # consecutive failures
+    orchestrator_enable_channels: bool = True
+
     # Governance (Tier 7)
     enable_human_gate: bool = True
     enable_audit_trail: bool = True

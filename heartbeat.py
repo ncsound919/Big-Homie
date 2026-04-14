@@ -470,5 +470,38 @@ Provide specific code changes or configuration updates to resolve these issues."
 
         return notifications
 
+    async def _check_dream_system(self):
+        """Check if dream system should run during heartbeat"""
+        try:
+            from dream_system import dream_system, should_dream
+
+            if should_dream():
+                logger.info("💤 Conditions right for dream cycle, initiating...")
+                cycle = await dream_system.dream()
+                return {
+                    "dream_cycle_run": True,
+                    "memories_processed": cycle.memories_processed,
+                    "memories_consolidated": cycle.memories_consolidated
+                }
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"Dream system check failed: {e}")
+
+        return {"dream_cycle_run": False}
+
+    async def _notify_kairos(self, action: str, data: Optional[Dict] = None):
+        """Notify KAIROS daemon of heartbeat events"""
+        try:
+            from kairos_daemon import kairos
+
+            if kairos.state.value != "stopped":
+                kairos.record_user_activity()  # Heartbeat counts as activity
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"KAIROS notification skipped: {e}")
+
+
 # Global heartbeat instance
 heartbeat = HeartbeatSystem()
