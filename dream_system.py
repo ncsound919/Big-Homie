@@ -177,17 +177,22 @@ class DreamSystem:
         if not in_dream_hours:
             return False
 
-        # Check last user activity (from memory preferences)
+        # Check last user activity (from memory preferences).
+        # Fail closed when idle time is required but no valid activity timestamp exists,
+        # otherwise the idle-time gate can be bypassed.
         last_activity = memory.get_preference("last_user_activity")
-        if last_activity:
+        if self.config.min_idle_minutes > 0:
+            if not last_activity:
+                return False
+
             try:
                 last_time = datetime.fromisoformat(last_activity)
-                idle_minutes = (now - last_time).total_seconds() / 60
-                if idle_minutes < self.config.min_idle_minutes:
-                    return False
             except (ValueError, TypeError):
-                pass
+                return False
 
+            idle_minutes = (now - last_time).total_seconds() / 60
+            if idle_minutes < self.config.min_idle_minutes:
+                return False
         # Check if enough memories to consolidate
         all_memories = memory.search_memory(limit=10)
         if len(all_memories) < 5:  # Need some memories to work with
