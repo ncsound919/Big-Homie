@@ -15,6 +15,14 @@ class IntegrationType(str, Enum):
     BLOCKCHAIN = "blockchain"
     DATA = "data"
     AI = "ai"
+    BANKING = "banking"
+    TRADING = "trading"
+    CRYPTO = "crypto"
+    BETTING = "betting"
+    ECOMMERCE = "ecommerce"
+    SUPPLY_CHAIN = "supply_chain"
+    TELEPHONY = "telephony"
+    FREELANCE = "freelance"
 
 @dataclass
 class IntegrationStatus:

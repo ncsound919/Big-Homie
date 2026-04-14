@@ -312,6 +312,130 @@ class Settings(BaseSettings):
     prizepicks_api_key: str = ""
     prizepicks_enabled: bool = False
 
+    # ============================================================
+    # REVENUE ENGINE - Financial Integrations
+    # ============================================================
+
+    # ---- Banking (Plaid) ----
+    plaid_client_id: str = ""
+    plaid_secret: str = ""
+    plaid_env: str = "sandbox"  # sandbox | development | production
+    plaid_enabled: bool = False
+
+    # ---- Crypto Exchanges ----
+    # Binance
+    binance_api_key: str = ""
+    binance_secret_key: str = ""
+    binance_testnet: bool = True
+    binance_enabled: bool = False
+
+    # Kraken
+    kraken_api_key: str = ""
+    kraken_private_key: str = ""
+    kraken_enabled: bool = False
+
+    # Coinbase Advanced Trade
+    coinbase_adv_api_key: str = ""
+    coinbase_adv_secret: str = ""
+    coinbase_adv_enabled: bool = False
+
+    # ---- Options / Stock Brokers ----
+    # Interactive Brokers (IBKR)
+    ibkr_host: str = "127.0.0.1"
+    ibkr_port: int = 7497          # 7497=paper, 7496=live
+    ibkr_client_id: int = 1
+    ibkr_enabled: bool = False
+
+    # Schwab (TD Ameritrade successor)
+    schwab_client_id: str = ""
+    schwab_client_secret: str = ""
+    schwab_redirect_uri: str = "https://127.0.0.1"
+    schwab_enabled: bool = False
+
+    # ---- Sports Betting ----
+    # FanDuel
+    fanduel_api_key: str = ""
+    fanduel_enabled: bool = False
+
+    # The Odds API (aggregated betting lines)
+    odds_api_key: str = ""
+    odds_api_enabled: bool = False
+
+    # ---- Job / Gig / Task Platforms ----
+    # Upwork
+    upwork_client_id: str = ""
+    upwork_client_secret: str = ""
+    upwork_enabled: bool = False
+
+    # Fiverr
+    fiverr_api_key: str = ""
+    fiverr_enabled: bool = False
+
+    # Amazon Mechanical Turk
+    mturk_access_key: str = ""
+    mturk_secret_key: str = ""
+    mturk_sandbox: bool = True
+    mturk_enabled: bool = False
+
+    # ---- Ecommerce / SaaS ----
+    # Shopify
+    shopify_shop_domain: str = ""   # e.g. my-store.myshopify.com
+    shopify_access_token: str = ""
+    shopify_enabled: bool = False
+
+    # WooCommerce
+    woocommerce_url: str = ""
+    woocommerce_consumer_key: str = ""
+    woocommerce_consumer_secret: str = ""
+    woocommerce_enabled: bool = False
+
+    # Amazon Seller / SP-API
+    amazon_seller_id: str = ""
+    amazon_mws_auth_token: str = ""
+    amazon_sp_refresh_token: str = ""
+    amazon_sp_client_id: str = ""
+    amazon_sp_client_secret: str = ""
+    amazon_sp_enabled: bool = False
+
+    # ---- Supply Chain / Logistics ----
+    # ShipStation
+    shipstation_api_key: str = ""
+    shipstation_api_secret: str = ""
+    shipstation_enabled: bool = False
+
+    # EasyPost
+    easypost_api_key: str = ""
+    easypost_enabled: bool = False
+
+    # ---- Call Center / Telephony ----
+    # Twilio
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_phone_number: str = ""
+    twilio_enabled: bool = False
+
+    # ---- MCP (Model Context Protocol) Servers ----
+    mcp_server_urls: str = ""      # Comma-separated list of MCP server endpoints
+    mcp_auth_tokens: str = ""      # Matching comma-separated auth tokens
+    mcp_enabled: bool = False
+
+    # ---- Revenue Engine Settings ----
+    revenue_engine_enabled: bool = True
+    revenue_goal_daily_usd: float = 0.0        # Target daily revenue (0 = no goal)
+    revenue_goal_monthly_usd: float = 0.0      # Target monthly revenue
+    revenue_auto_reinvest_pct: float = 0.0     # Auto-reinvest % of profits (0–100)
+    revenue_max_single_trade_usd: float = 100.0  # Cap per automated trade / bet
+    revenue_risk_level: str = "low"            # low | medium | high
+    revenue_active_streams: str = ""           # Comma-sep: trading,betting,freelance,ecommerce
+    revenue_report_interval_hours: int = 24    # How often to emit a revenue report
+
+    # ---- SaaS / MaaS Deployment ----
+    saas_deploy_enabled: bool = False
+    saas_stripe_price_id: str = ""             # Default Stripe price for SaaS subscriptions
+    saas_trial_days: int = 14
+    maas_model_endpoint: str = ""             # URL of deployed model/API
+    maas_api_key_header: str = "X-API-Key"   # Auth header name for MaaS endpoint
+
     def _normalize_path(self, path_value: str) -> Path:
         """Normalize configured filesystem paths."""
         return Path(os.path.expanduser(path_value)).resolve()

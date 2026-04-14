@@ -23,6 +23,7 @@ from tone_preference import tone_analyzer, preference_tracker
 from content_utils import smart_truncator, markdown_exporter
 from fact_metadata import fact_checker, metadata_tagger
 from time_awareness import time_awareness
+from financial_settings_widget import SecureFinancialSettings
 import json
 from datetime import datetime
 
@@ -381,44 +382,12 @@ class BigHomieGUI(QMainWindow):
         return widget
 
     def create_settings_tab(self) -> QWidget:
-        """Create settings tab"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        settings_text = QTextEdit()
-        settings_text.setReadOnly(True)
-        settings_text.setPlainText(f"""Big Homie Settings
-
-App Version: {settings.app_version}
-Debug Mode: {settings.debug}
-
-LLM Configuration:
-- Default Model: {settings.default_model}
-- Reasoning Model: {settings.reasoning_model}
-- Fast Model: {settings.fast_model}
-- Coding Model: {settings.coding_model}
-
-API Keys Configured:
-- Anthropic: {'✓' if settings.anthropic_api_key else '✗'}
-- OpenAI: {'✓' if settings.openai_api_key else '✗'}
-- OpenRouter: {'✓' if settings.openrouter_api_key else '✗'}
-- Ollama: {'✓' if settings.ollama_enabled else '✗'}
-
-Memory:
-- Database: {settings.memory_db_path}
-- Vector Store: {settings.vector_db_dir}
-
-Agent Settings:
-- Max Iterations: {settings.max_iterations}
-- Temperature: {settings.temperature}
-- Max Tokens: {settings.max_tokens}
-
-Cost Tracking: {'Enabled' if settings.track_costs else 'Disabled'}
-Cost Alert Threshold: ${settings.cost_alert_threshold}
-""")
-        layout.addWidget(settings_text)
-
-        return widget
+        """Create settings tab with secure financial settings panel"""
+        self._financial_settings = SecureFinancialSettings()
+        self._financial_settings.settings_saved.connect(
+            lambda: self.status_bar.showMessage("Settings saved – restart to apply changes")
+        )
+        return self._financial_settings
 
     def send_message(self):
         """Send message to agent"""
