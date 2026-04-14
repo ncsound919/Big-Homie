@@ -240,17 +240,29 @@ class TwilioIntegration:
         Returns:
             TwiML XML string
         """
-        digits = "".join(menu_options.keys())
-        menu_text = ". ".join(f"Press {k} for {v}" for k, v in menu_options.items())
+        import xml.sax.saxutils as _xml
+
+        # Validate that the action URL only contains safe characters to prevent injection
+        import re as _re
+        if not _re.match(r'^https?://[^\s"\'<>]+$', gather_action_url):
+            raise ValueError(f"Invalid gather_action_url: {gather_action_url!r}")
+
+        menu_text = ". ".join(
+            f"Press {_xml.escape(k)} for {_xml.escape(v)}"
+            for k, v in menu_options.items()
+        )
+        escaped_greeting = _xml.escape(greeting)
+        # gather_action_url goes into an XML attribute – use quoteattr for safety
+        action_attr = _xml.quoteattr(gather_action_url)
         twiml = (
-            f"<?xml version='1.0' encoding='UTF-8'?>"
-            f"<Response>"
-            f"<Gather numDigits='1' action='{gather_action_url}' method='POST' "
-            f"input='dtmf' timeout='10' finishOnKey=''>"
-            f"<Say>{greeting}. {menu_text}. Press 0 to repeat.</Say>"
-            f"</Gather>"
-            f"<Say>We didn't receive your selection. Goodbye.</Say>"
-            f"</Response>"
+            "<?xml version='1.0' encoding='UTF-8'?>"
+            "<Response>"
+            f"<Gather numDigits='1' action={action_attr} method='POST' "
+            "input='dtmf' timeout='10' finishOnKey=''>"
+            f"<Say>{escaped_greeting}. {menu_text}. Press 0 to repeat.</Say>"
+            "</Gather>"
+            "<Say>We didn't receive your selection. Goodbye.</Say>"
+            "</Response>"
         )
         return twiml
 

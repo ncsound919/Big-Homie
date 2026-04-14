@@ -487,21 +487,53 @@ class SecureFinancialSettings(QWidget):
             with open(self._env_path, "r", encoding="utf-8") as f:
                 existing_lines = f.readlines()
 
-        # Build a map of key -> line-index for existing lines
+        # Build a map of key -> line-index for existing lines.
+        # We only match lines that set a key (not comment lines) and we keep
+        # track of any inline comment so we can restore it after updating.
         key_line: Dict[str, int] = {}
+        key_comment: Dict[str, str] = {}   # optional inline comment per key
         for i, line in enumerate(existing_lines):
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and "=" in stripped:
-                k = stripped.split("=", 1)[0].strip()
-                key_line[k] = i
+            stripped = line.rstrip("\n")
+            if not stripped or stripped.lstrip().startswith("#"):
+                continue
+            if "=" not in stripped:
+                continue
+            k, _, rest = stripped.partition("=")
+            k = k.strip()
+            # Detect an inline comment: unquoted `#` after the value
+            # Simple heuristic: if the value is not quoted and contains ` #`
+            inline_comment = ""
+            val_part = rest
+            if not (rest.startswith('"') or rest.startswith("'")):
+                comment_idx = rest.find(" #")
+                if comment_idx != -1:
+                    val_part = rest[:comment_idx]
+                    inline_comment = rest[comment_idx:]
+            key_line[k] = i
+            key_comment[k] = inline_comment
+
+        def _quote_value(v: str) -> str:
+            """Quote a value if it contains characters that need protection."""
+            # Quote if value contains: spaces, #, $, quotes, backslashes
+            if not v:
+                return v
+            needs_quoting = any(c in v for c in ' #$\\"\'\\\\')
+            if needs_quoting:
+                # Double-quote, escaping inner double-quotes and backslashes
+                escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+                return f'"{escaped}"'
+            return v
 
         # Apply widget values
         for env_key, widget in self._widgets.items():
             value = self._get_widget_value(widget)
+            quoted = _quote_value(value)
+            comment = key_comment.get(env_key, "")
+            new_line = f"{env_key}={quoted}{comment}\n"
             if env_key in key_line:
-                existing_lines[key_line[env_key]] = f"{env_key}={value}\n"
+                existing_lines[key_line[env_key]] = new_line
             else:
-                existing_lines.append(f"{env_key}={value}\n")
+                existing_lines.append(new_line)
 
         try:
             with open(self._env_path, "w", encoding="utf-8") as f:

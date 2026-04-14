@@ -171,17 +171,21 @@ class BinanceIntegration:
         if not settings.binance_enabled:
             return BinanceResult(success=False, error="Binance integration not enabled")
         try:
+            # Format numeric values as strings to avoid float precision issues and
+            # to prevent scientific notation in the HMAC-signed query string.
+            qty_str = f"{quantity:.8f}".rstrip("0").rstrip(".")
             params: Dict[str, Any] = {
                 "symbol": symbol.upper(),
                 "side": side.upper(),
                 "type": order_type.upper(),
-                "quantity": quantity,
+                "quantity": qty_str,
                 "timestamp": int(time.time() * 1000),
             }
             if order_type.upper() == "LIMIT":
                 if price is None:
                     return BinanceResult(success=False, error="price required for LIMIT order")
-                params["price"] = price
+                price_str = f"{price:.8f}".rstrip("0").rstrip(".")
+                params["price"] = price_str
                 params["timeInForce"] = "GTC"
             params["signature"] = self._sign(params)
             async with httpx.AsyncClient() as client:

@@ -391,7 +391,6 @@ class Settings(BaseSettings):
 
     # Amazon Seller / SP-API
     amazon_seller_id: str = ""
-    amazon_mws_auth_token: str = ""
     amazon_sp_refresh_token: str = ""
     amazon_sp_client_id: str = ""
     amazon_sp_client_secret: str = ""

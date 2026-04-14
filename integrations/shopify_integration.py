@@ -44,6 +44,19 @@ class ShopifyIntegration:
             "Content-Type": "application/json",
         } if token else {}
 
+    def _require_config(self) -> Optional[ShopifyResult]:
+        """
+        Return an error ShopifyResult if the integration is not fully configured,
+        otherwise return None (meaning all required config is present).
+        """
+        if not settings.shopify_enabled:
+            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        if not self.base_url:
+            return ShopifyResult(success=False, error="Shopify shop domain not configured")
+        if not self.headers.get("X-Shopify-Access-Token"):
+            return ShopifyResult(success=False, error="Shopify access token not configured")
+        return None
+
     async def health_check(self) -> bool:
         """Verify Shopify credentials by hitting the shop endpoint"""
         if not settings.shopify_enabled or not self.base_url:
@@ -64,8 +77,9 @@ class ShopifyIntegration:
 
     async def list_products(self, limit: int = 50) -> ShopifyResult:
         """List products in the store"""
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
@@ -103,8 +117,9 @@ class ShopifyIntegration:
             tags:         Comma-separated tag string
             status:       "draft" | "active" | "archived"
         """
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         try:
             product: Dict[str, Any] = {
                 "title": title,
@@ -134,8 +149,9 @@ class ShopifyIntegration:
 
     async def update_product(self, product_id: int, updates: Dict) -> ShopifyResult:
         """Update an existing product"""
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.put(
@@ -159,8 +175,9 @@ class ShopifyIntegration:
         limit: int = 50,
     ) -> ShopifyResult:
         """List orders (status: open|closed|cancelled|any)"""
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
@@ -178,8 +195,9 @@ class ShopifyIntegration:
 
     async def get_order(self, order_id: int) -> ShopifyResult:
         """Get a specific order by ID"""
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
@@ -202,8 +220,9 @@ class ShopifyIntegration:
         notify_customer: bool = True,
     ) -> ShopifyResult:
         """Mark an order as fulfilled (requires confirmation)"""
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         try:
             fulfillment: Dict[str, Any] = {
                 "notify_customer": notify_customer,
@@ -232,8 +251,9 @@ class ShopifyIntegration:
 
     async def list_customers(self, limit: int = 50) -> ShopifyResult:
         """List customers"""
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
@@ -269,8 +289,9 @@ class ShopifyIntegration:
             value_type:  "percentage" or "fixed_amount"
             usage_limit: Max total uses (None = unlimited)
         """
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         import datetime as _dt
         # Use now as the start date so the discount is immediately active
         starts_at = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -317,8 +338,9 @@ class ShopifyIntegration:
 
     async def get_store_info(self) -> ShopifyResult:
         """Get basic store information"""
-        if not settings.shopify_enabled:
-            return ShopifyResult(success=False, error="Shopify integration not enabled")
+        err = self._require_config()
+        if err:
+            return err
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
