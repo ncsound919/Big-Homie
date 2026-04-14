@@ -241,10 +241,12 @@ class TwilioIntegration:
             TwiML XML string
         """
         import xml.sax.saxutils as _xml
+        from urllib.parse import urlparse as _urlparse
 
-        # Validate that the action URL only contains safe characters to prevent injection
-        import re as _re
-        if not _re.match(r'^https?://[^\s"\'<>]+$', gather_action_url):
+        # Validate the action URL using proper URL parsing to prevent SSRF / injection.
+        # Only allow http/https, a non-empty hostname, and no embedded credentials.
+        _parsed = _urlparse(gather_action_url)
+        if _parsed.scheme not in ("http", "https") or not _parsed.hostname or _parsed.username or _parsed.password:
             raise ValueError(f"Invalid gather_action_url: {gather_action_url!r}")
 
         menu_text = ". ".join(

@@ -517,7 +517,7 @@ class SecureFinancialSettings(QWidget):
             # Quote if value contains: spaces, #, $, quotes, backslashes
             if not v:
                 return v
-            needs_quoting = any(c in v for c in ' #$\\"\'\\\\')
+            needs_quoting = any(c in v for c in r' #$"\'\\')
             if needs_quoting:
                 # Double-quote, escaping inner double-quotes and backslashes
                 escaped = v.replace("\\", "\\\\").replace('"', '\\"')

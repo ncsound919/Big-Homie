@@ -173,7 +173,12 @@ class BinanceIntegration:
         try:
             # Format numeric values as strings to avoid float precision issues and
             # to prevent scientific notation in the HMAC-signed query string.
-            qty_str = f"{quantity:.8f}".rstrip("0").rstrip(".")
+            # Strip trailing zeros but keep at least one decimal digit (e.g. 10.0 not 10).
+            def _fmt(v: float) -> str:
+                s = f"{v:.8f}".rstrip("0")
+                return s + "0" if s.endswith(".") else s
+
+            qty_str = _fmt(quantity)
             params: Dict[str, Any] = {
                 "symbol": symbol.upper(),
                 "side": side.upper(),
@@ -184,8 +189,7 @@ class BinanceIntegration:
             if order_type.upper() == "LIMIT":
                 if price is None:
                     return BinanceResult(success=False, error="price required for LIMIT order")
-                price_str = f"{price:.8f}".rstrip("0").rstrip(".")
-                params["price"] = price_str
+                params["price"] = _fmt(price)
                 params["timeInForce"] = "GTC"
             params["signature"] = self._sign(params)
             async with httpx.AsyncClient() as client:
