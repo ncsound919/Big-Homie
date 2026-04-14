@@ -19,7 +19,6 @@ from enum import Enum
 from pathlib import Path
 from loguru import logger
 from config import settings
-from memory import memory
 
 
 class PlanStatus(str, Enum):
