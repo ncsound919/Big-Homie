@@ -61,6 +61,7 @@ class HeartbeatSystem:
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self._reactive_pending: bool = False  # guard against overlapping reactive heartbeats
+        self._reactive_lock: threading.Lock = threading.Lock()  # atomic check-and-set
 
         # Load SOUL and HEARTBEAT configuration
         self.load_soul()
@@ -551,10 +552,11 @@ def handle_reactive_event(payload: dict):
     heartbeat is already pending/running, the new event is dropped.
     """
     logger.info(f"⚡ Reactive event received: {payload}")
-    if heartbeat._reactive_pending:
-        logger.debug("Reactive heartbeat already pending — event coalesced")
-        return
-    heartbeat._reactive_pending = True
+    with heartbeat._reactive_lock:
+        if heartbeat._reactive_pending:
+            logger.debug("Reactive heartbeat already pending — event coalesced")
+            return
+        heartbeat._reactive_pending = True
 
     async def _run_and_clear():
         try:
@@ -569,9 +571,9 @@ def handle_reactive_event(payload: dict):
         try:
             asyncio.run(_run_and_clear())
         except Exception as e:
-            heartbeat._reactive_pending = False
             logger.error(f"Reactive heartbeat failed: {e}")
     except Exception as e:
+        # create_task failed before the task was scheduled; finally block won't run
         heartbeat._reactive_pending = False
         logger.error(f"Reactive heartbeat failed: {e}")
 
