@@ -482,6 +482,13 @@ class KairosDaemon:
                 # Execute built-in task logic
                 result = await self._execute_builtin_task(task)
 
+            # Track per-task cost and update hourly budget
+            task_cost = 0.0
+            if isinstance(result, dict):
+                task_cost = float(result.get("cost", 0.0) or 0.0)
+            self.hourly_cost += task_cost
+            self.metrics.total_cost += task_cost
+
             # Update task stats
             task.last_run = datetime.now()
             task.run_count += 1
@@ -496,7 +503,7 @@ class KairosDaemon:
             if self.on_task_complete:
                 self.on_task_complete(task, result)
 
-            logger.info(f"✅ Task completed: {task.name}")
+            logger.info(f"✅ Task completed: {task.name} (cost: ${task_cost:.4f})")
 
         except asyncio.TimeoutError:
             logger.warning(f"Task timed out: {task.name}")
@@ -649,7 +656,18 @@ kairos = KairosDaemon()
 
 
 def start_kairos():
-    """Convenience function to start KAIROS daemon"""
+    """
+    Convenience function to start KAIROS daemon.
+
+    Also registers OS signal handlers (SIGTERM/SIGINT) for graceful shutdown,
+    but only when called from the main thread, because Python's signal module
+    raises ValueError when used from a non-main thread.
+    """
+    # Register signal handlers only from the main thread to avoid ValueError
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(signal.SIGTERM, _signal_handler)
+        signal.signal(signal.SIGINT, _signal_handler)
+
     kairos.start()
 
 
@@ -658,13 +676,9 @@ def stop_kairos():
     kairos.stop()
 
 
-# Signal handlers for graceful shutdown
+# Signal handler for graceful shutdown — registered by start_kairos() only
+# from the main thread to prevent ValueError in non-main threads.
 def _signal_handler(signum, frame):
     """Handle shutdown signals"""
     logger.info(f"Received signal {signum}, shutting down KAIROS...")
     kairos.stop()
-
-
-# Register signal handlers
-signal.signal(signal.SIGTERM, _signal_handler)
-signal.signal(signal.SIGINT, _signal_handler)

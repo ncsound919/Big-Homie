@@ -9,7 +9,6 @@ ULTRAPLAN handles complex planning tasks that require:
 - Session persistence and resumption
 - Resource-intensive computation
 """
-import asyncio
 import json
 import uuid
 from datetime import datetime, timedelta

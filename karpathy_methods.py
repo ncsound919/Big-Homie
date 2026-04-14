@@ -151,16 +151,8 @@ class TemperatureCalibrator:
     higher temperatures for creative tasks where diversity matters."
 
     Automatically selects the optimal sampling temperature based on task nature.
+    Temperature values are configurable via settings.karpathy_temp_* env knobs.
     """
-
-    # Base temperatures per task nature
-    TEMPERATURE_MAP: Dict[TaskNature, float] = {
-        TaskNature.FACTUAL: 0.0,
-        TaskNature.ANALYTICAL: 0.2,
-        TaskNature.BALANCED: 0.5,
-        TaskNature.CREATIVE: 0.9,
-        TaskNature.EXPLORATORY: 1.0,
-    }
 
     # Keywords that hint at each nature
     NATURE_KEYWORDS: Dict[TaskNature, List[str]] = {
@@ -187,6 +179,17 @@ class TemperatureCalibrator:
             "diverse", "varied", "many different", "unexpected"
         ],
     }
+
+    @property
+    def TEMPERATURE_MAP(self) -> Dict[TaskNature, float]:
+        """Temperature map populated from settings, with hard-coded fallbacks."""
+        return {
+            TaskNature.FACTUAL: getattr(settings, "karpathy_temp_factual", 0.0),
+            TaskNature.ANALYTICAL: getattr(settings, "karpathy_temp_analytical", 0.2),
+            TaskNature.BALANCED: getattr(settings, "karpathy_temp_balanced", 0.5),
+            TaskNature.CREATIVE: getattr(settings, "karpathy_temp_creative", 0.9),
+            TaskNature.EXPLORATORY: getattr(settings, "karpathy_temp_exploratory", 1.0),
+        }
 
     def classify_task(self, task: str) -> TaskNature:
         """Classify a task into a nature category by keyword heuristics."""
@@ -302,7 +305,8 @@ Use your scratchpad to reason carefully before answering."""
 
         decision, result = await self._get_router().execute_with_routing(
             task=prompt,
-            context={"requires_reasoning": True, "system_override": self.SCRATCHPAD_SYSTEM}
+            context={"requires_reasoning": True, "system_override": self.SCRATCHPAD_SYSTEM},
+            temperature=temp
         )
 
         content = result.get("content", "")
@@ -682,9 +686,17 @@ class FewShotLibrary:
             import numpy as np
             query_vec = np.array(query_emb)
 
+            # Build an index from example → its embedding position in self._embeddings
+            example_index: Dict[int, int] = {
+                id(ex): i for i, ex in enumerate(self._examples)
+            }
+
             scored: List[Tuple[float, FewShotExample]] = []
-            for i, example in enumerate(self._examples):
-                emb_vec = np.array(self._embeddings[i])
+            for example in candidates:
+                emb_pos = example_index.get(id(example))
+                if emb_pos is None:
+                    continue
+                emb_vec = np.array(self._embeddings[emb_pos])
                 sim = float(
                     np.dot(query_vec, emb_vec) /
                     (np.linalg.norm(query_vec) * np.linalg.norm(emb_vec) + 1e-8)
@@ -960,11 +972,14 @@ Topic: {topic}"""
                 context={"requires_reasoning": True}
             )
             rebuttal = rebut_result.get("content", "")
+
+            # Capture this round's proposition BEFORE updating it for the next round
+            round_proposition = proposition
             proposition = rebuttal  # Updated position for next round
 
             debate_rounds.append(DebateRound(
                 round_number=round_num,
-                proposition=proposition,
+                proposition=round_proposition,
                 critique=critique,
                 rebuttal=rebuttal
             ))

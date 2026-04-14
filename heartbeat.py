@@ -211,12 +211,20 @@ class HeartbeatSystem:
             if self._should_review_logs():
                 await self._review_logs()
 
-            # 5. Generate Notifications
+            # 5. Dream System — run overnight memory consolidation if conditions are right
+            await self._check_dream_system()
+
+            # 6. Notify KAIROS daemon that heartbeat ran (keeps activity timestamp fresh)
+            await self._notify_kairos("heartbeat", {"count": self.heartbeat_count})
+
+            # 7. Generate Notifications
             result.notifications = self._generate_notifications(result)
 
             # Update preferences
             memory.set_preference("last_heartbeat_time", start_time.isoformat())
             memory.set_preference("last_heartbeat_result", result.__dict__)
+            # Record activity so dream system / KAIROS idle detection works correctly
+            memory.set_preference("last_user_activity", start_time.isoformat())
 
         except Exception as e:
             logger.error(f"Heartbeat execution error: {e}")

@@ -293,14 +293,20 @@ class SmartRouter:
         }
         decision = self.route_task(task, context, **routing_kwargs)
 
-        # Apply Karpathy temperature calibration if not already set
-        if "temperature" not in kwargs:
+        # Apply Karpathy temperature calibration if not already set and feature is enabled
+        if (
+            "temperature" not in kwargs
+            and getattr(settings, "enable_karpathy_methods", True)
+            and getattr(settings, "karpathy_temperature_calibration", True)
+        ):
             calibrated_temp = self.get_calibrated_temperature(task, decision.role)
             kwargs["temperature"] = calibrated_temp
             logger.debug(
                 f"Karpathy temperature calibration: {calibrated_temp} "
                 f"for {decision.role.value} role"
             )
+        elif "temperature" not in kwargs:
+            kwargs["temperature"] = settings.temperature
 
         # Allow context to supply a system prompt override (used by ScratchpadReasoner etc.)
         system_content = self._get_role_prompt(decision.role)
