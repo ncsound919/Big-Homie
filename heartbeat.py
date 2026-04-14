@@ -60,6 +60,7 @@ class HeartbeatSystem:
         self.last_reset = datetime.now().date()
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
+        self._reactive_pending: bool = False  # guard against overlapping reactive heartbeats
 
         # Load SOUL and HEARTBEAT configuration
         self.load_soul()
@@ -92,6 +93,12 @@ class HeartbeatSystem:
         self.thread.start()
 
         logger.info(f"🫀 Heartbeat started (interval: {self.config.interval_minutes} minutes)")
+
+        # Activate Draymond Realtime subscription (optional — skipped if Supabase not configured)
+        try:
+            setup_realtime("big-homie")
+        except Exception as e:
+            logger.debug(f"Realtime subscription skipped: {e}")
 
     def pause(self):
         """Pause heartbeat temporarily"""
@@ -188,6 +195,14 @@ class HeartbeatSystem:
             cost_incurred=0
         )
 
+        # Open a Draymond session for this heartbeat cycle
+        session_id: Optional[str] = None
+        try:
+            from autonomous_loop import start_session, close_session
+            session_id = await start_session("big-homie", trigger="heartbeat")
+        except Exception as e:
+            logger.debug(f"Draymond session open skipped: {e}")
+
         try:
             # 1. System Health Check
             result.system_health = await self._check_system_health()
@@ -238,6 +253,19 @@ class HeartbeatSystem:
             f"🫀 Heartbeat #{self.heartbeat_count} complete "
             f"({result.duration_seconds:.1f}s, ${result.cost_incurred:.4f})"
         )
+
+        # Close the Draymond session with summary stats
+        if session_id:
+            try:
+                total = len(result.autonomous_actions)
+                success = len([a for a in result.autonomous_actions if "error" not in a])
+                await close_session(session_id, {
+                    "total": total,
+                    "success": success,
+                    "failed": total - success,
+                })
+            except Exception as e:
+                logger.debug(f"Draymond session close skipped: {e}")
 
         # Send notifications if callback provided
         if self.config.notification_callback and result.notifications:
@@ -519,18 +547,32 @@ def handle_reactive_event(payload: dict):
     """
     Handle an inbound Supabase Realtime event from ``draymond_reactive_events``.
     Schedules an immediate heartbeat cycle so Big Homie reacts without waiting
-    for the next 45-minute wakeup.
+    for the next 45-minute wakeup.  Coalesces duplicate events: if a reactive
+    heartbeat is already pending/running, the new event is dropped.
     """
     logger.info(f"⚡ Reactive event received: {payload}")
+    if heartbeat._reactive_pending:
+        logger.debug("Reactive heartbeat already pending — event coalesced")
+        return
+    heartbeat._reactive_pending = True
+
+    async def _run_and_clear():
+        try:
+            await heartbeat._execute_heartbeat()
+        finally:
+            heartbeat._reactive_pending = False
+
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(heartbeat._execute_heartbeat())
+        loop.create_task(_run_and_clear())
     except RuntimeError:
         try:
-            asyncio.run(heartbeat._execute_heartbeat())
+            asyncio.run(_run_and_clear())
         except Exception as e:
+            heartbeat._reactive_pending = False
             logger.error(f"Reactive heartbeat failed: {e}")
     except Exception as e:
+        heartbeat._reactive_pending = False
         logger.error(f"Reactive heartbeat failed: {e}")
 
 
