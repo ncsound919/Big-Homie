@@ -306,7 +306,7 @@ class ShopifyIntegration:
                 "allocation_method": "across",
                 "starts_at": starts_at,
             }
-            if usage_limit:
+            if usage_limit is not None:
                 price_rule["usage_limit"] = usage_limit
             async with httpx.AsyncClient() as client:
                 pr_resp = await client.post(
