@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Server
     server_host: str = "127.0.0.1"
     server_port: int = 9000
-    orchestrator_secret: str = "change-me-in-production"
+    orchestrator_secret: str = ""  # MUST be set in production
 
     # UI Settings
     ui_theme: str = "dark"

@@ -390,13 +390,13 @@ class AuditTrail:
             params.append(since)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        # Use parameterized query for limit as well
+        query = f"SELECT * FROM audit_log {where} ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
 
         with self._conn() as db:
-            rows = db.execute(
-                f"SELECT * FROM audit_log {where} ORDER BY timestamp DESC LIMIT ?",
-                params
-            ).fetchall()
+            rows = db.execute(query, params).fetchall()
 
         return [
             {
