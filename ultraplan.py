@@ -126,15 +126,37 @@ class UltraPlanConfig:
     """Configuration for ULTRAPLAN system"""
 
     def __init__(self):
-        self.max_session_duration_seconds: int = 1800  # 30 minutes max
-        self.checkpoint_interval_seconds: int = 300  # Checkpoint every 5 minutes
-        self.max_retries_per_phase: int = 3
-        self.enable_cloud_offload: bool = True
-        self.enable_persistence: bool = True
-        self.storage_path: Path = Path(settings.data_dir) / "ultraplans"
-        self.max_parallel_phases: int = 2
-        self.cost_limit_per_plan: float = 5.0  # USD
-        self.quality_threshold: float = 0.8
+        self.max_session_duration_seconds: int = getattr(
+            settings, "ultraplan_max_session_duration_seconds", 1800
+        )  # 30 minutes max
+        self.checkpoint_interval_seconds: int = getattr(
+            settings, "ultraplan_checkpoint_interval_seconds", 300
+        )  # Checkpoint every 5 minutes
+        self.max_retries_per_phase: int = getattr(
+            settings, "ultraplan_max_retries_per_phase", 3
+        )
+        self.enable_cloud_offload: bool = getattr(
+            settings, "ultraplan_enable_cloud_offload", True
+        )
+        self.enable_persistence: bool = getattr(
+            settings, "ultraplan_enable_persistence", True
+        )
+        self.storage_path: Path = Path(
+            getattr(
+                settings,
+                "ultraplan_storage_path",
+                Path(settings.data_dir) / "ultraplans",
+            )
+        )
+        self.max_parallel_phases: int = getattr(
+            settings, "ultraplan_max_parallel_phases", 2
+        )
+        self.cost_limit_per_plan: float = getattr(
+            settings, "ultraplan_cost_limit_per_plan", 5.0
+        )  # USD
+        self.quality_threshold: float = getattr(
+            settings, "ultraplan_quality_threshold", 0.8
+        )
 
 
 class UltraPlanEngine:
