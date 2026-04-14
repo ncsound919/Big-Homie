@@ -206,7 +206,6 @@ class ShopifyIntegration:
             return ShopifyResult(success=False, error="Shopify integration not enabled")
         try:
             fulfillment: Dict[str, Any] = {
-                "location_id": None,
                 "notify_customer": notify_customer,
             }
             if tracking_number:
