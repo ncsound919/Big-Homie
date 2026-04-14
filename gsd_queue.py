@@ -294,17 +294,20 @@ async def push_gsd_step(
         tool: Tool name to invoke for this step.
         params: Tool parameters as a dict (stored as JSONB).
     """
-    from supabase_client import get_supabase
-    db = get_supabase()
-    db.table("bm_mission_steps").insert({
-        "id": f"{objective_id}_{order}",
-        "objective_id": objective_id,
-        "step_order": order,
-        "action": action,
-        "tool": tool,
-        "params": params,
-        "status": "pending",
-    }).execute()
+    try:
+        from supabase_client import get_supabase
+        db = get_supabase()
+        db.table("bm_mission_steps").insert({
+            "objective_id": objective_id,
+            "step_order": order,
+            "action": action,
+            "tool": tool,
+            "params": params,
+            "status": "pending",
+        }).execute()
+    except Exception as e:
+        logger.error(f"push_gsd_step failed for objective '{objective_id}' step {order}: {e}")
+        raise
 
 
 if __name__ == "__main__":

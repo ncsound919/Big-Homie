@@ -523,7 +523,11 @@ def handle_reactive_event(payload: dict):
     """
     logger.info(f"⚡ Reactive event received: {payload}")
     try:
-        asyncio.run(heartbeat._execute_heartbeat())
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(heartbeat._execute_heartbeat())
+        else:
+            asyncio.run(heartbeat._execute_heartbeat())
     except Exception as e:
         logger.error(f"Reactive heartbeat failed: {e}")
 
@@ -541,7 +545,7 @@ def setup_realtime(agent_id: str):
             event="INSERT",
             schema="public",
             table="draymond_reactive_events",
-            callback=lambda payload: handle_reactive_event(payload),
+            callback=handle_reactive_event,
         ) \
         .subscribe()
     logger.info(f"🔔 Realtime subscription active for agent {agent_id}")

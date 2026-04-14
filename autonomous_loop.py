@@ -34,7 +34,7 @@ async def close_session(session_id: str, stats: dict):
     db = get_supabase()
     db.table("draymond_sessions").update({
         "is_active": False,
-        "ended_at": "now()",
+        "ended_at": datetime.utcnow().isoformat(),
         "total_actions": stats.get("total", 0),
         "successful_actions": stats.get("success", 0),
         "failed_actions": stats.get("failed", 0),
