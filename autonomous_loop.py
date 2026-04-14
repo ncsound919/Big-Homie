@@ -25,7 +25,24 @@ async def start_session(agent_id: str, trigger: str = "heartbeat") -> str:
         "trigger_source": trigger,
         "is_active": True,
     }).execute()
-    return res.data[0]["id"]
+
+    error = getattr(res, "error", None)
+    if error:
+        raise RuntimeError(f"Failed to start session in Supabase: {error}")
+
+    data = getattr(res, "data", None)
+    if not data:
+        raise RuntimeError(
+            "Failed to start session in Supabase: insert returned no rows."
+        )
+
+    row = data[0]
+    if "id" not in row:
+        raise RuntimeError(
+            f"Failed to start session in Supabase: inserted row missing 'id': {row}"
+        )
+
+    return row["id"]
 
 
 async def close_session(session_id: str, stats: dict):
