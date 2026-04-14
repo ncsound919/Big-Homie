@@ -4,11 +4,13 @@ Browse, execute, create, and schedule skills from the SkillRegistry.
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import uuid
 from datetime import datetime
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -391,12 +393,9 @@ class SkillLibraryWidget(QWidget):
         self._output.append(f"\n[{datetime.now().strftime('%H:%M:%S')}] Executing: {skill.name}…")
 
         # Run in background thread via QThread to avoid blocking UI
-        from PyQt6.QtCore import QThread, pyqtSignal as Signal
-        import asyncio
-
         class _ExecWorker(QThread):
-            done = Signal(object)
-            error = Signal(str)
+            done = pyqtSignal(object)
+            error = pyqtSignal(str)
 
             def __init__(self, skill_id, params, registry):
                 super().__init__()
@@ -465,7 +464,6 @@ class SkillLibraryWidget(QWidget):
             return
 
         try:
-            import uuid
             from skill_acquisition import SkillDefinition
             skill = SkillDefinition(
                 skill_id=str(uuid.uuid4()),

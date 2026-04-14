@@ -315,7 +315,8 @@ class CronManagerWidget(QWidget):
         self._table.setRowCount(len(tasks))
         for row, task in enumerate(tasks):
             self._table.setItem(row, 0, QTableWidgetItem(task.name))
-            self._table.setItem(row, 1, QTableWidgetItem(task.priority if isinstance(task.priority, str) else task.priority.value))
+            priority_str = task.priority.value if hasattr(task.priority, "value") else str(task.priority)
+            self._table.setItem(row, 1, QTableWidgetItem(priority_str))
 
             interval_str = "—"
             if task.interval_seconds:
@@ -347,8 +348,7 @@ class CronManagerWidget(QWidget):
             self._table.item(row, 0).setData(Qt.ItemDataRole.UserRole, task.id)
 
     def _on_selection_changed(self):
-        has_sel = bool(self._table.selectedRows() if hasattr(self._table, "selectedRows")
-                       else self._table.selectionModel().selectedRows())
+        has_sel = bool(self._table.selectionModel().selectedRows())
         self._run_now_btn.setEnabled(has_sel)
         self._toggle_btn.setEnabled(has_sel)
         self._remove_btn.setEnabled(has_sel)

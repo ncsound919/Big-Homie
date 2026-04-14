@@ -395,20 +395,6 @@ class BigHomieGUI(QMainWindow):
 
         return widget
 
-    def create_skills_tab(self) -> QWidget:
-        """Create skills tab (legacy - kept for backward compatibility)"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        self.skills_list = QListWidget()
-        layout.addWidget(self.skills_list)
-
-        refresh_button = QPushButton("Refresh Skills")
-        refresh_button.clicked.connect(self.refresh_skills)
-        layout.addWidget(refresh_button)
-
-        return widget
-
     def create_settings_tab(self) -> QWidget:
         """Create settings tab with secure financial settings panel"""
         self._financial_settings = SecureFinancialSettings()
