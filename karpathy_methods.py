@@ -465,7 +465,8 @@ class BestOfNSampler:
         """Generate a single draft."""
         decision, result = await self._get_router().execute_with_routing(
             task=query,
-            context=context
+            context=context,
+            temperature=temperature
         )
 
         return DraftCandidate(
