@@ -173,8 +173,9 @@ class BinanceIntegration:
         try:
             # Format numeric values as strings to avoid float precision issues and
             # to prevent scientific notation in the HMAC-signed query string.
-            # Strip trailing zeros but keep at least one decimal digit (e.g. 10.0 not 10).
             def _fmt(v: float) -> str:
+                """Format a float to 8 decimal places, strip trailing zeros,
+                but keep at least one decimal digit (e.g. 10.0, not 10)."""
                 s = f"{v:.8f}".rstrip("0")
                 return s + "0" if s.endswith(".") else s
 

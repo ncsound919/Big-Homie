@@ -3,6 +3,8 @@ Twilio Integration – Agentic Call Center & SMS
 Enables Big Homie to make/receive calls, send SMS, and run IVR flows
 """
 import base64
+import xml.sax.saxutils as _xml
+from urllib.parse import urlparse as _urlparse
 import httpx
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -240,9 +242,6 @@ class TwilioIntegration:
         Returns:
             TwiML XML string
         """
-        import xml.sax.saxutils as _xml
-        from urllib.parse import urlparse as _urlparse
-
         # Validate the action URL using proper URL parsing to prevent SSRF / injection.
         # Only allow http/https, a non-empty hostname, and no embedded credentials.
         _parsed = _urlparse(gather_action_url)
