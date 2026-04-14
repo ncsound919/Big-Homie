@@ -62,7 +62,7 @@ class AddCronDialog(QDialog):
         self._interval_spin.setValue(60)
         self._interval_unit = QComboBox()
         self._interval_unit.addItems(["minutes", "hours", "seconds"])
-        self._interval_unit.setCurrentIndex(1)  # hours default
+        self._interval_unit.setCurrentIndex(0)  # minutes default
         interval_row.addWidget(self._interval_spin)
         interval_row.addWidget(self._interval_unit)
         form.addRow("Interval:", interval_row)
@@ -145,9 +145,9 @@ class CronManagerWidget(QWidget):
     def _get_daemon(self):
         if self._daemon is None:
             try:
-                from kairos_daemon import KairosDaemon
-                self._daemon = KairosDaemon()
-                self._daemon.start()
+                from kairos_daemon import kairos, start_kairos
+                start_kairos()
+                self._daemon = kairos
             except Exception as e:
                 logger.warning(f"Could not start KAIROS daemon: {e}")
         return self._daemon
@@ -394,6 +394,24 @@ class CronManagerWidget(QWidget):
                 "low": TaskPriority.LOW,
                 "background": TaskPriority.BACKGROUND,
             }
+
+            # Build an async handler if a skill is linked
+            handler = None
+            linked_skill = vals["linked_skill"]
+            if linked_skill:
+                registry = self._get_skill_registry()
+                if registry:
+                    # Find skill_id by name
+                    skill_id = next(
+                        (s.skill_id for s in registry.skills.values() if s.name == linked_skill),
+                        None,
+                    )
+                    if skill_id:
+                        async def _skill_handler(_sid=skill_id, _reg=registry):
+                            result = await _reg.execute_skill(_sid)
+                            return {"output": result.output, "success": result.success, "cost": result.cost}
+                        handler = _skill_handler
+
             task = DaemonTask(
                 id=f"custom_{uuid.uuid4().hex[:8]}",
                 name=vals["name"],
@@ -401,7 +419,8 @@ class CronManagerWidget(QWidget):
                 priority=priority_map.get(vals["priority"], TaskPriority.NORMAL),
                 interval_seconds=vals["interval_seconds"],
                 enabled=vals["enabled"],
-                metadata={"linked_skill": vals["linked_skill"]},
+                handler=handler,
+                metadata={"linked_skill": linked_skill},
             )
             daemon.register_task(task)
             self._log(f"Task added: {vals['name']}")

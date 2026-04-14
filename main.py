@@ -470,20 +470,28 @@ class BigHomieGUI(QMainWindow):
     def _update_kairos_status(self):
         """Update KAIROS daemon status badge in the header."""
         try:
-            daemon = self.cron_tab._get_daemon()
-            if daemon:
-                state = daemon.state.value if hasattr(daemon.state, "value") else str(daemon.state)
-                color_map = {
-                    "running":       "#4CAF50",
-                    "idle":          "#2196F3",
-                    "processing":    "#FFC107",
-                    "paused":        "#FF9800",
-                    "stopped":       "#F44336",
-                    "initializing":  "#9C27B0",
-                }
-                color = color_map.get(state, "#9E9E9E")
-                self.kairos_status_label.setText(f"🔮 KAIROS: {state}")
-                self.kairos_status_label.setStyleSheet(f"font-weight: bold; color: {color};")
+            if not settings.kairos_enabled:
+                self.kairos_status_label.setText("🔮 KAIROS: disabled")
+                self.kairos_status_label.setStyleSheet("font-weight: bold; color: #9E9E9E;")
+                return
+            # Only read status if the daemon has already been accessed — don't force startup
+            daemon = self.cron_tab._daemon
+            if daemon is None:
+                self.kairos_status_label.setText("🔮 KAIROS: not started")
+                self.kairos_status_label.setStyleSheet("font-weight: bold; color: #9E9E9E;")
+                return
+            state = daemon.state.value if hasattr(daemon.state, "value") else str(daemon.state)
+            color_map = {
+                "running":       "#4CAF50",
+                "idle":          "#2196F3",
+                "processing":    "#FFC107",
+                "paused":        "#FF9800",
+                "stopped":       "#F44336",
+                "initializing":  "#9C27B0",
+            }
+            color = color_map.get(state, "#9E9E9E")
+            self.kairos_status_label.setText(f"🔮 KAIROS: {state}")
+            self.kairos_status_label.setStyleSheet(f"font-weight: bold; color: {color};")
         except Exception:
             pass
 
@@ -504,15 +512,6 @@ class BigHomieGUI(QMainWindow):
         for item in history:
             self.history_list.addItem(
                 f"[{item['timestamp']}] {item['task'][:50]}... - {item['status']} (${item['cost']:.4f})"
-            )
-
-    def refresh_skills(self):
-        """Refresh skills list"""
-        self.skills_list.clear()
-        skills = memory.list_skills()
-        for skill in skills:
-            self.skills_list.addItem(
-                f"{skill['name']} - Success: {skill['success_count']}x - {skill['description'][:50]}..."
             )
 
     def new_session(self):

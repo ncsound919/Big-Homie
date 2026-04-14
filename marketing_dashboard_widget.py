@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -20,7 +20,6 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSplitter,
     QTextEdit,
     QVBoxLayout,

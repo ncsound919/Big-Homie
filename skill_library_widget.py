@@ -145,18 +145,39 @@ class ExecuteSkillDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self._accept_if_valid)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _accept_if_valid(self):
+        text = self._params.toPlainText().strip()
+        if not text:
+            self.accept()
+            return
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            QMessageBox.warning(
+                self,
+                "Invalid Parameters",
+                f"Parameters must be valid JSON.\n\n{exc}",
+            )
+            return
+        if not isinstance(parsed, dict):
+            QMessageBox.warning(
+                self,
+                "Invalid Parameters",
+                "Parameters must be a JSON object (e.g. {\"key\": \"value\"}).",
+            )
+            return
+        self.accept()
 
     def get_params(self) -> Optional[dict]:
         text = self._params.toPlainText().strip()
         if not text:
             return None
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            return None
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else None
 
 
 class SkillLibraryWidget(QWidget):

@@ -345,14 +345,34 @@ class FinanceDashboardWidget(QWidget):
 
     def _toggle_engine(self):
         try:
-            import os
+            from config import settings
             from pathlib import Path
+            import re
+
+            new_enabled = not settings.revenue_engine_enabled
+
+            # 1. Update the in-memory settings object so the running engine sees the change
+            settings.revenue_engine_enabled = new_enabled
+
+            # 2. Persist to .env so the change survives a restart
             env_path = Path(__file__).parent / ".env"
-            # Flip the env var in memory for this run
-            current = os.environ.get("REVENUE_ENGINE_ENABLED", "false").lower()
-            new_val = "false" if current == "true" else "true"
-            os.environ["REVENUE_ENGINE_ENABLED"] = new_val
-            self._log_msg(f"Revenue engine {'enabled' if new_val == 'true' else 'disabled'} (restart to persist).")
+            new_val_str = "true" if new_enabled else "false"
+            key = "REVENUE_ENGINE_ENABLED"
+
+            if env_path.exists():
+                content = env_path.read_text(encoding="utf-8")
+                pattern = re.compile(r"^" + re.escape(key) + r"\s*=.*$", re.MULTILINE)
+                if pattern.search(content):
+                    content = pattern.sub(f"{key}={new_val_str}", content)
+                else:
+                    content = content.rstrip("\n") + f"\n{key}={new_val_str}\n"
+            else:
+                content = f"{key}={new_val_str}\n"
+
+            env_path.write_text(content, encoding="utf-8")
+
+            state_str = "enabled" if new_enabled else "disabled"
+            self._log_msg(f"Revenue engine {state_str} and persisted to .env.")
             self._refresh()
         except Exception as e:
             self._log_msg(f"Error toggling engine: {e}")
