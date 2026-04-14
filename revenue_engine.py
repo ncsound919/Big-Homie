@@ -271,7 +271,6 @@ class RevenueEngine:
     async def _handle_trading(self, task: RevenueTask, max_amount: float):
         """Alpaca stock/ETF trading sub-agent"""
         try:
-            from integrations.base_l2_integration import base_l2
             logger.info(f"[TRADING] Task {task.id}: researching positions via Alpaca")
             # Placeholder: real implementation would call Alpaca API for orders
             self.complete_task(task.id, revenue=0.0, cost=0.0, result={"note": "Trading analysis complete – no live orders placed (paper mode)"})
