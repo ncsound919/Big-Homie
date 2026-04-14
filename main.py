@@ -24,6 +24,10 @@ from content_utils import smart_truncator, markdown_exporter
 from fact_metadata import fact_checker, metadata_tagger
 from time_awareness import time_awareness
 from financial_settings_widget import SecureFinancialSettings
+from cron_manager_widget import CronManagerWidget
+from skill_library_widget import SkillLibraryWidget
+from finance_dashboard_widget import FinanceDashboardWidget
+from marketing_dashboard_widget import MarketingDashboardWidget
 import json
 from datetime import datetime
 
@@ -231,6 +235,12 @@ class BigHomieGUI(QMainWindow):
         header_layout.addWidget(title_label)
         header_layout.addStretch()
 
+        # KAIROS daemon status
+        self.kairos_status_label = QLabel("🔮 KAIROS: —")
+        self.kairos_status_label.setStyleSheet("font-weight: bold; color: #9E9E9E;")
+        self.kairos_status_label.setToolTip("KAIROS autonomous background daemon state")
+        header_layout.addWidget(self.kairos_status_label)
+
         # Cost display
         self.cost_label = QLabel(f"Session Cost: $0.00")
         self.cost_label.setStyleSheet("font-weight: bold; color: #4CAF50;")
@@ -249,9 +259,22 @@ class BigHomieGUI(QMainWindow):
         self.history_tab = self.create_history_tab()
         self.tabs.addTab(self.history_tab, "📜 History")
 
-        # Skills tab
-        self.skills_tab = self.create_skills_tab()
-        self.tabs.addTab(self.skills_tab, "🎯 Skills")
+        # Skills Library tab (enhanced)
+        self.skill_library_tab = SkillLibraryWidget()
+        self.skill_library_tab.skill_scheduled.connect(self._on_skill_scheduled)
+        self.tabs.addTab(self.skill_library_tab, "🎯 Skills Library")
+
+        # Finance Dashboard tab
+        self.finance_tab = FinanceDashboardWidget()
+        self.tabs.addTab(self.finance_tab, "💰 Finance")
+
+        # Marketing Dashboard tab
+        self.marketing_tab = MarketingDashboardWidget()
+        self.tabs.addTab(self.marketing_tab, "📣 Marketing")
+
+        # Cron Jobs tab
+        self.cron_tab = CronManagerWidget()
+        self.tabs.addTab(self.cron_tab, "⏰ Cron Jobs")
 
         # Settings tab
         self.settings_tab = self.create_settings_tab()
@@ -271,6 +294,11 @@ class BigHomieGUI(QMainWindow):
         self.cost_timer = QTimer()
         self.cost_timer.timeout.connect(self.update_cost_display)
         self.cost_timer.start(1000)  # Update every second
+
+        # Start KAIROS status timer
+        self._kairos_status_timer = QTimer()
+        self._kairos_status_timer.timeout.connect(self._update_kairos_status)
+        self._kairos_status_timer.start(3000)  # Update every 3 seconds
 
     def create_menu_bar(self):
         """Create menu bar"""
@@ -368,7 +396,7 @@ class BigHomieGUI(QMainWindow):
         return widget
 
     def create_skills_tab(self) -> QWidget:
-        """Create skills tab"""
+        """Create skills tab (legacy - kept for backward compatibility)"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
@@ -452,6 +480,36 @@ class BigHomieGUI(QMainWindow):
         # Alert if threshold exceeded
         if total_cost > settings.cost_alert_threshold:
             self.cost_label.setStyleSheet("font-weight: bold; color: #F44336;")
+
+    def _update_kairos_status(self):
+        """Update KAIROS daemon status badge in the header."""
+        try:
+            daemon = self.cron_tab._get_daemon()
+            if daemon:
+                state = daemon.state.value if hasattr(daemon.state, "value") else str(daemon.state)
+                color_map = {
+                    "running":       "#4CAF50",
+                    "idle":          "#2196F3",
+                    "processing":    "#FFC107",
+                    "paused":        "#FF9800",
+                    "stopped":       "#F44336",
+                    "initializing":  "#9C27B0",
+                }
+                color = color_map.get(state, "#9E9E9E")
+                self.kairos_status_label.setText(f"🔮 KAIROS: {state}")
+                self.kairos_status_label.setStyleSheet(f"font-weight: bold; color: {color};")
+        except Exception:
+            pass
+
+    def _on_skill_scheduled(self, skill_name: str):
+        """Switch to Cron Jobs tab when a skill is sent there from the Skill Library."""
+        for i in range(self.tabs.count()):
+            if "Cron" in self.tabs.tabText(i):
+                self.tabs.setCurrentIndex(i)
+                self.status_bar.showMessage(
+                    f"Skill '{skill_name}' ready to schedule — click ➕ Add Task and link the skill."
+                )
+                return
 
     def refresh_history(self):
         """Refresh task history"""
