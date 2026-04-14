@@ -444,15 +444,19 @@ async def log_deal(
     """
     try:
         from supabase_client import get_supabase
-        db = get_supabase()
-        return db.table("draymond_crm_deals").insert({
-            "contact_id": contact_id,
-            "title": title,
-            "value_cents": value_cents,
-            "service_type": service,
-            "source_platform": source,
-            "stage": "lead",
-        }).execute()
+
+        def _insert_deal():
+            db = get_supabase()
+            return db.table("draymond_crm_deals").insert({
+                "contact_id": contact_id,
+                "title": title,
+                "value_cents": value_cents,
+                "service_type": service,
+                "source_platform": source,
+                "stage": "lead",
+            }).execute()
+
+        return await asyncio.to_thread(_insert_deal)
     except Exception as e:
         logger.error(f"log_deal failed for '{title}': {e}")
         raise
