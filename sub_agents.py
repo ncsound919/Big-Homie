@@ -665,6 +665,8 @@ class EnhancedOrchestrator:
     MAX_WORKERS = 10
     HEALTH_CHECK_INTERVAL = 60  # seconds
     FAILOVER_THRESHOLD = 3  # consecutive failures before failover
+    LATENCY_HISTORY_WEIGHT = 0.8   # Exponential moving average weight for history
+    LATENCY_CURRENT_WEIGHT = 0.2   # Weight for the most recent sample
 
     def __init__(self):
         self.base_orchestrator = SubAgentOrchestrator()
@@ -832,14 +834,12 @@ class EnhancedOrchestrator:
 
             if latency_ms > 0:
                 # Rolling average using exponential moving average
-                LATENCY_HISTORY_WEIGHT = 0.8
-                LATENCY_CURRENT_WEIGHT = 0.2
                 if health.average_latency_ms == 0:
                     health.average_latency_ms = latency_ms
                 else:
                     health.average_latency_ms = (
-                        health.average_latency_ms * LATENCY_HISTORY_WEIGHT +
-                        latency_ms * LATENCY_CURRENT_WEIGHT
+                        health.average_latency_ms * self.LATENCY_HISTORY_WEIGHT +
+                        latency_ms * self.LATENCY_CURRENT_WEIGHT
                     )
 
     def create_channel(self, participants: List[str]) -> str:

@@ -15,7 +15,7 @@ import threading
 import time
 import signal
 import sys
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, time as time_of_day, timedelta
 from typing import Dict, List, Any, Optional, Callable, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -88,8 +88,8 @@ class KairosConfig:
     max_background_cost_per_hour: float = 1.0  # USD limit per hour
     max_concurrent_tasks: int = 3
     quiet_hours_enabled: bool = True
-    quiet_hours_start: dt_time = dt_time(23, 0)
-    quiet_hours_end: dt_time = dt_time(6, 0)
+    quiet_hours_start: time_of_day = time_of_day(23, 0)
+    quiet_hours_end: time_of_day = time_of_day(6, 0)
     priority_task_timeout: int = 300  # 5 min for critical tasks
     normal_task_timeout: int = 600  # 10 min for normal tasks
     enable_auto_consolidation: bool = True

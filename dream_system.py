@@ -12,7 +12,7 @@ The Dream System operates during idle periods to:
 import asyncio
 import json
 import uuid
-from datetime import datetime, timedelta, time as dt_time
+from datetime import datetime, timedelta, time as time_of_day
 from typing import Dict, List, Any, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -93,8 +93,8 @@ class DreamConfig:
     """Configuration for the dream system"""
     enabled: bool = True
     # Scheduling
-    dream_hours_start: dt_time = dt_time(2, 0)   # 2 AM
-    dream_hours_end: dt_time = dt_time(5, 0)     # 5 AM
+    dream_hours_start: time_of_day = time_of_day(2, 0)   # 2 AM
+    dream_hours_end: time_of_day = time_of_day(5, 0)     # 5 AM
     min_idle_minutes: int = 30  # Minimum idle time before dreaming
     # Consolidation settings
     consolidation_threshold: int = 100  # Min memories before consolidation
