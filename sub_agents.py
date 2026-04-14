@@ -1014,10 +1014,9 @@ class EnhancedOrchestrator:
         return result
 
     def scale_workers(self, new_max: int):
-        """Dynamically scale the maximum number of parallel workers"""
+        """Update the configured maximum number of parallel workers."""
         old_max = self.MAX_WORKERS
         self.MAX_WORKERS = min(max(1, new_max), 20)  # Clamp between 1-20
-        self._worker_semaphore = asyncio.Semaphore(self.MAX_WORKERS)
         logger.info(f"Worker pool scaled: {old_max} -> {self.MAX_WORKERS}")
 
     def get_status(self) -> Dict[str, Any]:
