@@ -717,7 +717,8 @@ Provide refinement suggestions in JSON:
 
         # Calculate validation score
         total_checks = 3 + len(plan.phases) * 2
-        passed_checks = total_checks - len(validation["issues"]) - len(validation["warnings"]) * 0.5
+        # Warnings count as half an issue
+        passed_checks = total_checks - len(validation["issues"]) - (len(validation["warnings"]) * 0.5)
         validation["score"] = max(0, passed_checks / total_checks)
 
         if validation["score"] < 0.6:

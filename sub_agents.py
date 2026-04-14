@@ -634,6 +634,8 @@ class AgentHealth:
     last_success: Optional[datetime] = None
     last_failure: Optional[datetime] = None
     consecutive_failures: int = 0
+    total_failures: int = 0
+    total_successes: int = 0
     total_tasks: int = 0
     success_rate: float = 1.0
     average_latency_ms: float = 0.0
@@ -811,20 +813,21 @@ class EnhancedOrchestrator:
                 if success:
                     health.last_success = datetime.now()
                     health.consecutive_failures = 0
+                    health.total_successes += 1
                     health.status = AgentHealthStatus.HEALTHY
                 else:
                     health.last_failure = datetime.now()
                     health.consecutive_failures += 1
+                    health.total_failures += 1
 
                     if health.consecutive_failures >= self.FAILOVER_THRESHOLD:
                         health.status = AgentHealthStatus.UNHEALTHY
                     elif health.consecutive_failures > 0:
                         health.status = AgentHealthStatus.DEGRADED
 
-                # Update success rate
+                # Update success rate based on total successes and failures
                 if health.total_tasks > 0:
-                    failed = health.consecutive_failures
-                    health.success_rate = max(0, (health.total_tasks - failed) / health.total_tasks)
+                    health.success_rate = max(0, health.total_successes / health.total_tasks)
 
             if latency_ms > 0:
                 # Rolling average

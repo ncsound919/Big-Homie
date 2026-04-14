@@ -854,11 +854,16 @@ List up to 10 connections in JSON:
                 }
                 for n in sorted_nodes
             ],
-            "categories": dict(defaultdict(
-                int,
-                {n.category: 1 for n in self.nodes.values()}
-            ))
+            "categories": self._count_node_categories()
         }
+
+    def _count_node_categories(self) -> Dict[str, int]:
+        """Count nodes by category"""
+        counts: Dict[str, int] = {}
+        for node in self.nodes.values():
+            category = node.category
+            counts[category] = counts.get(category, 0) + 1
+        return counts
 
 
 # Global dream system instance

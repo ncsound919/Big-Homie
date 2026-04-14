@@ -573,9 +573,10 @@ class KairosDaemon:
 
             for skill in skills:
                 # Identify high-performing skills
-                success_rate = skill.get("success_count", 0) / max(
-                    skill.get("success_count", 0) + skill.get("failure_count", 1), 1
-                )
+                success_count = skill.get("success_count", 0)
+                failure_count = skill.get("failure_count", 0)
+                total = success_count + failure_count
+                success_rate = success_count / max(total, 1)
 
                 if success_rate > 0.8:
                     # Mark as optimized/reliable
