@@ -19,8 +19,10 @@ def _resolve_key() -> str:
     # Fall back to the legacy supabase_key field
     if settings.supabase_key:
         return settings.supabase_key
-    # Last-resort published anon key (read-only, RLS enforced)
-    return "sb_publishable_Ysm568aFGilsd-nUZN8a6w_eW5vc9uq"
+    raise RuntimeError(
+        "Supabase key is not configured. Set settings.supabase_anon_key "
+        "or settings.supabase_key before creating the Supabase client."
+    )
 
 
 def _resolve_url() -> str:
