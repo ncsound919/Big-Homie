@@ -1,7 +1,8 @@
 """
 Secure Financial Settings Widget
-A categorized, password-masked settings panel for all financial integrations.
-Reads from and writes to the .env file with AES encryption for sensitive values.
+A categorized, password-masked settings panel for financial integrations.
+Reads from and writes to the .env file. Sensitive values are masked in the UI
+but are stored in the .env file without encryption.
 """
 from __future__ import annotations
 
