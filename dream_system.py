@@ -195,7 +195,7 @@ class DreamSystem:
                 return False
         # Check if enough memories to consolidate
         all_memories = memory.search_memory(limit=10)
-        if len(all_memories) < 5:  # Need some memories to work with
+        if len(all_memories) < self.config.consolidation_threshold:  # Need some memories to work with
             return False
 
         return True
