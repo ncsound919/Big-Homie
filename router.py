@@ -285,8 +285,13 @@ class SmartRouter:
         Returns:
             Tuple of (routing decision, LLM response)
         """
-        # Get routing decision
-        decision = self.route_task(task, context, **kwargs)
+        # Get routing decision using only routing-specific kwargs.
+        routing_kwargs = {
+            key: kwargs[key]
+            for key in ("prefer_cost", "prefer_quality")
+            if key in kwargs
+        }
+        decision = self.route_task(task, context, **routing_kwargs)
 
         # Apply Karpathy temperature calibration if not already set
         if "temperature" not in kwargs:
