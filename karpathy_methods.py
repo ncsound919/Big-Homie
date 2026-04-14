@@ -420,10 +420,25 @@ class BestOfNSampler:
         if not drafts:
             raise RuntimeError("All draft generations failed")
 
+        # Accumulate successful draft-generation costs
+        total_cost = sum(float(getattr(d, "cost", 0.0) or 0.0) for d in drafts)
+        draft_cost_by_id = {
+            getattr(d, "id", i): float(getattr(d, "cost", 0.0) or 0.0)
+            for i, d in enumerate(drafts)
+        }
+
         # Score all drafts
         scored_drafts = await self._score_drafts(query, drafts, criteria)
-        total_cost += sum(d.score for d in scored_drafts) * 0  # cost tracked separately
 
+        # Add any incremental scoring/judging cost without double-counting
+        scoring_cost = 0.0
+        for i, draft in enumerate(scored_drafts):
+            draft_id = getattr(draft, "id", i)
+            scored_cost = float(getattr(draft, "cost", 0.0) or 0.0)
+            original_cost = draft_cost_by_id.get(draft_id, 0.0)
+            if scored_cost > original_cost:
+                scoring_cost += scored_cost - original_cost
+        total_cost += scoring_cost
         # Select best
         best = max(scored_drafts, key=lambda d: d.score)
 
