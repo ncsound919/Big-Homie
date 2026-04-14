@@ -696,12 +696,14 @@ class EnhancedOrchestrator:
         max_workers = min(max_parallel or self.MAX_WORKERS, len(tasks))
         logger.info(f"Spawning {max_workers} parallel workers for {len(tasks)} tasks")
 
-        # Create semaphore for this batch
-        semaphore = asyncio.Semaphore(max_workers)
+        # Keep the per-batch limit while also honoring the instance-wide
+        # semaphore so scale_workers() can adjust runtime concurrency.
+        batch_semaphore = asyncio.Semaphore(max_workers)
 
         async def execute_with_limit(task_info: Dict) -> Dict[str, Any]:
-            async with semaphore:
-                return await self._execute_worker_task(task_info, retry_failed)
+            async with self._worker_semaphore:
+                async with batch_semaphore:
+                    return await self._execute_worker_task(task_info, retry_failed)
 
         # Execute all tasks with limited parallelism
         results = await asyncio.gather(
