@@ -74,11 +74,12 @@ class RevenueEngine:
     1. Evaluate configured active streams
     2. Decompose daily/session goal into per-stream sub-tasks
     3. Dispatch tasks to specialized sub-agents (trading, ecommerce, etc.)
-    4. Monitor execution, enforce risk limits, collect results
-    5. Emit revenue reports and reinvest configured percentage
+    4. Monitor execution, enforce risk limits, and collect results
+    5. Emit revenue reports summarizing task outcomes and financial totals
 
-    All write/transact operations require explicit human approval unless
-    auto_approve is set and the amount is below revenue_max_single_trade_usd.
+    This class coordinates task execution and reporting only. Any approval
+    requirements, transaction safeguards, or reinvestment behavior must be
+    implemented by the specific task handlers or external orchestration layers.
     """
 
     def __init__(self):
