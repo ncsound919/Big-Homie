@@ -79,21 +79,64 @@ class DaemonMetrics:
     current_state: DaemonState = DaemonState.STOPPED
 
 
+def _get_kairos_setting(name: str, default: Any) -> Any:
+    """Read a KAIROS setting from config, falling back to the existing default."""
+    return getattr(settings, name, default)
+
+
+def _get_kairos_time_setting(name: str, default: time_of_day) -> time_of_day:
+    """Read a KAIROS time setting from config and coerce common string formats."""
+    value = getattr(settings, name, default)
+
+    if isinstance(value, time_of_day):
+        return value
+
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value.strip(), "%H:%M").time()
+        except ValueError:
+            return default
+
+    return default
+
+
 @dataclass
 class KairosConfig:
     """Configuration for KAIROS daemon"""
-    enabled: bool = True
-    idle_threshold_seconds: int = 300  # 5 minutes of no activity = idle
-    consolidation_interval_seconds: int = 3600  # Consolidate every hour when idle
-    max_background_cost_per_hour: float = 1.0  # USD limit per hour
-    max_concurrent_tasks: int = 3
-    quiet_hours_enabled: bool = True
-    quiet_hours_start: time_of_day = time_of_day(23, 0)
-    quiet_hours_end: time_of_day = time_of_day(6, 0)
-    priority_task_timeout: int = 300  # 5 min for critical tasks
-    normal_task_timeout: int = 600  # 10 min for normal tasks
-    enable_auto_consolidation: bool = True
-    enable_proactive_tasks: bool = True
+    enabled: bool = field(default_factory=lambda: _get_kairos_setting("kairos_enabled", True))
+    idle_threshold_seconds: int = field(
+        default_factory=lambda: _get_kairos_setting("kairos_idle_threshold_seconds", 300)
+    )  # 5 minutes of no activity = idle
+    consolidation_interval_seconds: int = field(
+        default_factory=lambda: _get_kairos_setting("kairos_consolidation_interval_seconds", 3600)
+    )  # Consolidate every hour when idle
+    max_background_cost_per_hour: float = field(
+        default_factory=lambda: _get_kairos_setting("kairos_max_background_cost_per_hour", 1.0)
+    )  # USD limit per hour
+    max_concurrent_tasks: int = field(
+        default_factory=lambda: _get_kairos_setting("kairos_max_concurrent_tasks", 3)
+    )
+    quiet_hours_enabled: bool = field(
+        default_factory=lambda: _get_kairos_setting("kairos_quiet_hours_enabled", True)
+    )
+    quiet_hours_start: time_of_day = field(
+        default_factory=lambda: _get_kairos_time_setting("kairos_quiet_hours_start", time_of_day(23, 0))
+    )
+    quiet_hours_end: time_of_day = field(
+        default_factory=lambda: _get_kairos_time_setting("kairos_quiet_hours_end", time_of_day(6, 0))
+    )
+    priority_task_timeout: int = field(
+        default_factory=lambda: _get_kairos_setting("kairos_priority_task_timeout", 300)
+    )  # 5 min for critical tasks
+    normal_task_timeout: int = field(
+        default_factory=lambda: _get_kairos_setting("kairos_normal_task_timeout", 600)
+    )  # 10 min for normal tasks
+    enable_auto_consolidation: bool = field(
+        default_factory=lambda: _get_kairos_setting("kairos_enable_auto_consolidation", True)
+    )
+    enable_proactive_tasks: bool = field(
+        default_factory=lambda: _get_kairos_setting("kairos_enable_proactive_tasks", True)
+    )
 
 
 class KairosDaemon:
