@@ -423,3 +423,40 @@ class RevenueEngine:
 
 # Global instance
 revenue_engine = RevenueEngine()
+
+
+async def log_deal(
+    contact_id: str,
+    title: str,
+    value_cents: int,
+    service: str,
+    source: str,
+):
+    """
+    Persist a CRM deal to the Draymond ``draymond_crm_deals`` table.
+
+    Args:
+        contact_id: Draymond contact UUID linked to this deal.
+        title: Short human-readable deal name.
+        value_cents: Deal value in cents (e.g. 4900 = $49.00).
+        service: ``music_production`` | ``web_dev`` | ``software_dev`` | ``other``
+        source: ``fiverr`` | ``upwork`` | ``website`` | ``referral`` | ``direct``
+    """
+    try:
+        from supabase_client import get_supabase
+
+        def _insert_deal():
+            db = get_supabase()
+            return db.table("draymond_crm_deals").insert({
+                "contact_id": contact_id,
+                "title": title,
+                "value_cents": value_cents,
+                "service_type": service,
+                "source_platform": source,
+                "stage": "lead",
+            }).execute()
+
+        return await asyncio.to_thread(_insert_deal)
+    except Exception as e:
+        logger.error(f"log_deal failed for '{title}': {e}")
+        raise

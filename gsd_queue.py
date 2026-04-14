@@ -24,6 +24,7 @@ import json
 import time
 import logging
 import sqlite3
+import asyncio
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from enum import Enum
@@ -275,6 +276,43 @@ class GSDQueue:
         with self._conn() as c:
             rows = c.execute("SELECT stage, COUNT(*) as n FROM gsd_items GROUP BY stage").fetchall()
         return {r["stage"]: r["n"] for r in rows}
+
+
+async def push_gsd_step(
+    objective_id: str,
+    order: int,
+    action: str,
+    tool: str,
+    params: dict,
+):
+    """
+    Persist a single GSD task step to the Draymond ``bm_mission_steps`` table.
+
+    Args:
+        objective_id: Parent objective/goal UUID in Draymond.
+        order: Step sequence number within the objective.
+        action: Human-readable action description.
+        tool: Tool name to invoke for this step.
+        params: Tool parameters as a dict (stored as JSONB).
+    """
+    try:
+        from supabase_client import get_supabase
+
+        def _insert_step():
+            db = get_supabase()
+            return db.table("bm_mission_steps").insert({
+                "objective_id": objective_id,
+                "step_order": order,
+                "action": action,
+                "tool": tool,
+                "params": params,
+                "status": "pending",
+            }).execute()
+
+        await asyncio.to_thread(_insert_step)
+    except Exception as e:
+        logger.error(f"push_gsd_step failed for objective '{objective_id}' step {order}: {e}")
+        raise
 
 
 if __name__ == "__main__":
