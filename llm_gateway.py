@@ -783,6 +783,11 @@ class LLMGateway:
                 # No tools requested, return final response
                 return response
 
+            # Safety check: prevent runaway loops
+            if tool_round >= max_tool_rounds - 1:
+                logger.warning(f"Max tool rounds ({max_tool_rounds}) reached, returning current response")
+                return response
+
             provider = response.get("_provider", Provider.ANTHROPIC.value)
 
             # Execute all requested tools, collecting results per call

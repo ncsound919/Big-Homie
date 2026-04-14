@@ -585,13 +585,20 @@ def setup_realtime(agent_id: str):
     """
     from supabase_client import get_supabase
     db = get_supabase()
-    db.realtime.channel("big-homie-events") \
-        .on(
-            "postgres_changes",
-            event="INSERT",
-            schema="public",
-            table="draymond_reactive_events",
-            callback=handle_reactive_event,
-        ) \
-        .subscribe()
+    if db is None:
+        logger.warning("Supabase client not available - realtime subscription skipped")
+        return
+
+    channel = db.realtime.channel("big-homie-events")
+    if channel is None:
+        logger.warning("Failed to create realtime channel")
+        return
+
+    channel.on(
+        "postgres_changes",
+        event="INSERT",
+        schema="public",
+        table="draymond_reactive_events",
+        callback=handle_reactive_event,
+    ).subscribe()
     logger.info(f"🔔 Realtime subscription active for agent {agent_id}")
