@@ -1263,7 +1263,7 @@ class KarpathyEngine:
         - Ambiguous / hard questions → scratchpad reasoning
         - Quality mode or cost-insensitive → best-of-N
         - Controversial or high-stakes → debate
-        - All paths → constitutional review
+        - Full/high-quality pipeline → constitutional review before returning
 
         Args:
             query: The task
