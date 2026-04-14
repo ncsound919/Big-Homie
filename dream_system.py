@@ -286,9 +286,7 @@ class DreamSystem:
 
         finally:
             self.is_dreaming = False
-            cycle = self.current_cycle
             self.current_cycle = None
-            return cycle
 
     async def _initialize_cycle(self):
         """Initialize the dream cycle"""
