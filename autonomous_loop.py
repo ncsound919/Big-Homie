@@ -7,7 +7,7 @@ import json
 import uuid
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from loguru import logger
 
@@ -51,7 +51,7 @@ async def close_session(session_id: str, stats: dict):
     db = get_supabase()
     db.table("draymond_sessions").update({
         "is_active": False,
-        "ended_at": datetime.utcnow().isoformat(),
+        "ended_at": datetime.now(timezone.utc).isoformat(),
         "total_actions": stats.get("total", 0),
         "successful_actions": stats.get("success", 0),
         "failed_actions": stats.get("failed", 0),
