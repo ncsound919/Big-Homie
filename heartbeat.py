@@ -523,11 +523,13 @@ def handle_reactive_event(payload: dict):
     """
     logger.info(f"⚡ Reactive event received: {payload}")
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(heartbeat._execute_heartbeat())
-        else:
+        loop = asyncio.get_running_loop()
+        loop.create_task(heartbeat._execute_heartbeat())
+    except RuntimeError:
+        try:
             asyncio.run(heartbeat._execute_heartbeat())
+        except Exception as e:
+            logger.error(f"Reactive heartbeat failed: {e}")
     except Exception as e:
         logger.error(f"Reactive heartbeat failed: {e}")
 
