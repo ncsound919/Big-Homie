@@ -24,6 +24,7 @@ import json
 import time
 import logging
 import sqlite3
+import asyncio
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from enum import Enum
@@ -296,15 +297,19 @@ async def push_gsd_step(
     """
     try:
         from supabase_client import get_supabase
-        db = get_supabase()
-        db.table("bm_mission_steps").insert({
-            "objective_id": objective_id,
-            "step_order": order,
-            "action": action,
-            "tool": tool,
-            "params": params,
-            "status": "pending",
-        }).execute()
+
+        def _insert_step():
+            db = get_supabase()
+            return db.table("bm_mission_steps").insert({
+                "objective_id": objective_id,
+                "step_order": order,
+                "action": action,
+                "tool": tool,
+                "params": params,
+                "status": "pending",
+            }).execute()
+
+        await asyncio.to_thread(_insert_step)
     except Exception as e:
         logger.error(f"push_gsd_step failed for objective '{objective_id}' step {order}: {e}")
         raise
