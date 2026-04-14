@@ -607,13 +607,356 @@ result = await orchestrator.execute_workflow(workflow, parallel=False)
 
 ---
 
+## 🧠 Karpathy LLM Methods (Tier 6.5)
+
+Implements Andrej Karpathy's key insights on maximizing LLM operational quality:
+
+### 1. Temperature Calibration
+
+```python
+from karpathy_methods import temperature_calibrator, TaskNature
+
+# Auto-classify and get optimal temperature
+temp = temperature_calibrator.get_temperature("What is 2+2?")         # → 0.0 (factual)
+temp = temperature_calibrator.get_temperature("Write a short story")  # → 0.9 (creative)
+temp = temperature_calibrator.get_temperature_for_role("coder")       # → 0.1 (code)
+
+# Integrated in router.py — ALL routing calls now use calibrated temperatures
+# No code change needed; happens automatically
+```
+
+**Karpathy insight:** *"Temperature 0 for anything that has a right answer. Higher for creative tasks where diversity matters."*
+
+### 2. Scratchpad Reasoning
+
+```python
+from karpathy_methods import scratchpad_reasoner
+
+# Force deliberate thinking before committing to an answer
+result = await scratchpad_reasoner.think(
+    query="Should I use Redis or PostgreSQL for session storage?",
+    context={"scale": "10k users", "budget": "low"}
+)
+
+print(result.scratchpad)    # Private reasoning (tradeoff analysis)
+print(result.final_answer)  # Clean answer after reflection
+print(result.confidence)    # 0.88
+```
+
+**Karpathy insight:** *"Give the model a private scratchpad — it can reason through wrong paths and correct itself before the final answer is locked in."*
+
+### 3. Best-of-N Sampling
+
+```python
+from karpathy_methods import best_of_n_sampler
+
+# Generate 5 independent drafts and pick the best-scoring one
+result = await best_of_n_sampler.sample(
+    query="Write a Python function to merge sorted lists",
+    n=5,
+    temperature=0.7
+)
+
+print(result.best_draft.content)      # Best answer
+print(result.best_draft.score)        # e.g., 0.94
+print(len(result.all_drafts))         # 5
+```
+
+**Karpathy insight:** *"Scaling inference compute: run the same prompt N times and pick the best response. You get real quality gains for a predictable cost increase."*
+
+### 4. Few-Shot Library
+
+```python
+from karpathy_methods import few_shot_library
+
+# Add examples to the library
+few_shot_library.add_example(
+    task_type="api_design",
+    input_text="Design a REST endpoint for user login",
+    output_text="POST /api/v1/auth/login → returns {token, user_id, expires_at}",
+    tags=["api", "rest", "auth"]
+)
+
+# Retrieve relevant examples and build a few-shot block
+block = few_shot_library.build_few_shot_block(
+    query="Design an endpoint for password reset",
+    k=3
+)
+# Returns formatted examples to inject into your prompt
+
+# Auto-augment a query with retrieved examples
+augmented = karpathy_engine.augment_with_examples(
+    "Design a REST endpoint for user logout",
+    task_type="api_design"
+)
+```
+
+**Karpathy insight:** *"Few-shot prompting is enormously powerful. The model already saw millions of similar examples in pretraining — a few at inference time dramatically improve structured task performance."*
+
+### 5. Process Reward Model (PRM)
+
+```python
+from karpathy_methods import process_reward_model
+
+steps = [
+    "First, identify all prime numbers less than 10: 2, 3, 5, 7",
+    "Sum them: 2+3+5+7 = 17",
+    "Therefore the answer is 17"
+]
+
+result = await process_reward_model.score_steps(
+    query="What is the sum of primes less than 10?",
+    steps=steps
+)
+
+print(result.overall_score)    # 0.96
+print(result.passed_threshold) # True
+for step in result.step_scores:
+    print(f"Step {step.step_number}: {step.score:.2f} - {step.critique}")
+```
+
+**Karpathy insight:** *"Don't just verify the final answer — score every intermediate step. A chain-of-thought with a wrong mid-step may still produce a correct-looking final answer by accident."*
+
+### 6. Self-Play Debate
+
+```python
+from karpathy_methods import self_play_debate
+
+result = await self_play_debate.debate(
+    topic="Should we use microservices or a monolith for this new project?",
+    rounds=2,
+    context={"team_size": 3, "timeline": "6 months", "traffic": "low"}
+)
+
+print(result.final_verdict)  # Judge's conclusion
+print(result.confidence)     # 0.82
+for r in result.rounds:
+    print(f"Round {r.round_number}: Proposition vs Critique")
+```
+
+**Karpathy insight:** *"Multi-agent debate improves answer quality on hard problems. Two models with different perspectives force deeper reasoning and catch errors."*
+
+### 7. Constitutional Review
+
+```python
+from karpathy_methods import constitutional_reviewer
+
+result = await constitutional_reviewer.review(
+    output="The drug XYZ cures all cancers...",
+    original_query="Tell me about cancer treatments",
+    # Custom principles override defaults
+    custom_principles=[
+        "All medical claims must be qualified with 'consult a doctor'",
+        "Do not make absolute claims about treatments",
+    ]
+)
+
+print(result.all_passed)       # False → triggered revision
+print(result.revision_count)   # 1
+print(result.final_output)     # Revised, compliant output
+```
+
+**Karpathy insight:** *"Have the model critique its own outputs against principles and revise. This is surprisingly effective at removing harmful or incorrect content."*
+
+### 8. Unified KarpathyEngine
+
+```python
+from karpathy_methods import karpathy_engine
+
+# Auto-select the best method
+result = await karpathy_engine.auto(
+    query="Explain the pros and cons of async vs sync Python",
+    quality_mode=False  # Set True for full pipeline (scratchpad + best-of-N + constitutional)
+)
+print(result["answer"])
+print(result["method"])     # "scratchpad_constitutional"
+print(result["confidence"]) # 0.87
+
+# Full quality pipeline
+result = await karpathy_engine.auto(
+    query="Design a caching strategy for our API",
+    quality_mode=True
+)
+print(result["bon_score"])           # Best-of-N winner score
+print(result["constitutional_passed"]) # True
+
+# Get capabilities summary
+caps = karpathy_engine.get_capabilities_summary()
+for method, desc in caps.items():
+    print(f"{method}: {desc}")
+```
+
+---
+
 ## 📚 Further Reading
 
 - `SOUL.md` - Big Homie's persistent identity and principles
 - `HEARTBEAT.md` - Detailed autonomous system documentation
-- `router.py` - Multi-model orchestration implementation
+- `router.py` - Multi-model orchestration with Karpathy temperature calibration
 - `sub_agents.py` - Sub-agent spawning system
 - `heartbeat.py` - Autonomous heartbeat implementation
+- `karpathy_methods.py` - Karpathy LLM methods implementation
+- `kairos_daemon.py` - KAIROS persistent daemon mode
+- `ultraplan.py` - ULTRAPLAN complex planning system
+- `dream_system.py` - autoDream memory consolidation
+
+---
+
+## 🔮 Advanced Features (Tier 7)
+
+### KAIROS - Persistent Autonomous Daemon
+
+KAIROS (Knowledge-Augmented Intelligent Responsive Operating System) operates as a continuous background process:
+
+```python
+from kairos_daemon import kairos, start_kairos, stop_kairos
+
+# Start the daemon
+start_kairos()
+
+# Check status
+status = kairos.get_status()
+print(f"State: {status['state']}, Tasks executed: {status['tasks_executed']}")
+
+# Register custom background task
+from kairos_daemon import DaemonTask, TaskPriority
+
+custom_task = DaemonTask(
+    id="my_custom_task",
+    name="Custom Background Task",
+    description="Runs periodically in background",
+    priority=TaskPriority.LOW,
+    interval_seconds=3600,  # Every hour
+    handler=my_async_handler
+)
+kairos.register_task(custom_task)
+
+# Stop when done
+stop_kairos()
+```
+
+**Key Features:**
+- ✅ Always-on background operation
+- ✅ Priority-based task scheduling
+- ✅ Automatic memory consolidation
+- ✅ Cost-aware resource management
+- ✅ Quiet hours respect
+
+### ULTRAPLAN - Complex Planning System
+
+ULTRAPLAN handles deep planning sessions for complex objectives:
+
+```python
+from ultraplan import ultraplan, create_ultraplan
+
+# Create a comprehensive plan
+plan = await create_ultraplan(
+    goal="Build a complete e-commerce platform",
+    context={"budget": "$50k", "timeline": "3 months"},
+    constraints=["Must use Python", "Cloud-native architecture"],
+    time_limit_seconds=1800  # 30 minutes max
+)
+
+print(f"Plan: {plan.title}")
+print(f"Phases: {len(plan.phases)}")
+print(f"Complexity: {plan.complexity.value}")
+
+# Access detailed phases
+for phase in plan.phases:
+    print(f"\n{phase.name}:")
+    for milestone in phase.milestones:
+        print(f"  - {milestone.name}")
+        for step in milestone.output.get("steps", []):
+            print(f"    • {step}")
+```
+
+**Key Features:**
+- ✅ Multi-phase decomposition
+- ✅ Milestone tracking
+- ✅ Session persistence & resumption
+- ✅ Automatic checkpointing
+- ✅ Cloud-offloaded computation
+
+### autoDream - Memory Consolidation
+
+The Dream System optimizes memory during idle periods:
+
+```python
+from dream_system import dream_system, run_dream_cycle, should_dream
+
+# Check if conditions are right for dreaming
+if should_dream():
+    cycle = await run_dream_cycle()
+    print(f"Processed: {cycle.memories_processed}")
+    print(f"Consolidated: {cycle.memories_consolidated}")
+    print(f"Pruned: {cycle.memories_pruned}")
+
+# Get dream system status
+status = dream_system.get_status()
+
+# Access knowledge graph
+graph = dream_system.get_knowledge_graph_summary()
+print(f"Knowledge nodes: {graph['nodes']}")
+print(f"Connections: {graph['connections']}")
+```
+
+**Dream Cycle Phases:**
+1. **Collection** - Gather all memories
+2. **Analysis** - Identify patterns & clusters
+3. **Consolidation** - Merge similar memories
+4. **Compression** - Reduce redundancy
+5. **Knowledge Graph** - Build connections
+6. **Pruning** - Remove stale data
+7. **Insights** - Generate observations
+
+### Enhanced Multi-Agent Coordination
+
+Advanced orchestration with health monitoring and failover:
+
+```python
+from sub_agents import enhanced_orchestrator
+
+# Spawn parallel workers
+tasks = [
+    {"description": "Research topic A", "role": "researcher"},
+    {"description": "Research topic B", "role": "researcher"},
+    {"description": "Analyze data", "role": "worker"},
+]
+results = await enhanced_orchestrator.spawn_workers(tasks, max_parallel=3)
+
+# Execute with automatic failover
+result = await enhanced_orchestrator.execute_with_failover(
+    task="Complex analysis task",
+    primary_role=AgentRole.RESEARCHER,
+    fallback_roles=[AgentRole.WORKER, AgentRole.CODER]
+)
+
+# Coordinate a team with communication
+team_result = await enhanced_orchestrator.coordinate_team(
+    goal="Build and deploy feature X",
+    team_config=[
+        {"role": "researcher", "specialization": "requirements"},
+        {"role": "coder", "specialization": "implementation"},
+        {"role": "architect", "specialization": "review"}
+    ],
+    enable_communication=True
+)
+
+# Check agent health
+health = enhanced_orchestrator.get_agent_health()
+for agent_id, status in health.items():
+    print(f"{agent_id}: {status['status']} ({status['success_rate']*100:.0f}% success)")
+
+# Scale workers dynamically
+enhanced_orchestrator.scale_workers(new_max=8)
+```
+
+**Key Features:**
+- ✅ Dynamic worker scaling
+- ✅ Health monitoring & failover
+- ✅ Inter-agent communication channels
+- ✅ Load balancing
+- ✅ Automatic retry & recovery
 
 ---
 
@@ -629,6 +972,16 @@ result = await orchestrator.execute_workflow(workflow, parallel=False)
 | Desktop GUI | ✅ Native | ❌ Web | ❌ CLI |
 | Persistent Soul | ✅ SOUL.md | ❌ | ✅ Memory |
 | Local Fallback | ✅ Ollama | ❌ | ✅ Local |
+| **KAIROS Daemon** | ✅ Always-on | ❌ | ❌ |
+| **ULTRAPLAN** | ✅ 30min plans | ❌ | ❌ |
+| **autoDream** | ✅ Memory opt | ❌ | ❌ |
+| **Multi-Agent** | ✅ Enhanced | ✅ Basic | ❌ |
+| **Temperature Calibration** | ✅ Karpathy | ❌ | ❌ |
+| **Scratchpad Reasoning** | ✅ Karpathy | ❌ | ❌ |
+| **Best-of-N Sampling** | ✅ Karpathy | ❌ | ❌ |
+| **Process Reward Model** | ✅ Karpathy | ❌ | ❌ |
+| **Self-Play Debate** | ✅ Karpathy | ❌ | ❌ |
+| **Constitutional Review** | ✅ Karpathy | ❌ | ❌ |
 
 ---
 

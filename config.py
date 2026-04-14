@@ -130,6 +130,78 @@ class Settings(BaseSettings):
     # RL Feedback (Tier 6)
     enable_rl_feedback: bool = True
 
+    # ============================================================
+    # Karpathy LLM Methods (Tier 6.5)
+    # Advanced inference-time compute techniques
+    # ============================================================
+    enable_karpathy_methods: bool = True
+
+    # Temperature Calibration
+    karpathy_temperature_calibration: bool = True  # Auto-tune temperature per task
+    karpathy_temp_factual: float = 0.0             # Deterministic (math, facts)
+    karpathy_temp_analytical: float = 0.2          # Structured (code, logic)
+    karpathy_temp_balanced: float = 0.5            # Mixed (Q&A, summarization)
+    karpathy_temp_creative: float = 0.9            # Open-ended (brainstorm)
+    karpathy_temp_exploratory: float = 1.0         # Maximum diversity
+
+    # Scratchpad Reasoning
+    karpathy_scratchpad_enabled: bool = True        # Private thinking before answering
+    karpathy_scratchpad_show_to_user: bool = False  # Whether to expose scratchpad
+
+    # Best-of-N Sampling
+    karpathy_best_of_n: int = 3           # Number of drafts to generate
+    karpathy_bon_temperature: float = 0.7  # Temperature for draft generation
+    karpathy_bon_enabled: bool = True
+
+    # Few-Shot Library
+    karpathy_few_shot_enabled: bool = True
+    karpathy_few_shot_k: int = 3  # Examples to retrieve per query
+
+    # Process Reward Model
+    karpathy_prm_enabled: bool = True
+    karpathy_prm_threshold: float = 0.6  # Min step score to pass
+
+    # Self-Play Debate
+    karpathy_debate_enabled: bool = True
+    karpathy_debate_rounds: int = 2  # Debate rounds before verdict
+
+    # Constitutional Review
+    karpathy_constitutional_enabled: bool = True
+    karpathy_constitutional_max_revisions: int = 2
+
+    # KAIROS - Persistent Autonomous Daemon (Tier 7)
+    kairos_enabled: bool = True
+    kairos_idle_threshold_seconds: int = 300  # 5 minutes idle = background mode
+    kairos_consolidation_interval_seconds: int = 3600  # Consolidate memory every hour when idle
+    kairos_max_background_cost_per_hour: float = 1.0  # USD limit for background operations
+    kairos_max_concurrent_tasks: int = 3
+    kairos_enable_proactive_tasks: bool = True
+
+    # ULTRAPLAN - Complex Planning System (Tier 7)
+    ultraplan_enabled: bool = True
+    ultraplan_max_session_duration_seconds: int = 1800  # 30 minutes max
+    ultraplan_checkpoint_interval_seconds: int = 300  # Checkpoint every 5 minutes
+    ultraplan_cost_limit_per_plan: float = 5.0  # USD
+    ultraplan_quality_threshold: float = 0.8
+    ultraplan_enable_cloud_offload: bool = True
+
+    # autoDream - Memory Consolidation System (Tier 7)
+    dream_system_enabled: bool = True
+    dream_hours_start: str = "02:00"  # 2 AM
+    dream_hours_end: str = "05:00"  # 5 AM
+    dream_min_idle_minutes: int = 30  # Min idle time before dreaming
+    dream_consolidation_threshold: int = 100  # Min memories before consolidation
+    dream_max_memories_per_cycle: int = 500
+    dream_importance_decay_rate: float = 0.1  # Per day decay for unused memories
+    dream_enable_knowledge_graph: bool = True
+
+    # Enhanced Multi-Agent Coordination (Tier 7)
+    enhanced_orchestrator_enabled: bool = True
+    orchestrator_max_parallel_workers: int = 10
+    orchestrator_health_check_interval: int = 60  # seconds
+    orchestrator_failover_threshold: int = 3  # consecutive failures
+    orchestrator_enable_channels: bool = True
+
     # Governance (Tier 7)
     enable_human_gate: bool = True
     enable_audit_trail: bool = True

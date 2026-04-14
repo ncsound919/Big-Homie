@@ -211,12 +211,20 @@ class HeartbeatSystem:
             if self._should_review_logs():
                 await self._review_logs()
 
-            # 5. Generate Notifications
+            # 5. Dream System — run overnight memory consolidation if conditions are right
+            await self._check_dream_system()
+
+            # 6. Notify KAIROS daemon that heartbeat ran (keeps activity timestamp fresh)
+            await self._notify_kairos("heartbeat", {"count": self.heartbeat_count})
+
+            # 7. Generate Notifications
             result.notifications = self._generate_notifications(result)
 
             # Update preferences
             memory.set_preference("last_heartbeat_time", start_time.isoformat())
             memory.set_preference("last_heartbeat_result", result.__dict__)
+            # Record activity so dream system / KAIROS idle detection works correctly
+            memory.set_preference("last_user_activity", start_time.isoformat())
 
         except Exception as e:
             logger.error(f"Heartbeat execution error: {e}")
@@ -469,6 +477,39 @@ Provide specific code changes or configuration updates to resolve these issues."
             )
 
         return notifications
+
+    async def _check_dream_system(self):
+        """Check if dream system should run during heartbeat"""
+        try:
+            from dream_system import dream_system, should_dream
+
+            if should_dream():
+                logger.info("💤 Conditions right for dream cycle, initiating...")
+                cycle = await dream_system.dream()
+                return {
+                    "dream_cycle_run": True,
+                    "memories_processed": cycle.memories_processed,
+                    "memories_consolidated": cycle.memories_consolidated
+                }
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"Dream system check failed: {e}")
+
+        return {"dream_cycle_run": False}
+
+    async def _notify_kairos(self, action: str, data: Optional[Dict] = None):
+        """Notify KAIROS daemon of heartbeat events"""
+        try:
+            from kairos_daemon import kairos
+
+            if kairos.state.value != "stopped":
+                kairos.record_user_activity()  # Heartbeat counts as activity
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"KAIROS notification skipped: {e}")
+
 
 # Global heartbeat instance
 heartbeat = HeartbeatSystem()

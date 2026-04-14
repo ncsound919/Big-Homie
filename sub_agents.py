@@ -614,5 +614,430 @@ Team contributions:
             "workflow_type": "hierarchical_coordination"
         }
 
-# Global orchestrator instance
+# ==========================================================
+# Enhanced Multi-Agent Coordination System
+# ==========================================================
+
+class AgentHealthStatus(str, Enum):
+    """Health status of an agent"""
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNHEALTHY = "unhealthy"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class AgentHealth:
+    """Health information for an agent"""
+    agent_id: str
+    status: AgentHealthStatus = AgentHealthStatus.UNKNOWN
+    last_success: Optional[datetime] = None
+    last_failure: Optional[datetime] = None
+    consecutive_failures: int = 0
+    total_failures: int = 0
+    total_successes: int = 0
+    total_tasks: int = 0
+    success_rate: float = 1.0
+    average_latency_ms: float = 0.0
+
+
+@dataclass
+class AgentChannel:
+    """Communication channel between agents"""
+    channel_id: str
+    participants: List[str]
+    messages: List[Dict[str, Any]] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.now)
+
+
+class EnhancedOrchestrator:
+    """
+    Enhanced Multi-Agent Coordination System
+
+    Provides:
+    - Parallel worker management with dynamic scaling
+    - Inter-agent communication channels
+    - Agent health monitoring and failover
+    - Load balancing across agents
+    - Automatic retry and recovery
+    """
+
+    MAX_WORKERS = 10
+    HEALTH_CHECK_INTERVAL = 60  # seconds
+    FAILOVER_THRESHOLD = 3  # consecutive failures before failover
+    LATENCY_HISTORY_WEIGHT = 0.8   # Exponential moving average weight for history
+    LATENCY_CURRENT_WEIGHT = 0.2   # Weight for the most recent sample
+
+    def __init__(self):
+        self.base_orchestrator = SubAgentOrchestrator()
+        self.worker_pool: Dict[str, SubAgentTask] = {}
+        self.agent_health: Dict[str, AgentHealth] = {}
+        self.channels: Dict[str, AgentChannel] = {}
+        self._worker_semaphore = asyncio.Semaphore(self.MAX_WORKERS)
+        self._health_lock = asyncio.Lock()
+
+    async def spawn_workers(
+        self,
+        tasks: List[Dict[str, Any]],
+        max_parallel: Optional[int] = None,
+        retry_failed: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Spawn parallel worker agents for multiple tasks.
+
+        Args:
+            tasks: List of task dictionaries with 'description' and optional 'role'
+            max_parallel: Maximum parallel workers (defaults to MAX_WORKERS)
+            retry_failed: Whether to retry failed tasks
+
+        Returns:
+            List of results for each task
+        """
+        max_workers = min(max_parallel or self.MAX_WORKERS, len(tasks))
+        logger.info(f"Spawning {max_workers} parallel workers for {len(tasks)} tasks")
+
+        # Keep the per-batch limit while also honoring the instance-wide
+        # semaphore so scale_workers() can adjust runtime concurrency.
+        batch_semaphore = asyncio.Semaphore(max_workers)
+
+        async def execute_with_limit(task_info: Dict) -> Dict[str, Any]:
+            async with self._worker_semaphore:
+                async with batch_semaphore:
+                    return await self._execute_worker_task(task_info, retry_failed)
+
+        # Execute all tasks with limited parallelism
+        results = await asyncio.gather(
+            *[execute_with_limit(t) for t in tasks],
+            return_exceptions=True
+        )
+
+        # Process results
+        final_results = []
+        for task, result in zip(tasks, results):
+            if isinstance(result, Exception):
+                final_results.append({
+                    "task": task.get("description", "Unknown"),
+                    "status": "failed",
+                    "error": str(result),
+                    "content": ""
+                })
+            else:
+                final_results.append(result)
+
+        # Log summary
+        succeeded = len([r for r in final_results if r.get("status") != "failed"])
+        logger.info(f"Worker batch complete: {succeeded}/{len(tasks)} succeeded")
+
+        return final_results
+
+    async def _execute_worker_task(
+        self,
+        task_info: Dict[str, Any],
+        retry_failed: bool
+    ) -> Dict[str, Any]:
+        """Execute a single worker task with health tracking"""
+        task_id = str(uuid.uuid4())
+        description = task_info.get("description", "")
+        role_str = task_info.get("role", "worker")
+
+        try:
+            role = AgentRole(role_str) if isinstance(role_str, str) else role_str
+        except ValueError:
+            role = AgentRole.WORKER
+
+        # Track agent health
+        agent_key = f"worker_{role.value}"
+        await self._update_agent_health(agent_key, starting=True)
+
+        start_time = datetime.now()
+        max_retries = 3 if retry_failed else 1
+
+        for attempt in range(max_retries):
+            try:
+                # Create and execute sub-agent task
+                sub_task = SubAgentTask(
+                    id=task_id,
+                    description=description,
+                    role=role,
+                    context=task_info.get("context", {})
+                )
+
+                # Execute using base orchestrator
+                result = await self.base_orchestrator._execute_sub_agent(sub_task, None)
+
+                # Track success
+                latency = (datetime.now() - start_time).total_seconds() * 1000
+                await self._update_agent_health(
+                    agent_key,
+                    success=True,
+                    latency_ms=latency
+                )
+
+                return {
+                    "task_id": task_id,
+                    "task": description,
+                    "status": "completed",
+                    "role": role.value,
+                    "content": result.result.get("content", "") if result.result else "",
+                    "cost": result.cost,
+                    "latency_ms": latency,
+                    "attempts": attempt + 1
+                }
+
+            except Exception as e:
+                logger.warning(f"Worker task attempt {attempt + 1} failed: {e}")
+                await self._update_agent_health(agent_key, success=False)
+
+                if attempt == max_retries - 1:
+                    raise
+
+                # Brief backoff before retry
+                await asyncio.sleep(1 * (attempt + 1))
+
+        return {"status": "failed", "error": "Max retries exceeded"}
+
+    async def _update_agent_health(
+        self,
+        agent_id: str,
+        starting: bool = False,
+        success: Optional[bool] = None,
+        latency_ms: float = 0.0
+    ):
+        """Update agent health metrics"""
+        async with self._health_lock:
+            if agent_id not in self.agent_health:
+                self.agent_health[agent_id] = AgentHealth(agent_id=agent_id)
+
+            health = self.agent_health[agent_id]
+
+            if starting:
+                health.total_tasks += 1
+
+            if success is not None:
+                if success:
+                    health.last_success = datetime.now()
+                    health.consecutive_failures = 0
+                    health.total_successes += 1
+                    health.status = AgentHealthStatus.HEALTHY
+                else:
+                    health.last_failure = datetime.now()
+                    health.consecutive_failures += 1
+                    health.total_failures += 1
+
+                    if health.consecutive_failures >= self.FAILOVER_THRESHOLD:
+                        health.status = AgentHealthStatus.UNHEALTHY
+                    elif health.consecutive_failures > 0:
+                        health.status = AgentHealthStatus.DEGRADED
+
+                # Update success rate based on total successes and failures
+                # Use min to ensure rate doesn't exceed 1.0 if there's data inconsistency
+                if health.total_tasks > 0:
+                    health.success_rate = min(1.0, health.total_successes / health.total_tasks)
+
+            if latency_ms > 0:
+                # Rolling average using exponential moving average
+                if health.average_latency_ms == 0:
+                    health.average_latency_ms = latency_ms
+                else:
+                    health.average_latency_ms = (
+                        health.average_latency_ms * self.LATENCY_HISTORY_WEIGHT +
+                        latency_ms * self.LATENCY_CURRENT_WEIGHT
+                    )
+
+    def create_channel(self, participants: List[str]) -> str:
+        """Create a communication channel between agents"""
+        channel_id = str(uuid.uuid4())
+        self.channels[channel_id] = AgentChannel(
+            channel_id=channel_id,
+            participants=participants
+        )
+        logger.info(f"Created agent channel: {channel_id} with {len(participants)} participants")
+        return channel_id
+
+    def send_message(
+        self,
+        channel_id: str,
+        sender: str,
+        message: str,
+        message_type: str = "info"
+    ):
+        """Send a message through a channel"""
+        if channel_id not in self.channels:
+            logger.warning(f"Channel not found: {channel_id}")
+            return
+
+        channel = self.channels[channel_id]
+        if sender not in channel.participants:
+            channel.participants.append(sender)
+
+        channel.messages.append({
+            "sender": sender,
+            "message": message,
+            "type": message_type,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    def get_channel_messages(
+        self,
+        channel_id: str,
+        since: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """Get messages from a channel"""
+        if channel_id not in self.channels:
+            return []
+
+        messages = self.channels[channel_id].messages
+        if since:
+            messages = [
+                m for m in messages
+                if datetime.fromisoformat(m["timestamp"]) > since
+            ]
+
+        return messages
+
+    def get_agent_health(self, agent_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get health status of agents"""
+        if agent_id:
+            health = self.agent_health.get(agent_id)
+            if not health:
+                return {"status": "unknown"}
+
+            return {
+                "agent_id": health.agent_id,
+                "status": health.status.value,
+                "success_rate": health.success_rate,
+                "consecutive_failures": health.consecutive_failures,
+                "total_tasks": health.total_tasks,
+                "average_latency_ms": health.average_latency_ms,
+                "last_success": health.last_success.isoformat() if health.last_success else None,
+                "last_failure": health.last_failure.isoformat() if health.last_failure else None
+            }
+
+        # Return all agents' health
+        return {
+            aid: self.get_agent_health(aid)
+            for aid in self.agent_health
+        }
+
+    async def execute_with_failover(
+        self,
+        task: str,
+        primary_role: AgentRole = AgentRole.WORKER,
+        fallback_roles: Optional[List[AgentRole]] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute a task with automatic failover to alternate agents.
+
+        Args:
+            task: The task to execute
+            primary_role: Primary agent role to try first
+            fallback_roles: Ordered list of fallback roles to try
+
+        Returns:
+            Task result
+        """
+        fallback_roles = fallback_roles or [AgentRole.RESEARCHER, AgentRole.CODER]
+        roles_to_try = [primary_role] + fallback_roles
+
+        for role in roles_to_try:
+            agent_key = f"worker_{role.value}"
+            health = self.agent_health.get(agent_key)
+
+            # Skip unhealthy agents
+            if health and health.status == AgentHealthStatus.UNHEALTHY:
+                logger.info(f"Skipping unhealthy agent: {agent_key}")
+                continue
+
+            try:
+                result = await self._execute_worker_task(
+                    {"description": task, "role": role.value},
+                    retry_failed=False
+                )
+
+                if result.get("status") != "failed":
+                    return result
+
+            except Exception as e:
+                logger.warning(f"Failover: {role.value} failed - {e}")
+                continue
+
+        # All agents failed
+        return {
+            "status": "failed",
+            "error": "All agents failed",
+            "roles_tried": [r.value for r in roles_to_try]
+        }
+
+    async def coordinate_team(
+        self,
+        goal: str,
+        team_config: Optional[List[Dict]] = None,
+        enable_communication: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Coordinate a team of agents with inter-agent communication.
+
+        Args:
+            goal: The team's objective
+            team_config: Team configuration with roles and specializations
+            enable_communication: Whether to enable inter-agent messaging
+
+        Returns:
+            Coordinated team result
+        """
+        # Default team
+        if not team_config:
+            team_config = [
+                {"role": "researcher", "specialization": "information gathering"},
+                {"role": "worker", "specialization": "data processing"},
+                {"role": "coder", "specialization": "implementation"},
+                {"role": "architect", "specialization": "review and synthesis"}
+            ]
+
+        # Create communication channel if enabled
+        channel_id = None
+        if enable_communication:
+            participants = [f"agent_{t['role']}" for t in team_config]
+            channel_id = self.create_channel(participants)
+
+        # Use hierarchical coordination with channel support
+        result = await self.base_orchestrator.execute_hierarchical(
+            task=goal,
+            team=[{"role": t["role"], "description": t.get("specialization", "")} for t in team_config],
+            context={"channel_id": channel_id} if channel_id else None
+        )
+
+        # Add channel messages to result if available
+        if channel_id:
+            result["channel_messages"] = self.get_channel_messages(channel_id)
+
+        return result
+
+    def scale_workers(self, new_max: int):
+        """Update the configured maximum number of parallel workers."""
+        old_max = self.MAX_WORKERS
+        self.MAX_WORKERS = min(max(1, new_max), 20)  # Clamp between 1-20
+        logger.info(f"Worker pool scaled: {old_max} -> {self.MAX_WORKERS}")
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get orchestrator status"""
+        return {
+            "max_workers": self.MAX_WORKERS,
+            "active_workers": len(self.worker_pool),
+            "active_channels": len(self.channels),
+            "agent_health_summary": {
+                status.value: len([
+                    h for h in self.agent_health.values()
+                    if h.status == status
+                ])
+                for status in AgentHealthStatus
+            },
+            "total_tasks_processed": sum(
+                h.total_tasks for h in self.agent_health.values()
+            )
+        }
+
+
+# Global orchestrator instances
 orchestrator = SubAgentOrchestrator()
+enhanced_orchestrator = EnhancedOrchestrator()

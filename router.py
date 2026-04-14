@@ -1,7 +1,7 @@
 """
 Advanced LLM Router - Multi-model orchestration with role-based delegation
 Architect (reasoning) / Worker (volume) / Coder (development) specialization
-With thought logging and transparent routing decisions
+With thought logging, transparent routing decisions, and Karpathy temperature calibration
 """
 from enum import Enum
 from typing import Dict, Any, List, Optional, Tuple
@@ -29,7 +29,8 @@ class RoutingDecision:
 class SmartRouter:
     """
     Intelligent routing system that analyzes tasks and delegates to
-    the most appropriate model based on complexity, cost, and specialization
+    the most appropriate model based on complexity, cost, and specialization.
+    Uses Karpathy temperature calibration for optimal sampling parameters.
     """
 
     def __init__(self):
@@ -41,6 +42,9 @@ class SmartRouter:
             self.thoughts_logger = thoughts_logger
         else:
             self.thoughts_logger = None
+
+        # Karpathy temperature calibrator (lazy-loaded to avoid circular imports)
+        self._temperature_calibrator = None
 
         # Role-specific model configurations
         self.role_models = {
@@ -238,6 +242,36 @@ class SmartRouter:
             f"Using {provider.value}/{model} as the optimal model for this task type."
         )
 
+    def _get_temperature_calibrator(self):
+        """Lazy-load temperature calibrator to avoid circular imports."""
+        if self._temperature_calibrator is None:
+            try:
+                from karpathy_methods import TemperatureCalibrator
+                self._temperature_calibrator = TemperatureCalibrator()
+            except ImportError:
+                self._temperature_calibrator = None
+        return self._temperature_calibrator
+
+    def get_calibrated_temperature(self, task: str, role: "AgentRole") -> float:
+        """
+        Get Karpathy-calibrated temperature for a task + role combination.
+        Falls back to settings.temperature if calibrator not available.
+        """
+        calibrator = self._get_temperature_calibrator()
+        if calibrator is None:
+            return settings.temperature
+
+        # Role takes precedence over task-nature for structured roles
+        role_temp = calibrator.get_temperature_for_role(role.value)
+
+        # For RESEARCHER/ARCHITECT, also consider task nature
+        if role in (AgentRole.RESEARCHER, AgentRole.ARCHITECT):
+            nature_temp = calibrator.get_temperature(task)
+            # Blend: 60% role, 40% nature
+            return round(role_temp * 0.6 + nature_temp * 0.4, 2)
+
+        return role_temp
+
     async def execute_with_routing(
         self,
         task: str,
@@ -245,17 +279,43 @@ class SmartRouter:
         **kwargs
     ) -> Tuple[RoutingDecision, Dict[str, Any]]:
         """
-        Route task and execute with selected model
+        Route task and execute with selected model.
+        Applies Karpathy temperature calibration unless temperature is explicitly provided.
 
         Returns:
             Tuple of (routing decision, LLM response)
         """
-        # Get routing decision
-        decision = self.route_task(task, context, **kwargs)
+        # Get routing decision using only routing-specific kwargs.
+        routing_kwargs = {
+            key: kwargs[key]
+            for key in ("prefer_cost", "prefer_quality")
+            if key in kwargs
+        }
+        decision = self.route_task(task, context, **routing_kwargs)
+
+        # Apply Karpathy temperature calibration if not already set and feature is enabled
+        if (
+            "temperature" not in kwargs
+            and getattr(settings, "enable_karpathy_methods", True)
+            and getattr(settings, "karpathy_temperature_calibration", True)
+        ):
+            calibrated_temp = self.get_calibrated_temperature(task, decision.role)
+            kwargs["temperature"] = calibrated_temp
+            logger.debug(
+                f"Karpathy temperature calibration: {calibrated_temp} "
+                f"for {decision.role.value} role"
+            )
+        elif "temperature" not in kwargs:
+            kwargs["temperature"] = settings.temperature
+
+        # Allow context to supply a system prompt override (used by ScratchpadReasoner etc.)
+        system_content = self._get_role_prompt(decision.role)
+        if context and context.get("system_override"):
+            system_content = context["system_override"]
 
         # Prepare messages
         messages = [
-            {"role": "system", "content": self._get_role_prompt(decision.role)},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": task}
         ]
 
