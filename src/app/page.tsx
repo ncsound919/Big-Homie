@@ -21,6 +21,7 @@ import TrendingReposPanel from '@/components/TrendingReposPanel';
 import UpgradeSweepPanel from '@/components/UpgradeSweepPanel';
 import { getSettings, getEnabledIntegrations, getActiveAgents, saveSettings, type AppSettings, type SecurityLevel, type AppMode } from '@/lib/settings';
 import { securityMiddleware } from '@/lib/security-middleware';
+import type { SecurityResult } from '@/lib/security-types';
 
 // Lazy-load heavy components not needed on initial render
 const SettingsDrawer = dynamic(() => import('@/components/SettingsDrawer'), { ssr: false });
@@ -416,7 +417,18 @@ function AppContent() {
       const securityAction = `phase:${phaseDef.id}:${phaseDef.name}`;
       const securityParams = { phaseId: phaseDef.id, subSteps: phaseDef.subs, checkType: securityCheckType };
 
-      const securityResult = await securityMiddleware.validateAction(securityAction, securityParams);
+      let securityResult: SecurityResult;
+      try {
+        securityResult = await securityMiddleware.validateAction(securityAction, securityParams);
+      } catch (err) {
+        addLog(`Security check failed: ${err}`, 'shield-alert', 'text-red-400', 'security');
+        securityResult = { 
+          approved: false, 
+          riskLevel: 'high', 
+          warnings: [], 
+          blockedReasons: ['Security validation error'] 
+        };
+      }
 
       // Log security event
       if (securityResult.riskLevel !== 'low') {
