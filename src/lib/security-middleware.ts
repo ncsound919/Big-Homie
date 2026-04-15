@@ -1,4 +1,5 @@
 import type { SecurityLevel, SecurityResult, SecurityEvent } from './security-types';
+import { checkPromptInjection, scanForSecrets } from './claw-protect-client';
 
 const INJECTION_KEYWORDS = [
   'ignore',
@@ -52,7 +53,33 @@ export class SecurityMiddleware {
 
     const actionLower = action.toLowerCase();
     const paramsStr = JSON.stringify(params).toLowerCase();
+    const scanText = `${action} ${paramsStr}`;
 
+    // Claw Protect API integration
+    try {
+      const injectionResult = await checkPromptInjection(scanText);
+      if (injectionResult.detected) {
+        warnings.push('Claw Protect: Prompt injection detected');
+        riskLevel = 'high';
+        if (injectionResult.warnings) {
+          warnings.push(...injectionResult.warnings);
+        }
+      }
+    } catch {
+      // Fail open - continue with local checks
+    }
+
+    try {
+      const secrets = await scanForSecrets(scanText);
+      if (secrets.length > 0) {
+        warnings.push(`Claw Protect: Secrets detected - ${secrets.join(', ')}`);
+        riskLevel = riskLevel === 'high' ? 'high' : 'medium';
+      }
+    } catch {
+      // Fail open - continue with local checks
+    }
+
+    // Local keyword-based injection detection
     for (const keyword of INJECTION_KEYWORDS) {
       if (actionLower.includes(keyword) || paramsStr.includes(keyword)) {
         warnings.push(`Potential prompt injection keyword detected: ${keyword}`);
