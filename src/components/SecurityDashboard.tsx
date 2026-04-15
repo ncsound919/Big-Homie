@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Shield, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle,
-  Eye, EyeOff, Search, Activity, RefreshCw, Clock,
+  Eye, EyeOff, Search, Activity, RefreshCw, Clock, Download,
 } from 'lucide-react';
 import SecuritySettings from './SecuritySettings';
 import AgentManager from './AgentManager';
@@ -50,12 +50,37 @@ const createInitialEvents = (): SecurityEvent[] => [
   { id: '3', timestamp: new Date(Date.now() - 600000).toISOString(), type: 'info', message: 'All security checks passed' },
 ];
 
+type SecurityEventFilter = 'all' | 'blocked' | 'warnings';
+
 export default function SecurityDashboard() {
   const [securityLevel, setSecurityLevel] = useState<SecurityLevel>('active');
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus>('secure');
   const [events, setEvents] = useState<SecurityEvent[]>(() => createInitialEvents());
+  const [eventFilter, setEventFilter] = useState<SecurityEventFilter>('all');
 
   const status = STATUS_CONFIG[securityStatus];
+
+  const totalChecks = events.length;
+  const blockedCount = events.filter(e => e.type === 'block').length;
+  const warningsCount = events.filter(e => e.type === 'alert').length;
+
+  const filteredEvents = events.filter(event => {
+    if (eventFilter === 'all') return true;
+    if (eventFilter === 'blocked') return event.type === 'block';
+    if (eventFilter === 'warnings') return event.type === 'alert';
+    return true;
+  });
+
+  const exportLogs = () => {
+    const dataStr = JSON.stringify(events, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `security-logs-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="min-h-full p-4 sm:p-6 lg:p-8 space-y-4">
@@ -91,6 +116,22 @@ export default function SecurityDashboard() {
         onSecurityLevelChange={setSecurityLevel}
       />
 
+      {/* Stats Section */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
+          <p className="text-lg font-bold text-foreground">{totalChecks}</p>
+          <p className="text-xs text-muted-foreground">Total Checks</p>
+        </div>
+        <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
+          <p className="text-lg font-bold text-red-400">{blockedCount}</p>
+          <p className="text-xs text-muted-foreground">Blocked</p>
+        </div>
+        <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
+          <p className="text-lg font-bold text-amber-400">{warningsCount}</p>
+          <p className="text-xs text-muted-foreground">Warnings</p>
+        </div>
+      </div>
+
       {/* Custom Agents */}
       <AgentManager />
 
@@ -101,16 +142,42 @@ export default function SecurityDashboard() {
             <Search className="w-4 h-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold text-foreground">Recent Events</h2>
           </div>
-          <button
-            type="button"
-            onClick={() => setEvents(createInitialEvents())}
-            className="p-1.5 rounded-lg hover:bg-background/30 text-muted-foreground transition-all"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={exportLogs}
+              className="p-1.5 rounded-lg hover:bg-background/30 text-muted-foreground transition-all"
+              title="Export Logs"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setEvents(createInitialEvents())}
+              className="p-1.5 rounded-lg hover:bg-background/30 text-muted-foreground transition-all"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        <div className="flex gap-2 mb-3">
+          {(['all', 'blocked', 'warnings'] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => setEventFilter(filter)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                eventFilter === filter
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background/10 text-muted-foreground hover:bg-background/20'
+              }`}
+            >
+              {filter.charAt(0).toUpperCase() + filter.slice(1)}
+            </button>
+          ))}
         </div>
         <div className="space-y-2">
-          {events.map((event) => {
+          {filteredEvents.map((event) => {
             const Icon = event.type === 'scan' ? Search : event.type === 'block' ? ShieldAlert : event.type === 'alert' ? AlertTriangle : CheckCircle;
             return (
               <div key={event.id} className="flex items-start gap-3 p-3 rounded-xl bg-background/10">
