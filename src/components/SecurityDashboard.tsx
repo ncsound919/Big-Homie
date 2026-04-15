@@ -43,7 +43,7 @@ const LEVEL_LABELS: Record<SecurityLevel, { label: string; description: string }
   configurable: { label: 'Configurable', description: 'User-controlled security policies' },
 };
 
-const INITIAL_EVENTS: SecurityEvent[] = [
+const createInitialEvents = (): SecurityEvent[] => [
   { id: '1', timestamp: new Date().toISOString(), type: 'info', message: 'Security dashboard initialized' },
   { id: '2', timestamp: new Date(Date.now() - 300000).toISOString(), type: 'scan', message: 'System scan completed - no threats detected' },
   { id: '3', timestamp: new Date(Date.now() - 600000).toISOString(), type: 'info', message: 'All security checks passed' },
@@ -52,7 +52,7 @@ const INITIAL_EVENTS: SecurityEvent[] = [
 export default function SecurityDashboard() {
   const [securityLevel, setSecurityLevel] = useState<SecurityLevel>('active');
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus>('secure');
-  const [events, setEvents] = useState<SecurityEvent[]>(INITIAL_EVENTS);
+  const [events, setEvents] = useState<SecurityEvent[]>(() => createInitialEvents());
 
   const status = STATUS_CONFIG[securityStatus];
 
@@ -97,7 +97,11 @@ export default function SecurityDashboard() {
             <Search className="w-4 h-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold text-foreground">Recent Events</h2>
           </div>
-          <button className="p-1.5 rounded-lg hover:bg-background/30 text-muted-foreground transition-all">
+          <button
+            type="button"
+            onClick={() => setEvents(createInitialEvents())}
+            className="p-1.5 rounded-lg hover:bg-background/30 text-muted-foreground transition-all"
+          >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -124,11 +128,19 @@ export default function SecurityDashboard() {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3">
-        <button className="flex items-center justify-center gap-2 p-3 rounded-xl border border-border/30 bg-background/20 hover:bg-background/30 transition-all">
+        <button
+          type="button"
+          onClick={() => console.log('Scan triggered')}
+          className="flex items-center justify-center gap-2 p-3 rounded-xl border border-border/30 bg-background/20 hover:bg-background/30 transition-all"
+        >
           <Eye className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-medium text-foreground">Scan Now</span>
         </button>
-        <button className="flex items-center justify-center gap-2 p-3 rounded-xl border border-border/30 bg-background/20 hover:bg-background/30 transition-all">
+        <button
+          type="button"
+          onClick={() => console.log('Hide details triggered')}
+          className="flex items-center justify-center gap-2 p-3 rounded-xl border border-border/30 bg-background/20 hover:bg-background/30 transition-all"
+        >
           <EyeOff className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-medium text-foreground">Hide Details</span>
         </button>

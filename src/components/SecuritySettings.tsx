@@ -57,6 +57,7 @@ export default function SecuritySettings({ onSecurityLevelChange, currentLevel }
           
           return (
             <button
+              type="button"
               key={level}
               onClick={() => onSecurityLevelChange(level)}
               className={`p-4 rounded-xl border text-left transition-all duration-200 ${
