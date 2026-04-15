@@ -51,11 +51,12 @@ export class SecurityMiddleware {
     const blockedReasons: string[] = [];
     let riskLevel: SecurityResult['riskLevel'] = 'low';
 
+    const tier = (params._tier as string)?.toLowerCase() || 'full';
     const actionLower = action.toLowerCase();
     const paramsStr = JSON.stringify(params).toLowerCase();
     const scanText = `${action} ${paramsStr}`;
 
-    // Claw Protect API integration
+    // Claw Protect API integration - always run prompt injection check
     try {
       const injectionResult = await checkPromptInjection(scanText);
       if (injectionResult.detected) {
@@ -69,17 +70,20 @@ export class SecurityMiddleware {
       // Fail open - continue with local checks
     }
 
-    try {
-      const secrets = await scanForSecrets(scanText);
-      if (secrets.length > 0) {
-        warnings.push(`Claw Protect: Secrets detected - ${secrets.join(', ')}`);
-        riskLevel = riskLevel === 'high' ? 'high' : 'medium';
+    // Secrets detection - only run for 'full' or 'custom' tiers
+    if (tier === 'full' || tier === 'custom') {
+      try {
+        const secrets = await scanForSecrets(scanText);
+        if (secrets.length > 0) {
+          warnings.push(`Claw Protect: Secrets detected - ${secrets.join(', ')}`);
+          riskLevel = riskLevel === 'high' ? 'high' : 'medium';
+        }
+      } catch {
+        // Fail open - continue with local checks
       }
-    } catch {
-      // Fail open - continue with local checks
     }
 
-    // Local keyword-based injection detection
+    // Local keyword-based injection detection - always run
     for (const keyword of INJECTION_KEYWORDS) {
       if (actionLower.includes(keyword) || paramsStr.includes(keyword)) {
         warnings.push(`Potential prompt injection keyword detected: ${keyword}`);
@@ -87,11 +91,14 @@ export class SecurityMiddleware {
       }
     }
 
-    for (const key of Object.keys(params)) {
-      for (const pattern of SECRET_PATTERNS) {
-        if (pattern.test(key)) {
-          warnings.push(`Potential secret detected in parameter: ${key}`);
-          riskLevel = riskLevel === 'high' ? 'high' : 'medium';
+    // Local secret pattern detection - only run for 'full' or 'custom' tiers
+    if (tier === 'full' || tier === 'custom') {
+      for (const key of Object.keys(params)) {
+        for (const pattern of SECRET_PATTERNS) {
+          if (pattern.test(key)) {
+            warnings.push(`Potential secret detected in parameter: ${key}`);
+            riskLevel = riskLevel === 'high' ? 'high' : 'medium';
+          }
         }
       }
     }
