@@ -6,6 +6,7 @@ import {
   Eye, EyeOff, Search, Activity, RefreshCw, Clock,
 } from 'lucide-react';
 import SecuritySettings from './SecuritySettings';
+import AgentManager from './AgentManager';
 import type { SecurityLevel } from './SecuritySettings';
 type SecurityStatus = 'secure' | 'warning' | 'critical';
 
@@ -89,6 +90,9 @@ export default function SecurityDashboard() {
         currentLevel={securityLevel}
         onSecurityLevelChange={setSecurityLevel}
       />
+
+      {/* Custom Agents */}
+      <AgentManager />
 
       {/* Security Events */}
       <div className="p-4 rounded-2xl border border-border/30 bg-background/20">
