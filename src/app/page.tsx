@@ -114,6 +114,7 @@ function AppContent() {
   const abortRef = useRef<AbortController | null>(null);
   const stateRef = useRef(state);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('build');
+  const [securityStatus, setSecurityStatus] = useState<'clear' | 'warning' | 'threat'>('clear');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -847,6 +848,18 @@ function AppContent() {
           title="Click to switch between Easy and Dev mode"
         >
           {appSettings.mode}
+        </button>
+
+        <button
+          onClick={() => setWorkspaceMode('security')}
+          title="Security Status"
+          className="p-2 rounded-xl hover:bg-white/10 transition-all"
+        >
+          <Shield className={`w-3.5 h-3.5 ${
+            securityStatus === 'clear' ? 'text-green-400' :
+            securityStatus === 'warning' ? 'text-yellow-400' :
+            'text-red-400'
+          }`} />
         </button>
 
         {!isEasyMode && (
