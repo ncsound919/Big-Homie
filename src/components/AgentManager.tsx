@@ -1,24 +1,34 @@
 import { type CustomAgent } from '../types/agent';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Upload, Trash2, Bot, FileJson, FileCode } from 'lucide-react';
 import AgentUploadModal from './AgentUploadModal';
+import { getAgents, deleteAgent, toggleAgent } from '@/lib/agent-persistence';
 
 export default function AgentManager() {
   const [agents, setAgents] = useState<CustomAgent[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    getAgents().then(setAgents).catch(console.error);
+  }, []);
 
   const handleUpload = (agent: CustomAgent) => {
     setAgents((prev) => [...prev, agent]);
     setIsModalOpen(false);
   };
 
-  const handleToggle = (id: string) => {
-    setAgents((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a))
-    );
+  const handleToggle = async (id: string) => {
+    const agent = agents.find((a) => a.id === id);
+    if (agent) {
+      await toggleAgent(id, !agent.enabled);
+      setAgents((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a))
+      );
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    await deleteAgent(id);
     setAgents((prev) => prev.filter((a) => a.id !== id));
   };
 
