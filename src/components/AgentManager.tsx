@@ -2,7 +2,7 @@ import { type CustomAgent } from '../types/agent';
 import { useState, useEffect } from 'react';
 import { Upload, Trash2, Bot, FileJson, FileCode } from 'lucide-react';
 import AgentUploadModal from './AgentUploadModal';
-import { getAgents, deleteAgent, toggleAgent } from '@/lib/agent-persistence';
+import { getAgents, deleteAgent, toggleAgent, saveAgent } from '@/lib/agent-persistence';
 
 export default function AgentManager() {
   const [agents, setAgents] = useState<CustomAgent[]>([]);
@@ -12,7 +12,8 @@ export default function AgentManager() {
     getAgents().then(setAgents).catch(console.error);
   }, []);
 
-  const handleUpload = (agent: CustomAgent) => {
+  const handleUpload = async (agent: CustomAgent) => {
+    await saveAgent(agent);
     setAgents((prev) => [...prev, agent]);
     setIsModalOpen(false);
   };
