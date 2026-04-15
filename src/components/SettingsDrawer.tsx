@@ -745,9 +745,9 @@ function IntegrationRow({ integration, onToggle, onKeyChange, devMode }: {
         ? 'border-primary/20 bg-primary/5'
         : 'border-border/20 bg-background/20'
     }`}>
-      <button type="button"
+      <div
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 p-3 text-left">
+        className="w-full flex items-center gap-3 p-3 text-left cursor-pointer">
         <button type="button" onClick={e => { e.stopPropagation(); onToggle(); }}
           className="flex-shrink-0">
           {integration.enabled
@@ -767,7 +767,7 @@ function IntegrationRow({ integration, onToggle, onKeyChange, devMode }: {
           <AlertCircle className="w-3 h-3 text-amber-400 flex-shrink-0" />
         )}
         <ChevronRight className={`w-3 h-3 text-muted-foreground/40 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-      </button>
+      </div>
       {expanded && (
         <div className="px-3 pb-3 pt-0 space-y-2 animate-fade-in-up">
           <MaskedInput label="API Key" value={integration.apiKey} onChange={onKeyChange}

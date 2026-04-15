@@ -1,69 +1,29 @@
-import { db } from '@/lib/db';
 import type { CustomAgent } from '@/types/agent';
 
-export async function saveAgent(agent: CustomAgent): Promise<CustomAgent> {
-  const result = await db.agent.upsert({
-    where: { id: agent.id || '' },
-    update: {
-      name: agent.name,
-      description: agent.description,
-      type: agent.type,
-      config: agent.type === 'config' ? agent.config as object : undefined,
-      code: agent.type === 'code' ? agent.code : undefined,
-      securityTier: agent.securityTier,
-      enabled: agent.enabled,
-    },
-    create: {
-      id: agent.id,
-      name: agent.name,
-      description: agent.description,
-      type: agent.type,
-      config: agent.type === 'config' ? agent.config as object : undefined,
-      code: agent.type === 'code' ? agent.code : undefined,
-      securityTier: agent.securityTier,
-      enabled: agent.enabled,
-      addedAt: new Date(),
-    },
-  });
-
-  return {
-    id: result.id,
-    name: result.name,
-    description: result.description || undefined,
-    type: result.type as 'config' | 'code',
-    config: result.config as object | undefined,
-    code: result.code || undefined,
-    securityTier: result.securityTier as 'full' | 'reduced' | 'custom',
-    enabled: result.enabled,
-    addedAt: result.addedAt.toISOString(),
-  };
-}
+const API_BASE = '/api/agents';
 
 export async function getAgents(): Promise<CustomAgent[]> {
-  const agents = await db.agent.findMany({
-    orderBy: { addedAt: 'desc' },
-  });
+  const res = await fetch(API_BASE, { cache: 'no-store' });
+  return res.json();
+}
 
-  return agents.map(a => ({
-    id: a.id,
-    name: a.name,
-    description: a.description || undefined,
-    type: a.type as 'config' | 'code',
-    config: a.config as object | undefined,
-    code: a.code || undefined,
-    securityTier: a.securityTier as 'full' | 'reduced' | 'custom',
-    enabled: a.enabled,
-    addedAt: a.addedAt.toISOString(),
-  }));
+export async function saveAgent(agent: CustomAgent): Promise<CustomAgent> {
+  const res = await fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(agent),
+  });
+  return res.json();
 }
 
 export async function deleteAgent(id: string): Promise<void> {
-  await db.agent.delete({ where: { id } });
+  await fetch(`${API_BASE}?id=${id}`, { method: 'DELETE' });
 }
 
 export async function toggleAgent(id: string, enabled: boolean): Promise<void> {
-  await db.agent.update({
-    where: { id },
-    data: { enabled },
+  await fetch(API_BASE, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, enabled }),
   });
 }
