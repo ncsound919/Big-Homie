@@ -11,7 +11,7 @@ export interface LogEntry {
   /** Icon name key for AppIcon (e.g. 'check', 'wrench', 'shield') */
   icon: string;
   color: string;
-  category: 'build' | 'audit' | 'fix' | 'deploy' | 'info';
+  category: 'build' | 'audit' | 'fix' | 'deploy' | 'info' | 'security';
   detail?: string;
 }
 
@@ -25,6 +25,7 @@ const categoryConfig = {
   fix: { label: 'Fix', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
   deploy: { label: 'Deploy', color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
   info: { label: 'Info', color: 'text-muted-foreground', bg: 'bg-muted/20', border: 'border-border/30' },
+  security: { label: 'Security', color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
 };
 
 type Category = keyof typeof categoryConfig;

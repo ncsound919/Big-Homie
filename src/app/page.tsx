@@ -19,7 +19,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import ToolEcosystem from '@/components/ToolEcosystem';
 import TrendingReposPanel from '@/components/TrendingReposPanel';
 import UpgradeSweepPanel from '@/components/UpgradeSweepPanel';
-import { getSettings, getEnabledIntegrations, getActiveAgents, saveSettings, type AppSettings } from '@/lib/settings';
+import { getSettings, getEnabledIntegrations, getActiveAgents, saveSettings, type AppSettings, type SecurityLevel, type AppMode } from '@/lib/settings';
+import { securityMiddleware } from '@/lib/security-middleware';
 
 // Lazy-load heavy components not needed on initial render
 const SettingsDrawer = dynamic(() => import('@/components/SettingsDrawer'), { ssr: false });
@@ -401,10 +402,36 @@ function AppContent() {
   const runPipeline = async (startPhase = 0) => {
     const settings = getSettings();
 
+    // Configure security middleware from settings
+    const securityLevel = (settings.security?.level ?? 'active') as SecurityLevel;
+    securityMiddleware.setSecurityLevel(securityLevel);
+
     for (let pi = startPhase; pi < PHASES_DEF.length; pi++) {
       if (!isRunningRef.current) return;
 
       const phaseDef = PHASES_DEF[pi];
+
+      // Security check before executing phase
+      const securityCheckType = phaseDef.securityCheck ?? 'command-validation';
+      const securityAction = `phase:${phaseDef.id}:${phaseDef.name}`;
+      const securityParams = { phaseId: phaseDef.id, subSteps: phaseDef.subs, checkType: securityCheckType };
+
+      const securityResult = await securityMiddleware.validateAction(securityAction, securityParams);
+
+      // Log security event
+      if (securityResult.riskLevel !== 'low') {
+        addLog(`Security: ${securityCheckType} check - ${securityResult.riskLevel} risk`, 'shield', securityResult.riskLevel === 'high' ? 'text-red-400' : 'text-yellow-400', 'security');
+      }
+
+      // Block phase if security level is active and action not approved
+      if (securityLevel === 'active' && !securityResult.approved) {
+        addLog(`Blocked: ${phaseDef.name} - security violation`, 'shield-alert', 'text-red-400', 'security');
+        for (const reason of securityResult.blockedReasons) {
+          addLog(`  → ${reason}`, 'x', 'text-red-400', 'security');
+        }
+        setState(prev => ({ ...prev, pipelineRunning: false, isPaused: true }));
+        return;
+      }
 
       // Skip audit phases if skipAudit is enabled
       if (settings.pipeline.skipAudit && phaseDef.type === 'audit') {
@@ -835,7 +862,7 @@ function AppContent() {
         {/* Mode badge - click to toggle */}
         <button
           onClick={() => {
-            const newMode = appSettings.mode === 'easy' ? 'dev' : 'easy';
+            const newMode: AppMode = appSettings.mode === 'easy' ? 'dev' : 'easy';
             const newSettings = { ...appSettings, mode: newMode };
             setAppSettings(newSettings);
             saveSettings(newSettings);

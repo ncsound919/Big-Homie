@@ -31,6 +31,8 @@ export interface IntegrationConfig {
   phases: number[];
 }
 
+export type SecurityLevel = 'passive' | 'active' | 'configurable';
+
 export interface AppSettings {
   mode: AppMode;
   modelProvider: ModelProvider;
@@ -42,6 +44,9 @@ export interface AppSettings {
     skipAudit: boolean;
     parallelPhases: boolean;
     defaultSpeed: number;
+  };
+  security: {
+    level: SecurityLevel;
   };
   ui: {
     particles: boolean;
@@ -101,6 +106,9 @@ const DEFAULTS: AppSettings = {
     parallelPhases: false,
     defaultSpeed: 1,
   },
+  security: {
+    level: 'active' as SecurityLevel,
+  },
   ui: {
     particles: true,
     animations: true,
@@ -121,6 +129,7 @@ export function getSettings(): AppSettings {
       ...parsed,
       localModel: { ...DEFAULTS.localModel, ...(parsed.localModel ?? {}) },
       pipeline: { ...DEFAULTS.pipeline, ...(parsed.pipeline ?? {}) },
+      security: { ...DEFAULTS.security, ...(parsed.security ?? {}) },
       ui: { ...DEFAULTS.ui, ...(parsed.ui ?? {}) },
       integrations: parsed.integrations?.length ? parsed.integrations : DEFAULTS.integrations,
       customAgents: parsed.customAgents ?? [],
