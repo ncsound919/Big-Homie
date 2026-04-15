@@ -8,7 +8,7 @@ export async function checkPromptInjection(text: string): Promise<{detected: boo
       body: JSON.stringify({ text }),
     });
     if (!response.ok) return { detected: false };
-    return response.json();
+    return await response.json();
   } catch {
     return { detected: false }; // Allow on failure (fail open)
   }
