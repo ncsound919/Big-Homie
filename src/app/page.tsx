@@ -26,11 +26,11 @@ import type { SecurityResult } from '@/lib/security-types';
 // Lazy-load heavy components not needed on initial render
 const SettingsDrawer = dynamic(() => import('@/components/SettingsDrawer'), { ssr: false });
 const GitHubPanel = dynamic(() => import('@/components/GitHubPanel'), { ssr: false });
+const SecurityDashboard = dynamic(() => import('@/components/SecurityDashboard'), { ssr: false });
 import BuildView from '@/components/BuildView';
 import ModeSwitcher from '@/components/ModeSwitcher';
 import { BrowseView, ResearchView, ScrapeView } from '@/components/ModeViews';
 import VenturesPanel from '@/components/VenturesPanel';
-import SecurityDashboard from '@/components/SecurityDashboard';
 import { PHASES_DEF, type WorkspaceMode, saveBuildState, loadBuildState, clearBuildState } from '@/lib/workspace';
 import EasyModeWizard from '@/components/EasyModeWizard';
 import EasyBuildProgress from '@/components/EasyBuildProgress';

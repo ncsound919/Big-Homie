@@ -1,6 +1,9 @@
 import type { SecurityLevel, SecurityResult, SecurityEvent } from './security-types';
 import { checkPromptInjection, scanForSecrets } from './claw-protect-client';
 
+const CACHE_TTL = 300000;
+const injectionCache = new Map<string, { result: boolean; warnings: string[]; timestamp: number }>();
+
 const INJECTION_KEYWORDS = [
   'ignore',
   'ignore previous',
@@ -57,17 +60,35 @@ export class SecurityMiddleware {
     const scanText = `${action} ${paramsStr}`;
 
     // Claw Protect API integration - always run prompt injection check
-    try {
-      const injectionResult = await checkPromptInjection(scanText);
-      if (injectionResult.detected) {
-        warnings.push('Claw Protect: Prompt injection detected');
+    // Check cache first
+    const cacheKey = scanText.slice(0, 200);
+    const cached = injectionCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      if (cached.result) {
+        warnings.push('Claw Protect: Prompt injection detected (cached)');
         riskLevel = 'high';
-        if (injectionResult.warnings) {
-          warnings.push(...injectionResult.warnings);
+        if (cached.warnings) {
+          warnings.push(...cached.warnings);
         }
       }
-    } catch {
-      // Fail open - continue with local checks
+    } else {
+      try {
+        const injectionResult = await checkPromptInjection(scanText);
+        injectionCache.set(cacheKey, {
+          result: injectionResult.detected,
+          warnings: injectionResult.warnings || [],
+          timestamp: Date.now(),
+        });
+        if (injectionResult.detected) {
+          warnings.push('Claw Protect: Prompt injection detected');
+          riskLevel = 'high';
+          if (injectionResult.warnings) {
+            warnings.push(...injectionResult.warnings);
+          }
+        }
+      } catch {
+        // Fail open - continue with local checks
+      }
     }
 
     // Secrets detection - only run for 'full' or 'custom' tiers
