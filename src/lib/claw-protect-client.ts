@@ -22,7 +22,7 @@ export async function scanForSecrets(content: string): Promise<string[]> {
       body: JSON.stringify({ content }),
     });
     if (!response.ok) return [];
-    const data = response.json();
+    const data = await response.json();
     return data.findings || [];
   } catch {
     return [];
