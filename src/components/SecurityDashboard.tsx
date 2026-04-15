@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import {
   Shield, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle,
-  Lock, Eye, EyeOff, Search, Activity, RefreshCw, Clock,
+  Eye, EyeOff, Search, Activity, RefreshCw, Clock,
 } from 'lucide-react';
-
-type SecurityLevel = 'passive' | 'active' | 'aggressive';
+import SecuritySettings from './SecuritySettings';
+import type { SecurityLevel } from './SecuritySettings';
 type SecurityStatus = 'secure' | 'warning' | 'critical';
 
 interface SecurityEvent {
@@ -40,7 +40,7 @@ const STATUS_CONFIG: Record<SecurityStatus, { color: string; bg: string; icon: R
 const LEVEL_LABELS: Record<SecurityLevel, { label: string; description: string }> = {
   passive: { label: 'Passive', description: 'Monitors and logs activities only' },
   active: { label: 'Active', description: 'Blocks suspicious activities automatically' },
-  aggressive: { label: 'Aggressive', description: 'Maximum protection with strict controls' },
+  configurable: { label: 'Configurable', description: 'User-controlled security policies' },
 };
 
 const INITIAL_EVENTS: SecurityEvent[] = [
@@ -84,33 +84,11 @@ export default function SecurityDashboard() {
         </div>
       </div>
 
-      {/* Security Level Selector */}
-      <div className="p-4 rounded-2xl border border-border/30 bg-background/20">
-        <div className="flex items-center gap-2 mb-4">
-          <Lock className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Security Level</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {(Object.keys(LEVEL_LABELS) as SecurityLevel[]).map((level) => (
-            <button
-              key={level}
-              onClick={() => setSecurityLevel(level)}
-              className={`p-3 rounded-xl border text-left transition-all ${
-                securityLevel === level
-                  ? 'border-red-500/50 bg-red-500/10'
-                  : 'border-border/30 bg-background/10 hover:bg-background/20'
-              }`}
-            >
-              <p className={`text-sm font-semibold ${securityLevel === level ? 'text-red-400' : 'text-foreground'}`}>
-                {LEVEL_LABELS[level].label}
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {LEVEL_LABELS[level].description}
-              </p>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Security Settings */}
+      <SecuritySettings
+        currentLevel={securityLevel}
+        onSecurityLevelChange={setSecurityLevel}
+      />
 
       {/* Security Events */}
       <div className="p-4 rounded-2xl border border-border/30 bg-background/20">
