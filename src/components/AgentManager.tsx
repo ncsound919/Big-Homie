@@ -1,13 +1,4 @@
-interface CustomAgent {
-  id: string;
-  name: string;
-  description?: string;
-  type: 'config' | 'code';
-  securityTier: 'full' | 'reduced' | 'custom';
-  enabled: boolean;
-  addedAt: string;
-}
-
+import { type CustomAgent } from '../types/agent';
 import { useState } from 'react';
 import { Upload, Trash2, Bot, FileJson, FileCode } from 'lucide-react';
 import AgentUploadModal from './AgentUploadModal';

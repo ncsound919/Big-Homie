@@ -1,15 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, X, FileJson, FileCode, AlertCircle, CheckCircle } from 'lucide-react';
 
-interface CustomAgent {
-  id: string;
-  name: string;
-  description?: string;
-  type: 'config' | 'code';
-  securityTier: 'full' | 'reduced' | 'custom';
-  enabled: boolean;
-  addedAt: string;
-}
+import { type CustomAgent } from '../types/agent';
 
 interface AgentUploadModalProps {
   onUpload: (agent: CustomAgent) => void;
