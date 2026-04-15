@@ -85,8 +85,7 @@ export class SecurityMiddleware {
     }
 
     if (this.securityLevel === 'passive' && riskLevel === 'high') {
-      approved = false;
-      blockedReasons.push('Critical risk action blocked');
+      warnings.push('High risk action detected in passive mode - allowing but logging warning');
     }
 
     const result: SecurityResult = {
