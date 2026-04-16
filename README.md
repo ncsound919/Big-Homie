@@ -121,12 +121,11 @@ heartbeat.start()  # Runs in background
 
 Automatically routes tasks to the best model based on complexity:
 
-| Task Type | Default Model | Cost/1M tokens | Use Case |
-|-----------|---------------|----------------|----------|
-| Simple | Claude Haiku | $0.25 | Lists, summaries |
-| General | Claude Sonnet 4.5 | $3.00 | Most tasks |
-| Complex | Claude Opus 4.5 | $15.00 | Strategy, planning |
-| Coding | GPT-4 | $30.00 | Development |
+
+| Simple | Claude Haiku | Lists, summaries |
+| General | Claude Sonnet 4.6 | Most tasks |
+| Complex | Claude Opus 4.6 | Strategy, planning |
+
 
 ```python
 from router import router
