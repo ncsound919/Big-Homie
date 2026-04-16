@@ -101,30 +101,42 @@ class PersistentShellManager:
         # Pass --norc/--noprofile only to bash to avoid a fast, clean start
         shell_name = Path(shell_cmd).name
         bash_flags = ["--norc", "--noprofile"] if shell_name == "bash" else []
-        process = await asyncio.create_subprocess_exec(
-            shell_cmd,
-            *bash_flags,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=cwd,
-            env=env
-        )
 
-        session = ShellSession(
-            session_id=session_id,
-            process=process,
-            created_at=datetime.now(),
-            last_used=datetime.now(),
-            cwd=cwd or ".",
-            env=env or {},
-            history=[]
-        )
+        process = None
+        try:
+            process = await asyncio.create_subprocess_exec(
+                shell_cmd,
+                *bash_flags,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=cwd,
+                env=env
+            )
 
-        self.sessions[session_id] = session
-        logger.info(f"Created persistent shell session: {session_id}")
+            session = ShellSession(
+                session_id=session_id,
+                process=process,
+                created_at=datetime.now(),
+                last_used=datetime.now(),
+                cwd=cwd or ".",
+                env=env or {},
+                history=[]
+            )
 
-        return session_id
+            self.sessions[session_id] = session
+            logger.info(f"Created persistent shell session: {session_id}")
+
+            return session_id
+        except Exception as e:
+            # Clean up the process if session creation fails
+            if process is not None:
+                try:
+                    process.kill()
+                    await process.wait()
+                except Exception:
+                    pass
+            raise
 
     async def execute_command(
         self,

@@ -353,7 +353,7 @@ async def quick_navigate(url: str, screenshot: bool = False) -> BrowserResult:
         result = await browser.navigate(url)
         if screenshot and result.success:
             result.screenshot_path = await browser.screenshot()
-        return result
+    return result
 
 async def quick_scrape(url: str, selectors: Dict[str, str]) -> Dict[str, str]:
     """
@@ -373,7 +373,7 @@ async def quick_scrape(url: str, selectors: Dict[str, str]) -> Dict[str, str]:
         for name, selector in selectors.items():
             results[name] = await browser.extract_text(selector)
 
-        return results
+    return results
 
 # Global browser instance (reusable for efficiency)
 browser_skill = BrowserSkill()

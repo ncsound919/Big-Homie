@@ -7,9 +7,62 @@ import json
 import uuid
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from loguru import logger
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Draymond session helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def start_session(agent_id: str, trigger: str = "heartbeat") -> str:
+    """Open a Draymond session row and return its UUID."""
+    def _insert():
+        from supabase_client import get_supabase
+        db = get_supabase()
+        return db.table("draymond_sessions").insert({
+            "agent_id": agent_id,
+            "trigger_source": trigger,
+            "is_active": True,
+        }).execute()
+
+    res = await asyncio.to_thread(_insert)
+
+    error = getattr(res, "error", None)
+    if error:
+        raise RuntimeError(f"Failed to start session in Supabase: {error}")
+
+    data = getattr(res, "data", None)
+    if not data:
+        raise RuntimeError(
+            "Failed to start session in Supabase: insert returned no rows."
+        )
+
+    row = data[0]
+    if "id" not in row:
+        raise RuntimeError(
+            f"Failed to start session in Supabase: inserted row missing 'id': {row}"
+        )
+
+    return row["id"]
+
+
+async def close_session(session_id: str, stats: dict):
+    """Close a Draymond session and write summary statistics."""
+    def _update():
+        from supabase_client import get_supabase
+        db = get_supabase()
+        db.table("draymond_sessions").update({
+            "is_active": False,
+            "ended_at": datetime.now(timezone.utc).isoformat(),
+            "total_actions": stats.get("total", 0),
+            "successful_actions": stats.get("success", 0),
+            "failed_actions": stats.get("failed", 0),
+            "avg_confidence": stats.get("avg_confidence"),
+        }).eq("id", session_id).execute()
+
+    await asyncio.to_thread(_update)
 
 
 class LoopStatus(str, Enum):

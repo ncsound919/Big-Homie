@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Server
     server_host: str = "127.0.0.1"
     server_port: int = 9000
-    orchestrator_secret: str = "change-me-in-production"
+    orchestrator_secret: str = ""  # MUST be set in production
 
     # UI Settings
     ui_theme: str = "dark"
@@ -241,6 +241,8 @@ class Settings(BaseSettings):
     postgres_url: str = ""
     supabase_url: str = ""
     supabase_key: str = ""
+    supabase_anon_key: str = ""   # Draymond publishable anon key
+    draymond_project_id: str = ""  # Draymond Supabase project ID
 
     # Media Generation
     enable_media_generation: bool = True
