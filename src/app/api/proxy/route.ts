@@ -9,14 +9,58 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const MAX_BODY = 10 * 1024 * 1024; // 10 MB cap
 const FETCH_TIMEOUT = 15_000; // 15 s
-const BLOCKED_RE =
-  /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|localhost|::1|\[::1\])/i;
+
+function isLocalHostname(hostname: string): boolean {
+  return hostname === 'localhost' || hostname.endsWith('.localhost');
+}
+
+function isBlockedIpv4(hostname: string): boolean {
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)) {
+    return false;
+  }
+
+  const parts = hostname.split('.').map((part) => Number(part));
+  if (parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+    return true;
+  }
+
+  const [a, b] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+function isBlockedIpv6(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+
+  return (
+    normalized === '::1' ||
+    normalized.startsWith('fe8:') ||
+    normalized.startsWith('fe9:') ||
+    normalized.startsWith('fea:') ||
+    normalized.startsWith('feb:') ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd')
+  );
+}
 
 /** Reject URLs that point at private / internal IPs (SSRF guard). */
 function isBlockedHost(urlStr: string): boolean {
   try {
     const { hostname } = new URL(urlStr);
-    return BLOCKED_RE.test(hostname);
+    const normalized = hostname.toLowerCase();
+
+    return (
+      !normalized ||
+      isLocalHostname(normalized) ||
+      isBlockedIpv4(normalized) ||
+      isBlockedIpv6(normalized)
+    );
   } catch {
     return true;
   }
