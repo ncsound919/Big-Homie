@@ -90,8 +90,6 @@ export async function GET(req: NextRequest) {
       headers: {
         'Content-Type': ct,
         'Cache-Control': 'public, max-age=300',
-        // Explicitly allow framing
-        'X-Frame-Options': 'ALLOWALL',
       },
     });
   } catch (err) {
