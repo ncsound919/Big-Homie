@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   reactStrictMode: true,
   experimental: {
