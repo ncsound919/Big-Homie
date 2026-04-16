@@ -4,6 +4,7 @@ Simple validation tests for the media generation providers
 """
 import asyncio
 from pathlib import Path
+import pytest
 from media_generation import (
     MediaGenerationManager,
     MediaType,
@@ -120,6 +121,7 @@ def test_workflow_loading():
     assert "test_workflow" in provider.workflows
     print("✅ ComfyUI workflow loading works")
 
+@pytest.mark.asyncio
 async def test_auto_provider_selection():
     """Test automatic provider selection"""
     manager = MediaGenerationManager()

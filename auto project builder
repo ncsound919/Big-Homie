@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentBrowser — Autonomous Project Builder</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg0:#050710;--bg1:#0a0d18;--bg2:#0f1422;--bg3:#182038;--bg4:#223050;
+  --brd:#1e2a48;--brd2:#2a3c60;--tx0:#e8ecf6;--tx1:#8894b4;--tx2:#506080;--tx3:#354060;
+  --acc:#d4a020;--acc2:#f0c040;--accg:rgba(212,160,32,.08);
+  --tl:#10c4a0;--tlg:rgba(16,196,160,.08);--cy:#20b0d8;--cyg:rgba(32,176,216,.08);
+  --em:#10b981;--rd:#ef4444;--or:#f08020;--rs:#e84060;
+  --h1:#a060e0;--h2:#8040c0;--hg:rgba(160,96,224,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:var(--bg0);color:var(--tx0);overflow:hidden;height:100vh}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--brd);border-radius:3px}
+
+#app{display:grid;grid-template-rows:52px 1fr;height:100vh;grid-template-columns:1fr}
+#topbar{background:var(--bg1);border-bottom:1px solid var(--brd);display:flex;align-items:center;padding:0 20px;gap:12px;z-index:50}
+#main{overflow-y:auto;position:relative}
+
+.logo{font-size:15px;font-weight:900;letter-spacing:-.5px;display:flex;align-items:center;gap:8px}
+.logo i{color:var(--h1);font-size:18px}
+.logo span{color:var(--h1)}
+
+.tb-sep{width:1px;height:24px;background:var(--brd);margin:0 4px}
+
+.proj-sel{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;border:1px solid var(--brd);background:var(--bg2);cursor:pointer;font-size:12px;color:var(--tx1);transition:all .15s;max-width:240px}
+.proj-sel:hover{border-color:var(--brd2);color:var(--tx0)}
+
+.conf-badge{display:flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700}
+.conf-high{background:rgba(16,185,129,.1);color:var(--em);border:1px solid rgba(16,185,129,.2)}
+.conf-mid{background:var(--accg);color:var(--acc);border:1px solid rgba(212,160,32,.2)}
+.conf-low{background:rgba(239,68,68,.1);color:var(--rd);border:1px solid rgba(239,68,68,.2)}
+.conf-dot{width:7px;height:7px;border-radius:50%;animation:cdp 2s infinite}
+@keyframes cdp{0%,100%{opacity:1}50%{opacity:.3}}
+
+.tbtn{height:32px;padding:0 12px;border:0;background:0;color:var(--tx2);border-radius:6px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:5px;transition:all .12s}
+.tbtn:hover{background:var(--bg3);color:var(--tx0)}
+
+.new-btn{padding:6px 16px;border-radius:8px;border:0;background:var(--h1);color:#fff;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s}
+.new-btn:hover{background:var(--h2);transform:translateY(-1px)}
+
+/* Pages */
+.page{max-width:1100px;margin:0 auto;padding:28px 24px;animation:pgI .3s ease}
+@keyframes pgI{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* New Project Form */
+.form-card{background:var(--bg1);border:1px solid var(--brd);border-radius:14px;padding:28px;margin-bottom:16px}
+.form-title{font-size:22px;font-weight:900;margin-bottom:4px}
+.form-sub{font-size:13px;color:var(--tx1);margin-bottom:24px}
+.fg{margin-bottom:20px}
+.fg label{display:block;font-size:11px;font-weight:700;color:var(--tx1);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.fg input,.fg textarea,.fg select{width:100%;background:var(--bg0);border:1px solid var(--brd);border-radius:8px;padding:10px 14px;color:var(--tx0);font-size:13px;outline:0;transition:border-color .2s;font-family:'DM Sans',sans-serif}
+.fg input:focus,.fg textarea:focus{border-color:var(--h1)}
+.fg textarea{resize:vertical;min-height:100px;line-height:1.6}
+.fg select{cursor:pointer}
+.fg .hint{font-size:10px;color:var(--tx2);margin-top:4px}
+.fg .char-count{font-size:9px;color:var(--tx3);text-align:right;margin-top:2px}
+
+.option-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.option-card{padding:12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--bg2);cursor:pointer;transition:all .15s;text-align:center}
+.option-card:hover{border-color:var(--brd2)}
+.option-card.selected{border-color:var(--h1);background:var(--hg)}
+.option-card i{font-size:20px;margin-bottom:6px;display:block}
+.option-card .oc-name{font-size:11px;font-weight:700}
+.option-card .oc-desc{font-size:9px;color:var(--tx2);margin-top:2px}
+
+.start-btn{width:100%;padding:14px;border-radius:10px;border:0;background:linear-gradient(135deg,var(--h1),var(--h2));color:#fff;font-size:15px;font-weight:800;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.start-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(160,96,224,.3)}
+.start-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* Pipeline Tracker */
+.pipe{display:flex;flex-direction:column;gap:0;margin-bottom:24px}
+.pipe-phase{display:flex;gap:0;position:relative}
+.pipe-rail{width:48px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;position:relative}
+.pipe-dot{width:32px;height:32px;border-radius:50%;border:2.5px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--tx2);font-weight:800;transition:all .4s;position:relative;z-index:2;background:var(--bg1)}
+.pipe-dot.done{background:var(--em);border-color:var(--em);color:#fff}
+.pipe-dot.running{background:var(--h1);border-color:var(--h1);color:#fff;animation:dpulse 2s infinite;box-shadow:0 0 16px rgba(160,96,224,.4)}
+@keyframes dpulse{0%,100%{box-shadow:0 0 16px rgba(160,96,224,.4)}50%{box-shadow:0 0 28px rgba(160,96,224,.6)}}
+.pipe-dot.audit{border-color:var(--or);color:var(--or)}
+.pipe-dot.audit.done{background:var(--em);border-color:var(--em);color:#fff}
+.pipe-dot.audit.running{background:var(--or);border-color:var(--or);color:#fff;animation:apulse 2s infinite;box-shadow:0 0 16px rgba(240,128,32,.4)}
+@keyframes apulse{0%,100%{box-shadow:0 0 16px rgba(240,128,32,.4)}50%{box-shadow:0 0 28px rgba(240,128,32,.6)}}
+.pipe-dot.blocked{background:var(--rd);border-color:var(--rd);color:#fff;animation:bpulse 1s infinite}
+@keyframes bpulse{0%,100%{box-shadow:0 0 12px rgba(239,68,68,.4)}50%{box-shadow:0 0 24px rgba(239,68,68,.6)}}
+.pipe-line{width:3px;flex:1;background:var(--brd);transition:background .4s;min-height:8px}
+.pipe-line.done{background:var(--em)}.pipe-line.running{background:var(--h1)}
+.pipe-body{flex:1;padding:0 0 20px 14px;min-height:50px}
+.pipe-name{font-size:14px;font-weight:800;margin-bottom:2px;display:flex;align-items:center;gap:6px}
+.pipe-desc{font-size:11px;color:var(--tx2);line-height:1.5;margin-bottom:6px}
+.pipe-status{font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px}
+.pipe-status.s-waiting{color:var(--tx3)}.pipe-status.s-running{color:var(--h1)}.pipe-status.s-done{color:var(--em)}.pipe-status.s-blocked{color:var(--rd)}.pipe-status.s-auditing{color:var(--or)}
+
+.sub-steps{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.sub-step{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--tx1);padding:3px 0}
+.sub-step .ss-icon{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;flex-shrink:0}
+.ss-waiting{background:var(--bg3);color:var(--tx3)}.ss-running{background:var(--h1);color:#fff;animation:dpulse 2s infinite}.ss-done{background:var(--em);color:#fff}.ss-fail{background:var(--rd);color:#fff}
+
+/* Activity log */
+.log-card{background:var(--bg1);border:1px solid var(--brd);border-radius:10px;overflow:hidden}
+.log-header{padding:10px 14px;border-bottom:1px solid var(--brd);font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px}
+.log-body{max-height:280px;overflow-y:auto;padding:8px 14px}
+.log-entry{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid rgba(30,42,72,.3);font-size:10.5px;animation:leI .2s ease}
+@keyframes leI{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+.log-entry:last-child{border-bottom:0}
+.log-entry .le-time{color:var(--tx3);font-family:'JetBrains Mono',monospace;font-size:9px;min-width:42px;flex-shrink:0;padding-top:1px}
+.log-entry .le-icon{width:16px;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:7px;flex-shrink:0}
+.log-entry .le-text{color:var(--tx1);flex:1;line-height:1.4}
+.log-entry .le-text b{color:var(--tx0);font-weight:600}
+
+/* Findings in audit */
+.findings-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.finding{padding:8px;border-radius:6px;border-left:3px solid;font-size:10px;background:var(--bg2);line-height:1.4}
+.finding.critical{border-color:var(--rd);background:rgba(239,68,68,.05)}.finding.high{border-color:var(--or);background:rgba(240,128,32,.05)}.finding.medium{border-color:var(--acc);background:rgba(212,160,32,.05)}.finding.low{border-color:var(--cy);background:rgba(32,176,216,.05)}.finding.pass{border-color:var(--em);background:rgba(16,185,129,.05)}
+.finding .fn-sev{font-size:8px;font-weight:700;text-transform:uppercase;margin-bottom:2px}
+.finding .fn-title{font-weight:600;color:var(--tx0)}
+.sev-critical{color:var(--rd)}.sev-high{color:var(--or)}.sev-medium{color:var(--acc)}.sev-low{color:var(--cy)}.sev-pass{color:var(--em)}
+
+/* Summary cards */
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.sum-card{padding:14px;border-radius:10px;border:1px solid var(--brd);background:var(--bg1);text-align:center}
+.sum-card .sc-val{font-size:24px;font-weight:900;margin-bottom:2px}
+.sum-card .sc-label{font-size:9px;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px}
+
+/* Deliverables */
+.del-card{padding:14px;border:1px solid var(--brd);border-radius:10px;background:var(--bg1);margin-bottom:8px;display:flex;align-items:center;gap:12px;transition:all .15s;cursor:pointer}
+.del-card:hover{border-color:var(--h1);background:var(--hg)}
+.del-card .dc-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.del-card .dc-name{font-weight:700;font-size:12px}.del-card .dc-desc{font-size:10px;color:var(--tx2)}
+
+#toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:5px;z-index:999}
+.toast{padding:8px 14px;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:6px;transform:translateX(120%);transition:transform .25s ease;backdrop-filter:blur(10px)}
+.toast.show{transform:translateX(0)}
+.toast-ok{background:rgba(16,185,129,.14);border:1px solid rgba(16,185,129,.3);color:var(--em)}
+.toast-info{background:rgba(32,176,216,.14);border:1px solid rgba(32,176,216,.3);color:var(--cy)}
+
+@media(max-width:700px){.summary-grid{grid-template-columns:1fr 1fr}.findings-grid{grid-template-columns:1fr}.option-grid{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){*{animation-duration:0s!important;transition-duration:0s!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="logo"><i class="fas fa-hexagon-check"></i><span>AgentBrowser</span></div>
+    <div class="tb-sep"></div>
+    <div class="proj-sel" id="proj-sel" onclick="showNewProject()"><i class="fas fa-plus" style="font-size:10px"></i><span id="proj-name">New Project</span></div>
+    <div style="flex:1"></div>
+    <div id="conf-badge" class="conf-badge conf-high" style="display:none"><span class="conf-dot" style="background:var(--em)"></span><span id="conf-text">98% Complete</span></div>
+    <button class="tbtn" id="audit-btn" style="display:none" onclick="runAudit()"><i class="fas fa-shield-halved" style="color:var(--or)"></i> Run Audit</button>
+    <button class="new-btn" onclick="showNewProject()"><i class="fas fa-plus"></i>New Project</button>
+  </header>
+  <div id="main"></div>
+</div>
+<div id="toasts"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const esc=s=>s?.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')||'';
+
+/* ═══════════════════════════════════════════
+   PROJECT STATE
+   ═══════════════════════════════════════════ */
+let project=null;
+let pipelineRunning=false;
+
+/* Pipeline phases with sub-steps */
+const phases=[
+  {id:'requirements',name:'Understand What You Need',icon:'fas fa-comments',type:'build',
+    desc:'Hermes reads your project description and asks clarifying questions to fill any gaps.',
+    subs:['Analyze your project description','Identify missing requirements','Create complete feature list','Confirm project scope']},
+  {id:'architecture',name:'Design the System',icon:'fas fa-drafting-compass',type:'build',
+    desc:'A senior architect agent designs the technical architecture, data models, and component structure.',
+    subs:['Design database schema','Plan API endpoints','Define component hierarchy','Choose tech stack and libraries','Create file structure']},
+  {id:'scaffold',name:'Set Up the Foundation',icon:'fas fa-layer-group',type:'build',
+    desc:'The system creates the project, initializes the codebase, and configures all services.',
+    subs:['Create project repository','Initialize framework and tooling','Set up database and migrations','Configure authentication','Connect deployment platform']},
+  {id:'core',name:'Build Core Features',icon:'fas fa-cube',type:'build',
+    desc:'The coder agent implements the main features — the parts your users will interact with most.',
+    subs:['Implement user authentication','Build main data models and API','Create primary user interface','Connect front-end to back-end']},
+  {id:'audit1',name:'Quality Gate: Core Check',icon:'fas fa-shield-halved',type:'audit',
+    desc:'Automatic audit of everything built so far. Security, race conditions, and type safety are checked before proceeding. Issues are auto-fixed.',
+    subs:['Security vulnerability scan','Race condition detection','Type safety analysis','Auto-fix any issues found','Re-audit to confirm fixes']},
+  {id:'remaining',name:'Build Remaining Features',icon:'fas fa-cubes',type:'build',
+    desc:'With the core verified, the coder builds out secondary features, edge cases, and polish.',
+    subs:['Implement secondary features','Add error handling and edge cases','Build settings and preferences','Create notifications system','Add loading states and feedback']},
+  {id:'audit2',name:'Quality Gate: Full Audit',icon:'fas fa-shield-halved',type:'audit',
+    desc:'Complete 7-category audit of the entire project. Nothing ships with known critical issues.',
+    subs:['Static analysis and complexity','Security vulnerabilities','Code smells and duplication','Race conditions and concurrency','Memory leaks and resource cleanup','Type safety and null checks','Dependency health and CVEs','Auto-fix everything possible','Final verification scan']},
+  {id:'deploy',name:'Deploy and Deliver',icon:'fas fa-rocket',type:'build',
+    desc:'The finished project is deployed, tested live, and documented. You get working URLs and access credentials.',
+    subs:['Deploy to production','Run live health checks','Set up monitoring','Generate documentation','Create handoff summary']},
+];
+
+/* ═══════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════ */
+function toast(msg,t='ok'){const e=document.createElement('div');e.className=`toast toast-${t}`;e.innerHTML=`<i class="fas fa-${t==='ok'?'check-circle':'circle-info'}"></i> ${msg}`;$('#toasts').appendChild(e);requestAnimationFrame(()=>e.classList.add('show'));setTimeout(()=>{e.classList.remove('show');setTimeout(()=>e.remove(),250)},2800)}
+
+/* ═══════════════════════════════════════════
+   NEW PROJECT PAGE
+   ═══════════════════════════════════════════ */
+function showNewProject(){
+  project=null;pipelineRunning=false;
+  $('#proj-name').textContent='New Project';
+  $('#conf-badge').style.display='none';
+  $('#audit-btn').style.display='none';
+  $('#main').innerHTML=renderNewProjectForm();
+}
+
+function renderNewProjectForm(){
+  return`<div class="page" style="max-width:720px">
+  <div class="form-card">
+    <div class="form-title">What do you want built?</div>
+    <div class="form-sub">Describe your project in plain English. The system handles all technical decisions — architecture, coding, testing, and deployment happen automatically.</div>
+
+    <div class="fg">
+      <label>Project Name</label>
+      <input type="text" id="f-name" placeholder="e.g. My SaaS Dashboard, Client Portal, Inventory Tracker" oninput="updateStartBtn()">
+      <div class="hint">This becomes your project's repository and deployment name.</div>
+    </div>
+
+    <div class="fg">
+      <label>Describe Your Project</label>
+      <textarea id="f-desc" placeholder="Describe what you want in everyday language. For example:&#10;&#10;I need a web app where my clients can log in, view their project progress, approve tasks, and leave comments. I want a dashboard that shows project status with charts. I need to be able to create new projects and assign team members. Send email notifications when tasks are completed.&#10;&#10;The more detail you provide, the less the system needs to guess." oninput="updateCharCount()"></textarea>
+      <div class="char-count"><span id="char-count">0</span>/2000</div>
+    </div>
+
+    <div class="fg">
+      <label>What Type of Project?</label>
+      <div class="option-grid">
+        ${[{id:'webapp',icon:'fas fa-window-maximize',name:'Web Application',desc:'Interactive website or app'},{id:'api',icon:'fas fa-plug',name:'API / Backend',desc:'Data service or API'},{id:'dashboard',icon:'fas fa-chart-line',name:'Dashboard',desc:'Data visualization & management'},{id:'ecommerce',icon:'fas fa-cart-shopping',name:'E-Commerce',desc:'Online store or marketplace'},{id:'mobile',icon:'fas fa-mobile-screen',name:'Mobile App',desc:'iOS / Android application'},{id:'automation',icon:'fas fa-robot',name:'Automation',desc:'Workflow or integration'}].map(o=>`
+        <div class="option-card" data-type="${o.id}" onclick="selectType('${o.id}')">
+          <i class="${o.icon}" style="color:var(--h1)"></i>
+          <div class="oc-name">${o.name}</div>
+          <div class="oc-desc">${o.desc}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="fg">
+      <label>Who is this for?</label>
+      <div class="option-grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr))">
+        ${[{id:'business',name:'Business Clients'},{id:'team',name:'Internal Team'},{id:'customers',name:'Public Customers'},{id:'personal',name:'Personal Use'}].map(o=>`
+        <div class="option-card" data-aud="${o.id}" onclick="selectAud('${o.id}')" style="padding:10px">
+          <div class="oc-name">${o.name}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="fg">
+      <label>Any existing accounts to connect?</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${['GitHub','Vercel','Supabase','Cloudflare','AWS','Stripe'].map(s=>`
+        <label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:6px;border:1px solid var(--brd);background:var(--bg2);cursor:pointer;font-size:11px;transition:all .12s" onclick="this.style.borderColor=this.querySelector('input').checked?'var(--brd)':'var(--h1)'">
+          <input type="checkbox" value="${s}" class="svc-check" style="accent-color:var(--h1)">${s}
+        </label>`).join('')}
+      </div>
+      <div class="hint">The system uses your connected services automatically. No manual configuration needed.</div>
+    </div>
+
+    <button class="start-btn" id="start-btn" disabled onclick="startProject()">
+      <i class="fas fa-wand-magic-sparkles"></i>Build My Project
+    </button>
+    <div style="text-align:center;margin-top:10px;font-size:10px;color:var(--tx2)">The system follows an 8-phase pipeline with automatic quality gates. You'll see progress in real-time.</div>
+  </div>
+</div>`;
+}
+
+let selectedType=null,selectedAud=null;
+function selectType(id){selectedType=id;document.querySelectorAll('[data-type]').forEach(e=>e.classList.toggle('selected',e.dataset.type===id));updateStartBtn()}
+function selectAud(id){selectedAud=id;document.querySelectorAll('[data-aud]').forEach(e=>e.classList.toggle('selected',e.dataset.aud===id));updateStartBtn()}
+function updateCharCount(){const c=$('#f-desc')?.value?.length||0;const el=$('#char-count');if(el)el.textContent=c}
+function updateStartBtn(){const btn=$('#start-btn');if(btn)btn.disabled=!$('#f-name')?.value?.trim()}
+
+/* ═══════════════════════════════════════════
+   START PROJECT
+   ═══════════════════════════════════════════ */
+async function startProject(){
+  const name=$('#f-name').value.trim();
+  const desc=$('#f-desc')?.value?.trim()||'';
+  const services=[...document.querySelectorAll('.svc-check:checked')].map(c=>c.value);
+
+  if(!name)return;
+
+  project={
+    name,desc,type:selectedType||'webapp',audience:selectedAud||'business',
+    services,phase:0,subStep:0,confidence:0,
+    findings:[],log:[],
+    startedAt:new Date(),auditPasses:0,auditFails:0,autoFixes:0
+  };
+
+  $('#proj-name').textContent=name;
+  renderPipeline();
+  toast('Project started — building now','info');
+
+  await runPipeline();
+}
+
+/* ═══════════════════════════════════════════
+   PIPELINE RENDERING
+   ═══════════════════════════════════════════ */
+function renderPipeline(){
+  if(!project)return;
+  const conf=project.confidence;
+  const confClass=conf>=90?'conf-high':conf>=60?'conf-mid':'conf-low';
+  const confColor=conf>=90?'var(--em)':conf>=60?'var(--acc)':'var(--rd)';
+  $('#conf-badge').style.display='flex';
+  $('#conf-badge').className=`conf-badge ${confClass}`;
+  $('#conf-text').textContent=`${conf}% Complete`;
+  document.querySelector('.conf-dot').style.background=confColor;
+  $('#audit-btn').style.display=project.phase>0?'flex':'none';
+
+  const p=project;
+  $('#main').innerHTML=`<div class="page">
+  <div style="margin-bottom:20px">
+    <h1 style="font-size:22px;font-weight:900;margin-bottom:4px">${esc(p.name)}</h1>
+    <p style="font-size:12px;color:var(--tx1);max-width:600px">${p.desc?esc(p.desc.slice(0,150))+(p.desc.length>150?'...':''):'Building your project...'}</p>
+  </div>
+
+  <div class="summary-grid">
+    ${[{v:p.phase>7?'Live':p.phase>0?'Phase '+(p.phase+1)+'/8':'Starting',l:'Status',c:p.phase>=7?'var(--em)':p.phase>0?'var(--h1)':'var(--tx2)'},
+       {v:p.auditPasses,l:'Audits Passed',c:'var(--em)'},
+       {v:p.autoFixes,l:'Issues Auto-Fixed',c:'var(--or)'},
+       {v:p.findings.filter(f=>f.sev==='critical').length,l:'Open Critical Issues',c:p.findings.filter(f=>f.sev==='critical').length>0?'var(--rd)':'var(--em)'}
+    ].map(s=>`<div class="sum-card"><div class="sc-val" style="color:${s.c}">${s.v}</div><div class="sc-label">${s.l}</div></div>`).join('')}
+  </div>
+
+  <div class="pipe" id="pipe">
+    ${phases.map((ph,i)=>{
+      const state=i<p.phase?'done':i===p.phase?(pipelineRunning?'running':'waiting'):'waiting';
+      const dotClass=state==='done'?'done':state==='running'?(ph.type==='audit'?'audit running':'running'):'';
+      const lineClass=i<p.phase?'done':i===p.phase?'running':'';
+      const statusClass=state==='done'?'s-done':state==='running'?(ph.type==='audit'?'s-auditing':'s-running'):'s-waiting';
+      const statusText=state==='done'?'Completed':state==='running'?(ph.type==='audit'?'Auditing...':'In Progress...'):'Waiting';
+      return`<div class="pipe-phase">
+        <div class="pipe-rail">
+          <div class="pipe-dot ${dotClass}" style="${state==='waiting'?'':''}"><i class="${ph.icon}" style="font-size:${state==='done'?'11px':'12px'}"></i></div>
+          ${i<phases.length-1?`<div class="pipe-line ${lineClass}"></div>`:''}
+        </div>
+        <div class="pipe-body">
+          <div class="pipe-name">${ph.name}${ph.type==='audit'?' <i class="fas fa-shield-halved" style="color:var(--or);font-size:11px"></i>':''}</div>
+          <div class="pipe-desc">${ph.desc}</div>
+          <div class="pipe-status ${statusClass}"><i class="fas fa-${state==='done'?'check-circle':state==='running'?'spinner fa-spin':'clock'}"></i>${statusText}</div>
+          ${state==='running'||state==='done'?`<div class="sub-steps">${ph.subs.map((ss,si)=>{
+            const ssState=state==='done'?'done':si<p.subStep?'done':si===p.subStep?'running':'waiting';
+            return`<div class="sub-step"><span class="ss-icon ss-${ssState}"><i class="fas fa-${ssState==='done'?'check':ssState==='running'?'spinner fa-spin':'circle'}"></i></span><span style="color:${ssState==='done'?'var(--em)':ssState==='running'?'var(--tx0)':'var(--tx2)'}">${ss}</span></div>`;
+          }).join('')}</div>`:''}
+          ${state==='done'&&ph.type==='audit'?renderAuditSummary(i):''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  ${project.phase>=7?renderDeliverables():''}
+
+  <div class="log-card" style="margin-top:16px">
+    <div class="log-header"><i class="fas fa-list-timeline" style="color:var(--h1)"></i>Activity Log</div>
+    <div class="log-body" id="log-body">
+      ${project.log.slice(-30).reverse().map(l=>`<div class="log-entry">
+        <span class="le-time">${l.time}</span>
+        <span class="le-icon" style="background:${l.color}20;color:${l.color}"><i class="${l.icon}"></i></span>
+        <span class="le-text">${l.text}</span>
+      </div>`).join('')}
+    </div>
+  </div>
+</div>`;
+}
+
+function renderAuditSummary(phaseIdx){
+  const auditFindings=project.findings.filter(f=>f.phase===phaseIdx);
+  if(!auditFindings.length)return'';
+  const passed=auditFindings.filter(f=>f.sev==='pass').length;
+  const found=auditFindings.filter(f=>f.sev!=='pass').length;
+  return`<div style="margin-top:8px">
+    <div style="font-size:10px;font-weight:700;margin-bottom:4px;color:var(--em)"><i class="fas fa-check-circle" style="margin-right:3px"></i>${passed} checks passed, ${found} issues found and auto-fixed</div>
+  </div>`;
+}
+
+function renderDeliverables(){
+  return`<div style="margin-bottom:20px">
+    <div style="font-size:16px;font-weight:900;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="fas fa-gift" style="color:var(--h1)"></i>Your Project Is Ready</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      ${[{icon:'fas fa-globe',color:'var(--em)',bg:'rgba(16,185,129,.1)',name:'Live Application',desc:'https://'+project.name.toLowerCase().replace(/\s+/g,'-')+'.vercel.app'},
+         {icon:'fab fa-github',color:'#f0f0f0',bg:'rgba(240,240,240,.08)',name:'Source Code',desc:'github.com/ncsound919/'+project.name.toLowerCase().replace(/\s+/g,'-')},
+         {icon:'fas fa-database',color:'#3ecf8e',bg:'rgba(62,207,142,.08)',name:'Database Dashboard',desc:'supabase.com/dashboard/project/'+project.name.toLowerCase().replace(/\s+/g,'-')},
+         {icon:'fas fa-file-lines',color:'var(--cy)',bg:'var(--cyg)',name:'Documentation',desc:'README, API reference, and deployment guide'}
+      ].map(d=>`<div class="del-card"><div class="dc-icon" style="background:${d.bg};color:${d.color}"><i class="${d.icon}"></i></div><div><div class="dc-name">${d.name}</div><div class="dc-desc">${d.desc}</div></div></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function addLog(text,icon='fas fa-circle',color='var(--h1)'){
+  const now=new Date();
+  const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  project.log.push({time,text,icon,color});
+}
+
+/* ═══════════════════════════════════════════
+   PIPELINE EXECUTION
+   ═══════════════════════════════════════════ */
+async function runPipeline(){
+  pipelineRunning=true;
+
+  for(let pi=0;pi<phases.length;pi++){
+    project.phase=pi;
+    project.subStep=0;
+    addLog(`Starting: ${phases[pi].name}`,'fas fa-play','var(--h1)');
+    renderPipeline();
+
+    const ph=phases[pi];
+    for(let si=0;si<ph.subs.length;si++){
+      project.subStep=si;
+      renderPipeline();
+      await wait(800+Math.random()*1600);
+
+      // Simulate sub-step completion
+      const subName=ph.subs[si];
+
+      if(ph.type==='audit'){
+        await runAuditSubStep(pi,si,subName);
+      }else{
+        addLog(subName,'fas fa-check','var(--em)');
+      }
+
+      project.subStep=si+1;
+      renderPipeline();
+    }
+
+    // Phase complete
+    if(ph.type==='audit'){
+      await handleAuditGate(pi);
+    }else{
+      addLog(`Completed: ${ph.name}`,'fas fa-check-double','var(--em)');
+    }
+
+    // Update confidence
+    project.confidence=Math.min(100,Math.round(((pi+1)/phases.length)*100));
+    renderPipeline();
+  }
+
+  // Project complete
+  pipelineRunning=false;
+  project.confidence=100;
+  addLog('Project complete and delivered!','fas fa-party-horn','var(--h1)');
+  renderPipeline();
+  toast('Your project is built, audited, and live!','ok');
+}
+
+/* Audit sub-step logic */
+async function runAuditSubStep(phaseIdx,subIdx,subName){
+  // Generate findings based on which audit step
+  const auditFindings=generateFindings(phaseIdx,subIdx,subName);
+  for(const f of auditFindings){
+    project.findings.push({...f,phase:phaseIdx});
+    if(f.sev==='pass'){
+      addLog(f.title,'fas fa-check-circle','var(--em)');
+    }else{
+      addLog(`Found: ${f.title} (${f.sev})`,'fas fa-triangle-exclamation',f.sev==='critical'?'var(--rd)':f.sev==='high'?'var(--or)':'var(--acc)');
+    }
+  }
+
+  // Auto-fix non-pass findings
+  const fixable=auditFindings.filter(f=>f.sev!=='pass');
+  if(fixable.length>0){
+    await wait(600+Math.random()*800);
+    for(const f of fixable){
+      project.autoFixes++;
+      addLog(`Auto-fixed: ${f.title}`,'fas fa-wrench','var(--or)');
+    }
+  }
+}
+
+function generateFindings(phaseIdx,subIdx,subName){
+  // Phase 4 = first audit, Phase 6 = second audit
+  // Generate realistic findings based on sub-step
+  const findings=[];
+
+  if(subName.includes('Security')){
+    if(phaseIdx===4){
+      findings.push({sev:'high',title:'Missing CSRF token on settings endpoint',loc:'api/routes.ts:156'});
+      findings.push({sev:'medium',title:'Rate limiting not configured on login',loc:'api/auth.ts:42'});
+    }else{
+      findings.push({sev:'pass',title:'All security checks passed'});
+    }
+  }else if(subName.includes('Race')){
+    if(phaseIdx===4){
+      findings.push({sev:'high',title:'Token refresh race condition detected',loc:'auth/token.ts:47'});
+    }else{
+      findings.push({sev:'pass',title:'No race conditions detected'});
+    }
+  }else if(subName.includes('Type')){
+    findings.push({sev:'medium',title:'2 unsafe type casts found and fixed',loc:'utils/transform.ts:5'});
+    findings.push({sev:'pass',title:'All null checks verified'});
+  }else if(subName.includes('Static')){
+    findings.push({sev:'low',title:'Complex function simplified (complexity 18→7)',loc:'auth/login.ts:47'});
+    findings.push({sev:'pass',title:'No dead code detected'});
+  }else if(subName.includes('Smell')){
+    findings.push({sev:'low',title:'Duplicated validation extracted to shared utility',loc:'auth/middleware.ts:23'});
+    findings.push({sev:'pass',title:'No god classes detected'});
+  }else if(subName.includes('Memory')){
+    findings.push({sev:'pass',title:'No memory leaks detected'});
+  }else if(subName.includes('Dependency')){
+    if(phaseIdx===4){
+      findings.push({sev:'high',title:'3 dependency CVEs patched',loc:'package.json'});
+    }else{
+      findings.push({sev:'pass',title:'All dependencies up to date'});
+    }
+  }else if(subName.includes('Auto-fix')){
+    findings.push({sev:'pass',title:'All fixable issues resolved automatically'});
+  }else if(subName.includes('verification')||subName.includes('Re-audit')||subName.includes('Final')){
+    findings.push({sev:'pass',title:'Verification scan: all clear'});
+  }else{
+    findings.push({sev:'pass',title:subName+' — passed'});
+  }
+
+  return findings;
+}
+
+async function handleAuditGate(phaseIdx){
+  // Check if any critical issues remain unfixed
+  const criticals=project.findings.filter(f=>f.phase===phaseIdx&&f.sev==='critical');
+
+  if(criticals.length>0){
+    addLog(`Audit gate: ${criticals.length} critical issues — auto-fixing before proceeding`,'fas fa-shield-halved','var(--rd)');
+    renderPipeline();
+
+    // Simulate fixing critical issues
+    for(const c of criticals){
+      await wait(800+Math.random()*600);
+      project.autoFixes++;
+      c.sev='pass'; // Mark as fixed
+      addLog(`Critical fix applied: ${c.title}`,'fas fa-wrench','var(--rd)');
+    }
+
+    // Re-audit
+    await wait(600);
+    addLog('Re-audit passed — all critical issues resolved','fas fa-check-circle','var(--em)');
+    project.auditPasses++;
+  }else{
+    project.auditPasses++;
+    addLog(`Audit gate passed — no critical issues`,'fas fa-shield-halved','var(--em)');
+  }
+}
+
+/* Manual audit trigger */
+async function runAudit(){
+  if(pipelineRunning||!project)return;
+  pipelineRunning=true;
+  addLog('Manual audit triggered','fas fa-shield-halved','var(--or)');
+  renderPipeline();
+
+  const auditPhases=phases.filter(p=>p.type==='audit');
+  for(const ph of auditPhases){
+    for(let si=0;si<ph.subs.length;si++){
+      await runAuditSubStep(ph.id==='audit1'?4:6,si,ph.subs[si]);
+      await wait(400+Math.random()*600);
+    }
+  }
+
+  addLog('Manual audit complete','fas fa-check-circle','var(--em)');
+  pipelineRunning=false;
+  renderPipeline();
+  toast('Audit complete','ok');
+}
+
+/* ═══════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════ */
+showNewProject();
+</script>
+</body>
+</html>
