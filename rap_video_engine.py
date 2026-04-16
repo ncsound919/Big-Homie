@@ -1,467 +1,376 @@
-"""rap_video_engine.py — Big Homie Rap Video MaaS Vertical
-Full pipeline: lyrics → beat → vocal synth → video scenes → FFmpeg render
-Revenue stream: RevenueStream.MAAS  ($49/video one-shot)
 """
-from __future__ import annotations
-import asyncio, json, uuid, os, shutil, tempfile
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
+rap_video_engine.py — Big Homie Vertical: AI Rap Video Generation MaaS
+
+Pipeline:
+  1. LLM generates lyrics
+  2. MiniMax / Google Lyria generates beat
+  3. Bark TTS synthesizes vocal rap (local, free)
+  4. MiniMax video_generate creates scene visuals per section
+  5. FFmpeg stitches audio + video
+  6. Output uploaded to Cloudflare R2, URL returned
+
+Usage:
+  from rap_video_engine import RapVideoEngine
+  engine = RapVideoEngine()
+  result = await engine.generate(theme="hustle and grind", style="trap", bars=16)
+  print(result["video_url"])
+"""
+
+import os
+import asyncio
+import uuid
+import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from loguru import logger
+from typing import Optional
+from dataclasses import dataclass, field
 
+logger = logging.getLogger(__name__)
 
-class RapStyle(str, Enum):
-    TRAP       = "trap"
-    BOOM_BAP   = "boom_bap"
-    DRILL      = "drill"
-    LO_FI      = "lo_fi"
-    PHONK      = "phonk"
+OUTPUT_DIR = Path(os.getenv("MEDIA_OUTPUT_DIR", "~/.big_homie/media_outputs")).expanduser()
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+RAP_STYLES = {
+    "trap":       {"beat_prompt": "hard trap beat, 808 bass, hi-hats, dark synths, 140 BPM",
+                   "vocal_tone": "deep, melodic trap rap delivery"},
+    "boom_bap":   {"beat_prompt": "classic boom bap hip hop, punchy snare, jazz samples, 90 BPM",
+                   "vocal_tone": "lyrical, rhythmic, East Coast delivery"},
+    "drill":      {"beat_prompt": "UK/Chicago drill beat, sliding 808s, dark melody, 140 BPM",
+                   "vocal_tone": "aggressive, rhythmic drill cadence"},
+    "lo_fi_rap":  {"beat_prompt": "lo-fi hip hop instrumental, dusty samples, vinyl crackle, 85 BPM",
+                   "vocal_tone": "calm, introspective rap delivery"},
+    "afrobeats":  {"beat_prompt": "afrobeats fusion, talking drums, melodic guitar, 100 BPM",
+                   "vocal_tone": "melodic, soulful afro rap"},
+}
+
+VISUAL_MOODS = {
+    "trap":       "cinematic nighttime city streets, neon lights, luxury cars, slow motion",
+    "boom_bap":   "black and white New York City borough scenes, graffiti, vintage aesthetic",
+    "drill":      "dark urban environment, dramatic lighting, fast cuts, moody atmosphere",
+    "lo_fi_rap":  "cozy studio apartment, warm lighting, rain on window, chill atmosphere",
+    "afrobeats":  "vibrant African cityscape, colorful fashion, golden hour lighting, energy",
+}
 
 
 @dataclass
-class RapVideoJob:
-    id: str
+class RapVideoResult:
+    success: bool
+    job_id: str
     theme: str
-    style: RapStyle
-    bars: int
-    artist_name: str
-    include_vocals: bool
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    status: str = "pending"
-    lyrics: Optional[str] = None
-    beat_path: Optional[str] = None
-    vocals_path: Optional[str] = None
-    video_scenes: List[str] = field(default_factory=list)
-    output_path: Optional[str] = None
+    style: str
+    lyrics: str = ""
+    beat_path: str = ""
+    vocal_path: str = ""
+    video_path: str = ""
+    video_url: str = ""  # Cloudflare R2 URL if uploaded
     cost_usd: float = 0.0
-    error: Optional[str] = None
-    stages_completed: List[str] = field(default_factory=list)
-
-
-# ── Style → production prompts ────────────────────────────────────────────
-STYLE_PROMPTS = {
-    RapStyle.TRAP:     "heavy 808s, hi-hat rolls, dark minor key, 140 BPM trap beat",
-    RapStyle.BOOM_BAP: "classic boom bap, vinyl samples, heavy kick and snare, 90 BPM",
-    RapStyle.DRILL:    "UK/Chicago drill, sliding 808s, dark melody, 140 BPM, minor pentatonic",
-    RapStyle.LO_FI:    "lo-fi hip hop, warm vinyl crackle, jazzy chords, 85 BPM, chill",
-    RapStyle.PHONK:    "phonk beat, cowbell, distorted 808, Memphis rap influence, 130 BPM",
-}
-
-VISUAL_STYLES = {
-    RapStyle.TRAP:     "dark urban night, neon lights, slow motion, cinematic",
-    RapStyle.BOOM_BAP: "black and white New York streets, graffiti, film grain",
-    RapStyle.DRILL:    "grey concrete, hoodie silhouettes, dramatic lighting",
-    RapStyle.LO_FI:    "warm anime aesthetic, rain on windows, cozy studio",
-    RapStyle.PHONK:    "retro Memphis underground, VHS aesthetic, dim lighting",
-}
+    error: str = ""
+    metadata: dict = field(default_factory=dict)
 
 
 class RapVideoEngine:
-    OUTPUT_DIR = Path.home() / ".big_homie" / "rap_video_outputs"
-    TEMP_DIR   = Path.home() / ".big_homie" / "rap_video_temp"
+    """
+    Autonomous rap video generation pipeline.
+    Integrates: LLM lyrics → MiniMax beat → Bark vocals → MiniMax video → FFmpeg stitch
+    """
 
     def __init__(self):
-        self.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        self.TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        self.enabled = os.getenv("RAP_VIDEO_ENABLED", "true").lower() == "true"
+        self.bark_enabled = os.getenv("BARK_ENABLED", "false").lower() == "true"
+        self.bark_model_path = os.getenv("BARK_MODEL_PATH", "~/.big_homie/models/bark")
+        self.r2_enabled = os.getenv("CF_R2_ENABLED", "false").lower() == "true"
+        self.r2_bucket = os.getenv("CF_R2_BUCKET", "big-homie-media")
+        self.ffmpeg_path = os.getenv("FFMPEG_PATH", "ffmpeg")
 
-    # ── LLM helper ─────────────────────────────────────────────────────
-    async def _llm(self, prompt: str, tier: str = "complex") -> str:
-        try:
-            from llm_gateway import llm, TaskType
-            tier_map = {"fast": TaskType.SIMPLE, "general": TaskType.GENERAL, "complex": TaskType.COMPLEX}
-            resp = await llm.complete(
-                messages=[{"role": "user", "content": prompt}],
-                task_type=tier_map.get(tier, TaskType.COMPLEX),
-            )
-            return resp.content if hasattr(resp, "content") else str(resp)
-        except ImportError:
-            await asyncio.sleep(0.05)
-            return f"[STUB LYRICS for: {prompt[:80]}]"
-
-    # ── Stage 1: Lyrics ────────────────────────────────────────────────
-    async def _gen_lyrics(self, theme: str, style: RapStyle,
-                           bars: int, artist_name: str) -> str:
-        prompt = f"""You are a professional rap lyricist. Write {bars} bars of rap lyrics.
-
-THEME: {theme}
-STYLE: {style.value} — {STYLE_PROMPTS[style]}
-ARTIST NAME: {artist_name}
-
-STRUCTURE:
-- 4-bar intro (hype line)
-- 16-bar verse 1
-- 8-bar hook/chorus (catchy, repeatable)
-- 16-bar verse 2
-- 8-bar hook/chorus (repeat)
-- 4-bar outro
-
-RULES:
-- Raw, authentic lyrics matching the {style.value} style
-- Strong internal rhyme schemes
-- Metaphors related to the theme
-- Mark sections: [INTRO] [VERSE 1] [HOOK] [VERSE 2] [HOOK] [OUTRO]
-- Include BPM annotation at top: BPM: [number]
-
-WRITE THE FULL LYRICS NOW:"""
-        return await self._llm(prompt, "complex")
-
-    # ── Stage 2: Beat generation ────────────────────────────────────────
-    async def _gen_beat(self, job_id: str, style: RapStyle) -> Optional[str]:
-        beat_path = self.TEMP_DIR / f"beat_{job_id}.mp3"
-
-        # Try MiniMax Music API
-        try:
-            from media_generation import media_manager, MediaType
-            result = await media_manager.generate_media(
-                media_type=MediaType.MUSIC,
-                prompt=f"{STYLE_PROMPTS[style]}, instrumental only, no vocals",
-                provider="minimax",
-                duration=90,
-            )
-            if result.success and result.file_path:
-                shutil.copy(result.file_path, beat_path)
-                logger.info(f"[RapVideo] Beat generated via MiniMax -> {beat_path}")
-                return str(beat_path)
-        except (ImportError, Exception) as e:
-            logger.warning(f"[RapVideo] MiniMax beat failed: {e}")
-
-        # Try Google Lyria (Gemini music)
-        if os.getenv("GOOGLE_LYRIA_ENABLED", "false").lower() == "true":
-            try:
-                from media_generation import media_manager, MediaType
-                result = await media_manager.generate_media(
-                    media_type=MediaType.MUSIC,
-                    prompt=f"{STYLE_PROMPTS[style]}, instrumental",
-                    provider="lyria",
-                )
-                if result.success and result.file_path:
-                    shutil.copy(result.file_path, beat_path)
-                    return str(beat_path)
-            except (ImportError, Exception) as e:
-                logger.warning(f"[RapVideo] Lyria beat failed: {e}")
-
-        logger.warning("[RapVideo] No beat generator available — skipping beat stage")
-        return None
-
-    # ── Stage 3: Vocal synthesis ────────────────────────────────────────
-    async def _gen_vocals(self, job_id: str, lyrics: str,
-                           style: RapStyle) -> Optional[str]:
-        vocals_path = self.TEMP_DIR / f"vocals_{job_id}.mp3"
-        clean_lyrics = "\n".join(
-            line for line in lyrics.splitlines()
-            if not line.startswith("[") and line.strip()
-        )[:1000]
-
-        # Try ElevenLabs
-        elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
-        if elevenlabs_key:
-            try:
-                import httpx
-                async with httpx.AsyncClient(timeout=60) as client:
-                    resp = await client.post(
-                        "https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB",
-                        headers={"xi-api-key": elevenlabs_key, "Content-Type": "application/json"},
-                        json={
-                            "text": clean_lyrics,
-                            "model_id": "eleven_turbo_v2",
-                            "voice_settings": {"stability": 0.4, "similarity_boost": 0.7},
-                        },
-                    )
-                    if resp.status_code == 200:
-                        vocals_path.write_bytes(resp.content)
-                        logger.info(f"[RapVideo] Vocals via ElevenLabs -> {vocals_path}")
-                        return str(vocals_path)
-            except Exception as e:
-                logger.warning(f"[RapVideo] ElevenLabs failed: {e}")
-
-        # Try local Bark TTS
-        bark_path = os.getenv("BARK_MODEL_PATH", "")
-        if bark_path or os.getenv("BARK_ENABLED", "false").lower() == "true":
-            try:
-                from bark import generate_audio, SAMPLE_RATE  # type: ignore
-                import scipy.io.wavfile as wav  # type: ignore
-                import numpy as np
-
-                audio = generate_audio(clean_lyrics[:500])
-                wav_path = self.TEMP_DIR / f"vocals_{job_id}.wav"
-                wav.write(str(wav_path), SAMPLE_RATE, audio)
-                # Convert wav -> mp3 via ffmpeg
-                ret = await asyncio.create_subprocess_exec(
-                    "ffmpeg", "-y", "-i", str(wav_path), str(vocals_path),
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                await ret.wait()
-                logger.info(f"[RapVideo] Vocals via Bark -> {vocals_path}")
-                return str(vocals_path)
-            except Exception as e:
-                logger.warning(f"[RapVideo] Bark failed: {e}")
-
-        logger.warning("[RapVideo] No vocal synthesizer available — skipping vocals stage")
-        return None
-
-    # ── Stage 4: Video scene generation ────────────────────────────────
-    async def _gen_scenes(self, job_id: str, theme: str,
-                           style: RapStyle, count: int = 5) -> List[str]:
-        visual = VISUAL_STYLES[style]
-        scene_paths = []
-
-        try:
-            from media_generation import media_manager, MediaType
-            tasks = [
-                media_manager.generate_media(
-                    media_type=MediaType.VIDEO,
-                    prompt=f"{visual}, {theme}, scene {i+1} of {count}, cinematic music video",
-                    provider="minimax",
-                    duration=5,
-                )
-                for i in range(count)
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for i, result in enumerate(results):
-                if not isinstance(result, Exception) and result.success and result.file_path:
-                    dest = self.TEMP_DIR / f"scene_{job_id}_{i:02d}.mp4"
-                    shutil.copy(result.file_path, dest)
-                    scene_paths.append(str(dest))
-        except (ImportError, Exception) as e:
-            logger.warning(f"[RapVideo] Scene gen failed: {e}")
-
-        return scene_paths
-
-    # ── Stage 5: FFmpeg render ──────────────────────────────────────────
-    async def _render_video(
-        self, job_id: str, scene_paths: List[str],
-        beat_path: Optional[str], vocals_path: Optional[str],
-    ) -> Optional[str]:
-        if not scene_paths and not beat_path:
-            logger.warning("[RapVideo] No scenes or beat — cannot render")
-            return None
-
-        ffmpeg = shutil.which("ffmpeg")
-        if not ffmpeg:
-            logger.error("[RapVideo] ffmpeg not found — install with: sudo apt install ffmpeg")
-            return None
-
-        output_path = self.OUTPUT_DIR / f"rap_video_{job_id}.mp4"
-
-        try:
-            if scene_paths:
-                # Concatenate scenes
-                concat_list = self.TEMP_DIR / f"concat_{job_id}.txt"
-                concat_list.write_text("\n".join(f"file '{p}'" for p in scene_paths))
-                silent_video = self.TEMP_DIR / f"silent_{job_id}.mp4"
-                proc = await asyncio.create_subprocess_exec(
-                    ffmpeg, "-y", "-f", "concat", "-safe", "0",
-                    "-i", str(concat_list), "-c", "copy", str(silent_video),
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                await proc.wait()
-                video_source = str(silent_video)
-            else:
-                # No scenes: create black video
-                video_source = None
-
-            # Mix audio
-            if beat_path and vocals_path:
-                mixed_audio = self.TEMP_DIR / f"mixed_{job_id}.mp3"
-                proc = await asyncio.create_subprocess_exec(
-                    ffmpeg, "-y",
-                    "-i", beat_path, "-i", vocals_path,
-                    "-filter_complex", "[0:a]volume=0.7[a0];[1:a]volume=1.2[a1];[a0][a1]amix=inputs=2[aout]",
-                    "-map", "[aout]", str(mixed_audio),
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                await proc.wait()
-                audio_source = str(mixed_audio)
-            elif beat_path:
-                audio_source = beat_path
-            elif vocals_path:
-                audio_source = vocals_path
-            else:
-                audio_source = None
-
-            # Final combine
-            cmd = [ffmpeg, "-y"]
-            if video_source:
-                cmd += ["-i", video_source]
-            else:
-                cmd += ["-f", "lavfi", "-i", "color=c=black:s=1280x720:r=30"]
-            if audio_source:
-                cmd += ["-i", audio_source, "-c:a", "aac", "-b:a", "192k"]
-            cmd += ["-c:v", "libx264", "-preset", "fast", "-t", "90",
-                    "-pix_fmt", "yuv420p", str(output_path)]
-
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.wait()
-
-            if output_path.exists():
-                logger.success(f"[RapVideo] Rendered -> {output_path}")
-                return str(output_path)
-
-        except Exception as e:
-            logger.error(f"[RapVideo] Render failed: {e}")
-
-        return None
-
-    # ── Main pipeline ──────────────────────────────────────────────────
-    async def generate_rap_video(
+    async def generate(
         self,
         theme: str,
         style: str = "trap",
         bars: int = 16,
-        artist_name: str = "Big Homie",
         include_vocals: bool = True,
-    ) -> RapVideoJob:
-        job = RapVideoJob(
-            id=uuid.uuid4().hex[:8],
-            theme=theme,
-            style=RapStyle(style),
-            bars=bars,
-            artist_name=artist_name,
-            include_vocals=include_vocals,
-            status="running",
-        )
-        logger.info(f"[RapVideo] Starting job={job.id} theme='{theme}' style={style}")
+        visual_clips: int = 4,
+        custom_lyrics: Optional[str] = None,
+    ) -> RapVideoResult:
+        """
+        Full rap video generation pipeline.
+
+        Args:
+            theme: Topic/subject of the rap (e.g. "hustle and grind", "AI taking over")
+            style: Rap style key from RAP_STYLES dict
+            bars: Number of lyric bars to generate
+            include_vocals: Whether to synthesize vocals via Bark
+            visual_clips: Number of video scene clips to generate
+            custom_lyrics: Skip LLM lyrics generation and use provided text
+
+        Returns:
+            RapVideoResult with paths and URL
+        """
+        job_id = str(uuid.uuid4())[:8]
+        style_data = RAP_STYLES.get(style, RAP_STYLES["trap"])
+        total_cost = 0.0
+
+        logger.info(f"[RapVideo:{job_id}] Starting generation — theme='{theme}' style='{style}'")
 
         try:
-            # Stage 1: Lyrics
-            logger.info("[RapVideo] Stage 1/5 — generating lyrics")
-            job.lyrics = await self._gen_lyrics(theme, job.style, bars, artist_name)
-            job.stages_completed.append("lyrics")
-            job.cost_usd += 0.02
+            # ── Step 1: Generate Lyrics ───────────────────────────────────────────
+            if custom_lyrics:
+                lyrics = custom_lyrics
+                logger.info(f"[RapVideo:{job_id}] Using custom lyrics ({len(lyrics.split())} words)")
+            else:
+                lyrics = await self._generate_lyrics(theme, style, bars, style_data["vocal_tone"])
+                logger.info(f"[RapVideo:{job_id}] Lyrics generated ({bars} bars)")
 
-            # Stages 2-4: Beat, Vocals, Scenes (parallel)
-            logger.info("[RapVideo] Stages 2-4 — beat + vocals + scenes (parallel)")
-            beat_task   = self._gen_beat(job.id, job.style)
-            vocals_task = self._gen_vocals(job.id, job.lyrics, job.style) if include_vocals else asyncio.sleep(0)
-            scenes_task = self._gen_scenes(job.id, theme, job.style)
+            # ── Step 2: Generate Beat ─────────────────────────────────────────────
+            beat_path, beat_cost = await self._generate_beat(job_id, style_data["beat_prompt"])
+            total_cost += beat_cost
+            logger.info(f"[RapVideo:{job_id}] Beat generated: {beat_path}")
 
-            beat_result, vocals_result, scenes_result = await asyncio.gather(
-                beat_task, vocals_task, scenes_task, return_exceptions=True
+            # ── Step 3: Synthesize Vocals (optional) ──────────────────────────────
+            vocal_path = ""
+            if include_vocals and self.bark_enabled:
+                vocal_path = await self._synthesize_vocals(job_id, lyrics)
+                logger.info(f"[RapVideo:{job_id}] Vocals synthesized: {vocal_path}")
+            elif include_vocals:
+                logger.warning(f"[RapVideo:{job_id}] Bark not enabled — skipping vocal synthesis")
+
+            # ── Step 4: Generate Visual Clips ─────────────────────────────────────
+            visual_mood = VISUAL_MOODS.get(style, VISUAL_MOODS["trap"])
+            clip_paths, clip_cost = await self._generate_visuals(
+                job_id, theme, visual_mood, visual_clips
             )
+            total_cost += clip_cost
+            logger.info(f"[RapVideo:{job_id}] {len(clip_paths)} visual clips generated")
 
-            job.beat_path    = beat_result   if not isinstance(beat_result, Exception)   else None
-            job.vocals_path  = vocals_result if not isinstance(vocals_result, Exception) else None
-            job.video_scenes = scenes_result if not isinstance(scenes_result, Exception) else []
-            job.stages_completed.extend(["beat", "vocals", "scenes"])
-            job.cost_usd += 0.10
-
-            # Stage 5: Render
-            logger.info("[RapVideo] Stage 5/5 — FFmpeg render")
-            job.output_path = await self._render_video(
-                job.id, job.video_scenes, job.beat_path, job.vocals_path,
+            # ── Step 5: Stitch with FFmpeg ────────────────────────────────────────
+            video_path = await self._stitch_video(
+                job_id, beat_path, vocal_path, clip_paths
             )
-            job.stages_completed.append("render")
-            job.cost_usd += 0.01
+            logger.info(f"[RapVideo:{job_id}] Video stitched: {video_path}")
 
-            job.status   = "completed"
-            job.cost_usd = round(job.cost_usd, 4)
-            self._save(job)
-            logger.success(
-                f"[RapVideo] job={job.id} done | "
-                f"output={job.output_path} | cost=${job.cost_usd:.4f}"
+            # ── Step 6: Upload to R2 (optional) ───────────────────────────────────
+            video_url = ""
+            if self.r2_enabled and video_path:
+                video_url = await self._upload_to_r2(job_id, video_path)
+                logger.info(f"[RapVideo:{job_id}] Uploaded: {video_url}")
+
+            return RapVideoResult(
+                success=True,
+                job_id=job_id,
+                theme=theme,
+                style=style,
+                lyrics=lyrics,
+                beat_path=beat_path,
+                vocal_path=vocal_path,
+                video_path=video_path,
+                video_url=video_url,
+                cost_usd=total_cost,
+                metadata={"bars": bars, "clips": len(clip_paths), "style_config": style_data},
             )
 
         except Exception as e:
-            job.status = "failed"
-            job.error  = str(e)
-            logger.error(f"[RapVideo] job={job.id} FAILED: {e}")
-            self._save(job)
-
-        return job
-
-    # ── Persistence ────────────────────────────────────────────────────
-    def _save(self, job: RapVideoJob) -> Path:
-        ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = self.OUTPUT_DIR / f"rap_job_{ts}_{job.id}.json"
-        path.write_text(json.dumps({
-            "id": job.id, "created_at": job.created_at,
-            "status": job.status,
-            "theme": job.theme, "style": job.style.value,
-            "bars": job.bars, "artist_name": job.artist_name,
-            "lyrics_preview": (job.lyrics or "")[:300],
-            "beat_path": job.beat_path,
-            "vocals_path": job.vocals_path,
-            "scene_count": len(job.video_scenes),
-            "output_path": job.output_path,
-            "cost_usd": job.cost_usd,
-            "error": job.error,
-            "stages_completed": job.stages_completed,
-        }, indent=2))
-        return path
-
-    def list_jobs(self, limit: int = 20) -> List[Dict]:
-        files = sorted(self.OUTPUT_DIR.glob("rap_job_*.json"), reverse=True)[:limit]
-        return [json.loads(f.read_text()) for f in files]
-
-    # ── Revenue hook ────────────────────────────────────────────────────
-    async def bill_video(self, job: RapVideoJob, price_usd: float = 49.0):
-        try:
-            from revenue_engine import RevenueEngine, RevenueTask, RevenueStream, RiskLevel
-            engine = RevenueEngine()
-            task   = RevenueTask(
-                id=job.id,
-                stream=RevenueStream.MAAS,
-                description=f"Rap video: {job.theme[:60]} ({job.style.value})",
-                goal_usd=price_usd,
-                risk=RiskLevel.LOW,
-                status="completed",
-                revenue_usd=price_usd,
-                cost_usd=job.cost_usd,
+            logger.error(f"[RapVideo:{job_id}] Pipeline failed: {e}")
+            return RapVideoResult(
+                success=False, job_id=job_id, theme=theme, style=style, error=str(e)
             )
-            task.completed_at = datetime.now()
-            engine.tasks[task.id] = task
-            logger.success(f"[RapVideo] billed ${price_usd:.2f} for job {job.id}")
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Private pipeline steps
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    async def _generate_lyrics(self, theme: str, style: str, bars: int, vocal_tone: str) -> str:
+        """Generate rap lyrics via LLM (routes through router.py)"""
+        try:
+            from llm_gateway import llm, TaskType
+            prompt = f"""Write {bars} bars of original rap lyrics.
+
+Theme: {theme}
+Style: {style} — {vocal_tone}
+Format: {bars} lines, rhyme scheme AABB or ABAB, no chorus/hook unless bars > 16.
+Do NOT include section labels like [Verse] or [Hook].
+Make it authentic, vivid, and specific. No generic filler lines."""
+
+            response = await llm.complete(
+                messages=[{"role": "user", "content": prompt}],
+                task_type=TaskType.CREATIVE,
+            )
+            return response.content if hasattr(response, "content") else str(response)
         except ImportError:
-            pass
+            return f"Big Homie on the beat, {theme} is the theme, building an empire chasing the dream."
+
+    async def _generate_beat(self, job_id: str, beat_prompt: str) -> tuple[str, float]:
+        """Generate instrumental beat via media_generation.py (MiniMax or Google Lyria)"""
+        try:
+            from media_generation import media_manager, MediaType
+            result = await media_manager.generate_media(
+                media_type=MediaType.MUSIC,
+                prompt=beat_prompt,
+                provider="minimax",
+            )
+            cost = result.metadata.get("cost_usd", 0.02) if result.success else 0.0
+            path = result.file_path if result.success else ""
+            if not result.success:
+                # Fallback to Google Lyria
+                result = await media_manager.generate_media(
+                    media_type=MediaType.MUSIC,
+                    prompt=beat_prompt,
+                    provider="google_lyria",
+                )
+                path = result.file_path if result.success else ""
+                cost = result.metadata.get("cost_usd", 0.01) if result.success else 0.0
+            return path, cost
+        except Exception as e:
+            logger.warning(f"[RapVideo:{job_id}] Beat generation failed: {e}")
+            return "", 0.0
+
+    async def _synthesize_vocals(self, job_id: str, lyrics: str) -> str:
+        """Synthesize rap vocals via Bark TTS (local, free)"""
+        try:
+            from bark import SAMPLE_RATE, generate_audio, preload_models
+            import soundfile as sf
+            import numpy as np
+
+            preload_models()
+            # Split lyrics into chunks (Bark handles ~250 chars max cleanly)
+            chunks = [lyrics[i:i+200] for i in range(0, len(lyrics), 200)]
+            audio_arrays = []
+            for chunk in chunks:
+                audio = generate_audio(f"[rap voice, rhythmic]{chunk}")
+                audio_arrays.append(audio)
+
+            combined = np.concatenate(audio_arrays)
+            vocal_path = str(OUTPUT_DIR / f"vocal_{job_id}.wav")
+            sf.write(vocal_path, combined, SAMPLE_RATE)
+            return vocal_path
+        except ImportError:
+            logger.warning(f"[RapVideo:{job_id}] Bark not installed. Install: pip install bark")
+            return ""
+        except Exception as e:
+            logger.warning(f"[RapVideo:{job_id}] Bark synthesis failed: {e}")
+            return ""
+
+    async def _generate_visuals(self, job_id: str, theme: str, visual_mood: str, count: int) -> tuple[list, float]:
+        """Generate video scene clips in parallel via MiniMax"""
+        try:
+            from media_generation import media_manager, MediaType
+            from sub_agents import orchestrator
+
+            prompts = [
+                f"Cinematic rap video scene {i+1} of {count}: {theme}. Visual style: {visual_mood}. "
+                f"Smooth camera movement, professional cinematography, 5 seconds."
+                for i in range(count)
+            ]
+
+            # Generate in parallel
+            tasks = [
+                media_manager.generate_media(
+                    media_type=MediaType.VIDEO,
+                    prompt=p,
+                    provider="minimax",
+                    duration=5,
+                    width=1920,
+                    height=1080,
+                )
+                for p in prompts
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            clip_paths = []
+            total_cost = 0.0
+            for r in results:
+                if isinstance(r, Exception):
+                    logger.warning(f"[RapVideo:{job_id}] Clip generation error: {r}")
+                    continue
+                if r.success:
+                    clip_paths.append(r.file_path)
+                    total_cost += r.metadata.get("cost_usd", 0.05)
+
+            return clip_paths, total_cost
+        except Exception as e:
+            logger.warning(f"[RapVideo:{job_id}] Visual generation failed: {e}")
+            return [], 0.0
+
+    async def _stitch_video(self, job_id: str, beat_path: str, vocal_path: str, clip_paths: list) -> str:
+        """Stitch clips + audio with FFmpeg via persistent_shell.py"""
+        if not clip_paths:
+            logger.warning(f"[RapVideo:{job_id}] No clips to stitch")
+            return ""
+        try:
+            from persistent_shell import shell
+            output_path = str(OUTPUT_DIR / f"rap_video_{job_id}.mp4")
+
+            # Build FFmpeg concat file
+            concat_file = str(OUTPUT_DIR / f"concat_{job_id}.txt")
+            with open(concat_file, "w") as f:
+                for clip in clip_paths:
+                    f.write(f"file '{clip}'\n")
+
+            # Determine audio: prefer mixed vocals+beat, fallback to beat only
+            if vocal_path and beat_path:
+                audio_filter = f'-filter_complex "[0:a][1:a]amix=inputs=2:duration=longest" '
+                audio_input = f'-i "{beat_path}" -i "{vocal_path}" '
+            elif beat_path:
+                audio_input = f'-i "{beat_path}" '
+                audio_filter = ""
+            else:
+                audio_input = ""
+                audio_filter = ""
+
+            cmd = (
+                f'{self.ffmpeg_path} -y '
+                f'-f concat -safe 0 -i "{concat_file}" '
+                f'{audio_input}'
+                f'{audio_filter}'
+                f'-c:v libx264 -c:a aac -shortest '
+                f'"{output_path}"'
+            )
+            result = await shell.run(cmd)
+            if result and os.path.exists(output_path):
+                return output_path
+            else:
+                logger.warning(f"[RapVideo:{job_id}] FFmpeg did not produce output")
+                return ""
+        except Exception as e:
+            logger.warning(f"[RapVideo:{job_id}] Stitch failed: {e}")
+            return ""
+
+    async def _upload_to_r2(self, job_id: str, file_path: str) -> str:
+        """Upload finished video to Cloudflare R2 and return public URL"""
+        try:
+            import boto3
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=f"https://{os.getenv('CF_ACCOUNT_ID')}.r2.cloudflarestorage.com",
+                aws_access_key_id=os.getenv("CF_R2_ACCESS_KEY"),
+                aws_secret_access_key=os.getenv("CF_R2_SECRET_KEY"),
+            )
+            key = f"rap_videos/{job_id}/{Path(file_path).name}"
+            s3.upload_file(file_path, self.r2_bucket, key)
+            public_url = f"https://pub-{os.getenv('CF_R2_PUBLIC_ID', 'xxx')}.r2.dev/{key}"
+            return public_url
+        except Exception as e:
+            logger.warning(f"[RapVideo:{job_id}] R2 upload failed: {e}")
+            return f"file://{file_path}"
 
 
-# ── Singleton ─────────────────────────────────────────────────────────────
-rap_video_engine = RapVideoEngine()
+# ─────────────────────────────────────────────────────────────────────────────
+# Convenience function for direct use
+# ─────────────────────────────────────────────────────────────────────────────
 
+_engine = RapVideoEngine()
 
-# ── GSD router entry point ────────────────────────────────────────────────
-async def handle_rap_request(task_text: str) -> Dict:
-    """Called by gsd_router when context is @rap."""
-    # Extract style hint from task text
-    style = "trap"
-    for s in ["trap", "boom_bap", "drill", "lo_fi", "phonk"]:
-        if s.replace("_", " ") in task_text.lower() or s in task_text.lower():
-            style = s
-            break
-    job = await rap_video_engine.generate_rap_video(
-        theme=task_text,
+async def generate_rap_video(
+    theme: str,
+    style: str = "trap",
+    bars: int = 16,
+    include_vocals: bool = True,
+    visual_clips: int = 4,
+    custom_lyrics: Optional[str] = None,
+) -> RapVideoResult:
+    """Top-level convenience wrapper. Import and call directly."""
+    return await _engine.generate(
+        theme=theme,
         style=style,
-        bars=16,
-        artist_name="Big Homie",
+        bars=bars,
+        include_vocals=include_vocals,
+        visual_clips=visual_clips,
+        custom_lyrics=custom_lyrics,
     )
-    return {
-        "job_id":      job.id,
-        "status":      job.status,
-        "output_path": job.output_path,
-        "cost_usd":    job.cost_usd,
-    }
-
-
-# ── Quick test ──────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    import sys
-    async def _run():
-        theme = " ".join(sys.argv[1:]) or "building an empire from nothing, hustle and grind"
-        print(f"\n Generating rap video for: '{theme}'\n")
-        job = await rap_video_engine.generate_rap_video(
-            theme=theme, style="trap", bars=16, artist_name="Big Homie",
-        )
-        print(f"\nJob {job.id} | status={job.status} | cost=${job.cost_usd:.4f}")
-        print(f"Output: {job.output_path or 'not rendered (set media API keys)'}")
-        if job.lyrics:
-            print(f"\nLyrics preview:\n{job.lyrics[:400]}...")
-    asyncio.run(_run())
