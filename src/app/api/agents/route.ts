@@ -18,29 +18,44 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const agent = await db.agent.upsert({
-    where: { id: body.id || '' },
-    update: {
-      name: body.name,
-      description: body.description,
-      type: body.type,
-      config: body.type === 'config' ? body.config : undefined,
-      code: body.type === 'code' ? body.code : undefined,
-      securityTier: body.securityTier,
-      enabled: body.enabled,
-    },
-    create: {
-      id: body.id,
-      name: body.name,
-      description: body.description,
-      type: body.type,
-      config: body.type === 'config' ? body.config : undefined,
-      code: body.type === 'code' ? body.code : undefined,
-      securityTier: body.securityTier || 'full',
-      enabled: body.enabled ?? true,
-      addedAt: new Date(),
-    },
-  });
+
+  if (body.type !== 'config' && body.type !== 'code') {
+    return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
+  }
+
+  if (body.id !== undefined && body.id !== null && typeof body.id !== 'string') {
+    return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+  }
+
+  const updateData = {
+    name: body.name,
+    description: body.description,
+    type: body.type,
+    config: body.type === 'config' ? body.config : null,
+    code: body.type === 'code' ? body.code : null,
+    securityTier: body.securityTier,
+    enabled: body.enabled,
+  };
+
+  const createData = {
+    name: body.name,
+    description: body.description,
+    type: body.type,
+    config: body.type === 'config' ? body.config : null,
+    code: body.type === 'code' ? body.code : null,
+    securityTier: body.securityTier || 'full',
+    enabled: body.enabled ?? true,
+    addedAt: new Date(),
+  };
+
+  const agent = body.id
+    ? await db.agent.update({
+        where: { id: body.id },
+        data: updateData,
+      })
+    : await db.agent.create({
+        data: createData,
+      });
   return NextResponse.json(agent);
 }
 
