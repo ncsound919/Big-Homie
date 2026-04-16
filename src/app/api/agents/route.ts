@@ -1,22 +1,95 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export async function GET() {
+function getAgentApiKey(): string {
+  return process.env.BIG_HOMIE_AGENT_API_KEY || process.env.AGENT_API_KEY || '';
+}
+
+function getBearerToken(request: Request): string | null {
+  const auth = request.headers.get('authorization');
+  if (!auth?.startsWith('Bearer ')) {
+    return null;
+  }
+
+  return auth.slice('Bearer '.length).trim() || null;
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+function hasTrustedLocalOrigin(request: Request): boolean {
+  const requestUrl = new URL(request.url);
+  if (!isLoopbackHostname(requestUrl.hostname)) {
+    return false;
+  }
+
+  const source = request.headers.get('origin') ?? request.headers.get('referer');
+  if (!source) {
+    return false;
+  }
+
+  try {
+    const sourceUrl = new URL(source);
+    return isLoopbackHostname(sourceUrl.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isAuthorized(request: Request, options?: { requireApiKey?: boolean }): boolean {
+  const requireApiKey = options?.requireApiKey ?? false;
+  const bearerToken = getBearerToken(request);
+  const agentApiKey = getAgentApiKey();
+
+  if (agentApiKey && bearerToken === agentApiKey) {
+    return true;
+  }
+
+  if (requireApiKey) {
+    return false;
+  }
+
+  return hasTrustedLocalOrigin(request);
+}
+
+function unauthorizedResponse() {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+function serializeAgent(
+  agent: Awaited<ReturnType<typeof db.agent.findMany>>[number],
+  includeSensitive: boolean,
+) {
+  return {
+    id: agent.id,
+    name: agent.name,
+    description: agent.description,
+    type: agent.type,
+    securityTier: agent.securityTier,
+    enabled: agent.enabled,
+    addedAt: agent.addedAt.toISOString(),
+    ...(includeSensitive ? { config: agent.config, code: agent.code } : {}),
+  };
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const includeSensitive = searchParams.get('includeSensitive') === '1';
+
+  if (!isAuthorized(request, { requireApiKey: includeSensitive })) {
+    return unauthorizedResponse();
+  }
+
   const agents = await db.agent.findMany({ orderBy: { addedAt: 'desc' } });
-  return NextResponse.json(agents.map(a => ({
-    id: a.id,
-    name: a.name,
-    description: a.description,
-    type: a.type,
-    config: a.config,
-    code: a.code,
-    securityTier: a.securityTier,
-    enabled: a.enabled,
-    addedAt: a.addedAt.toISOString(),
-  })));
+  return NextResponse.json(agents.map((agent) => serializeAgent(agent, includeSensitive)));
 }
 
 export async function POST(request: Request) {
+  if (!isAuthorized(request)) {
+    return unauthorizedResponse();
+  }
+
   const body = await request.json();
 
   if (body.type !== 'config' && body.type !== 'code') {
@@ -60,8 +133,16 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  if (!isAuthorized(request)) {
+    return unauthorizedResponse();
+  }
+
   const body = await request.json();
   const { id, ...data } = body;
+  if (!id || typeof id !== 'string') {
+    return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  }
+
   const agent = await db.agent.update({
     where: { id },
     data: { ...data, updatedAt: new Date() },
@@ -70,6 +151,10 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!isAuthorized(request)) {
+    return unauthorizedResponse();
+  }
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   if (!id) {
