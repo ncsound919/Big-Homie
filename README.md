@@ -1,6 +1,6 @@
-# 🏠 Big Homie - The Truly Autonomous AI Agent
+# 🏠 Big Homie - The Definitive Integrated AI Agent Platform
 
-**Big Homie** isn't just another AI chatbot. It's a truly autonomous agent that proactively works for you, learns from experience, and continuously improves itself.
+**Big Homie** now uses the new `master` integrated web platform as the primary release—**AgentBrowser**, **Big Homie Agent**, and **Claw Protect**—while retaining the standout original Big Homie additions from `main`, including the rap video engine and related autonomous feature modules.
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -24,12 +24,25 @@
 
 ## 🚀 Quick Start
 
-### 1. Clone and Setup
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/tap919/Big-Homie.git
 cd Big-Homie
+```
 
+### 2. Start the primary integrated web platform (`master` release)
+
+```bash
+npm install
+npm run dev
+```
+
+Visit `http://localhost:3000` to use the AgentBrowser + Claw Protect powered interface.
+
+### 3. Use the retained original Big Homie modules when needed
+
+```bash
 # Linux/Mac
 chmod +x quick_start.sh
 ./quick_start.sh
@@ -38,7 +51,13 @@ chmod +x quick_start.sh
 quick_start.bat
 ```
 
-### 2. Configure API Keys
+Or install the Python dependencies directly:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure API Keys
 
 Edit `.env` file with your API keys:
 
@@ -53,13 +72,21 @@ GITHUB_TOKEN=ghp_xxx
 SERP_API_KEY=xxx
 ```
 
-### 3. Run
+### 5. Run the desktop/agent app
 
 ```bash
 python main.py
 ```
 
-That's it! Big Homie will start with GUI interface.
+The integrated web platform is now the main release surface, with the original Big Homie modules still available in-repo for advanced workflows.
+
+### Retained original Big Homie additions
+
+- `rap_video_engine.py` - rap video generation workflows
+- `content_factory.py` - content production workflows
+- `site_builder.py` - site generation flows
+- `gsd_router.py` / `gsd_dispatcher.py` - original GSD orchestration
+- `opencode_provider.py` / `free_api_stack.py` - original provider and free-stack support
 
 ---
 
@@ -291,12 +318,21 @@ Big Homie
 ### Install Dependencies
 
 ```bash
+npm install
 pip install -r requirements.txt
+```
+
+### Run Checks
+
+```bash
+npm run typecheck
+npm run lint
 ```
 
 ### Run Tests
 
 ```bash
+npm test
 pytest
 ```
 

@@ -1,0 +1,49 @@
+:81 {
+	@transform_port_3001 {
+		query XTransformPort=3001
+	}
+
+	handle @transform_port_3001 {
+		reverse_proxy localhost:3001 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	@transform_port_3002 {
+		query XTransformPort=3002
+	}
+
+	handle @transform_port_3002 {
+		reverse_proxy localhost:3002 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	@transform_port_3003 {
+		query XTransformPort=3003
+	}
+
+	handle @transform_port_3003 {
+		reverse_proxy localhost:3003 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		reverse_proxy localhost:3000 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}

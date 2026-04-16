@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentBrowser — Hermes Dev Environment</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,900&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --bg0:#060810;--bg1:#0b0e17;--bg2:#111625;--bg3:#1a2035;--bg4:#242e48;
+  --brd:#222c44;--brd2:#33405e;--tx0:#e6eaf3;--tx1:#8692ae;--tx2:#4e5c78;--tx3:#354058;
+  --acc:#e8a020;--acc2:#f5b840;--accg:rgba(232,160,32,.1);
+  --tl:#14c4a8;--tlg:rgba(20,196,168,.1);--cy:#22b8d6;--cyg:rgba(34,184,214,.1);
+  --em:#10b981;--rd:#ef4444;--or:#f97316;--rs:#f43f5e;
+  --hermes:#a855f7;--hermesg:rgba(168,85,247,.1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:var(--bg0);color:var(--tx0);overflow:hidden;height:100vh}
+code,pre,.mono{font-family:'JetBrains Mono',monospace}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--brd);border-radius:3px}
+
+#app{display:grid;grid-template-rows:40px 1fr;grid-template-columns:50px 1fr 420px;height:100vh}
+#topbar{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--brd);display:flex;align-items:center;padding:0 10px;gap:6px;z-index:50}
+#sidebar{background:var(--bg1);border-right:1px solid var(--brd);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:2px;overflow-y:auto}
+#main{display:flex;flex-direction:column;overflow:hidden;background:var(--bg2);position:relative}
+#rpanel{background:var(--bg1);border-left:1px solid var(--brd);display:flex;flex-direction:column;overflow:hidden}
+
+.addr{flex:1;max-width:500px;height:26px;background:var(--bg3);border:1px solid var(--brd);border-radius:7px;display:flex;align-items:center;padding:0 8px;gap:5px;transition:border-color .2s}
+.addr:focus-within{border-color:var(--acc)}.addr input{flex:1;background:0;border:0;outline:0;color:var(--tx0);font-size:11px;font-family:'JetBrains Mono',monospace}
+.nb{display:flex;gap:1px}.nb button{width:24px;height:24px;border:0;background:0;color:var(--tx2);border-radius:4px;cursor:pointer;font-size:10px;transition:all .12s}.nb button:hover{background:var(--bg3);color:var(--tx0)}
+.tb{display:flex;gap:1px;flex:1;overflow-x:auto;padding:0 4px;scrollbar-width:none}.tb::-webkit-scrollbar{display:none}
+.tab{display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:10px;cursor:pointer;white-space:nowrap;color:var(--tx1);transition:all .1s;border:1px solid transparent}
+.tab:hover{background:var(--bg3);color:var(--tx0)}.tab.on{background:var(--bg3);color:var(--tx0);border-color:var(--brd)}
+.tab .x{opacity:0;font-size:8px;padding:1px;border-radius:2px;transition:all .1s}.tab:hover .x{opacity:.5}.tab .x:hover{opacity:1;background:var(--rd);color:#fff}
+.tbtn{height:24px;padding:0 7px;border:0;background:0;color:var(--tx2);border-radius:4px;cursor:pointer;font-size:10px;display:flex;align-items:center;gap:4px;transition:all .12s}.tbtn:hover{background:var(--bg3);color:var(--tx0)}
+
+.sb{width:34px;height:34px;border-radius:7px;border:0;background:0;color:var(--tx2);cursor:pointer;font-size:13px;transition:all .15s;display:flex;align-items:center;justify-content:center;position:relative}
+.sb:hover{background:var(--bg3);color:var(--tx0)}.sb.on{background:var(--accg);color:var(--acc);box-shadow:inset 0 0 0 1px rgba(232,160,32,.2)}
+.sb .dt{position:absolute;bottom:2px;right:2px;width:5px;height:5px;border-radius:50%;border:1.5px solid var(--bg1)}.sb .dt.g{background:var(--em)}.sb .dt.r{background:var(--tx3)}
+.sb-sep{width:20px;height:1px;background:var(--brd);margin:3px 0}
+
+#vp{flex:1;overflow-y:auto;position:relative}
+.pg{padding:18px;animation:pgI .2s ease}@keyframes pgI{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+
+#tw{height:0;background:var(--bg0);border-top:1px solid var(--brd);overflow:hidden;transition:height .2s ease}#tw.open{height:130px}
+.tbar{display:flex;align-items:center;justify-content:space-between;padding:2px 8px;background:var(--bg1);border-bottom:1px solid var(--brd);font-size:9px;color:var(--tx2)}
+.tbody{padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.6;height:calc(100% - 20px);overflow-y:auto}
+.tl{color:var(--tx1)}.tl .p{color:var(--acc)}.tl .c{color:var(--tx0)}.tl .o{color:var(--tx2)}
+
+.rp-tabs{display:flex;border-bottom:1px solid var(--brd);flex-shrink:0;overflow-x:auto;scrollbar-width:none}.rp-tabs::-webkit-scrollbar{display:none}
+.rp-t{padding:7px 5px;text-align:center;font-size:9px;font-weight:600;color:var(--tx2);cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;white-space:nowrap;flex:1}
+.rp-t:hover{color:var(--tx1);background:var(--bg3)}.rp-t.on{color:var(--acc);border-bottom-color:var(--acc);background:var(--accg)}
+.rpc{flex:1;overflow-y:auto;display:none;padding:0}.rpc.on{display:flex;flex-direction:column}
+
+.cm{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.msg{animation:mI .2s ease}@keyframes mI{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.msg-u{align-self:flex-end;background:var(--bg4);border:1px solid var(--brd);border-radius:8px 8px 2px 8px;padding:7px 10px;font-size:12px;max-width:88%}
+.msg-a{align-self:flex-start;max-width:94%;font-size:12px;line-height:1.55;color:var(--tx0)}
+.msg-a .av{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;font-size:8px;font-weight:800;margin-right:4px;vertical-align:middle;color:#000}
+.av-hermes{background:var(--hermes)}.av-arch{background:#6366f1}.av-code{background:var(--acc)}.av-rev{background:var(--cy)}.av-dev{background:var(--em)}.av-res{background:var(--or)}
+
+.plan-blk{background:var(--bg3);border:1px solid var(--brd);border-radius:6px;margin:4px 0;overflow:hidden;font-size:11px}
+.plan-hdr{display:flex;align-items:center;gap:5px;padding:5px 8px;border-bottom:1px solid var(--brd);font-weight:600;font-size:10px}
+.plan-st{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid rgba(34,44,68,.4);font-size:10.5px}
+.plan-st:last-child{border-bottom:0}
+.plan-st .sn{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--tx2);flex-shrink:0;transition:all .15s}
+.plan-st.dn .sn{background:var(--em);border-color:var(--em);color:#fff}.plan-st.rn .sn{background:var(--acc);border-color:var(--acc);color:#000;animation:pp 1s infinite}.plan-st.pn .sn{border-color:var(--tx3);color:var(--tx3)}
+@keyframes pp{0%,100%{transform:scale(1)}50%{transform:scale(.8)}}
+.plan-st.dn .st{color:var(--em)}.plan-st.rn .st{color:var(--acc)}
+
+.tool-blk{background:var(--bg3);border:1px solid var(--brd);border-radius:6px;margin:4px 0;overflow:hidden;font-size:10.5px;animation:tI .15s ease}
+@keyframes tI{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+.tool-h{display:flex;align-items:center;gap:5px;padding:5px 8px;border-bottom:1px solid var(--brd)}
+.tool-h .ti{width:16px;height:16px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff;flex-shrink:0}
+.tool-h .ti.nav{background:var(--cy)}.tool-h .ti.mut{background:var(--acc)}.tool-h .ti.read{background:var(--em)}.tool-h .ti.aud{background:var(--hermes)}
+.tool-h .tn{font-weight:600;font-family:'JetBrains Mono',monospace;font-size:9.5px}.tool-h .ts{margin-left:auto;font-size:8.5px}.tool-h .ts.run{color:var(--acc)}.tool-h .ts.ok{color:var(--em)}
+.tool-p{padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--tx1);border-bottom:1px solid var(--brd)}
+.tool-p .pk{color:var(--tl)}.tool-p .pv{color:var(--tx0)}
+.tool-r{padding:5px 8px;font-size:9.5px;display:flex;align-items:center;gap:4px}
+.tool-r.ok{color:var(--em)}.tool-r.err{color:var(--rd)}.tool-r.warn{color:var(--or)}
+
+.appr-blk{background:var(--bg3);border:1px solid var(--or);border-radius:6px;margin:4px 0;padding:8px;font-size:11px}
+.appr-blk .at{color:var(--or);font-weight:700;margin-bottom:3px;display:flex;align-items:center;gap:5px;font-size:10.5px}
+.appr-blk .ad{color:var(--tx1);margin-bottom:6px;font-size:10.5px}
+.abtn{display:flex;gap:5px}.abtn button{padding:4px 12px;border-radius:5px;border:0;font-size:10px;font-weight:600;cursor:pointer;transition:all .1s}
+.ba{background:var(--em);color:#fff}.ba:hover{filter:brightness(1.15)}.bd{background:var(--bg4);color:var(--tx1);border:1px solid var(--brd)!important}
+
+.ci{padding:8px 12px;border-top:1px solid var(--brd);display:flex;gap:5px;position:relative}
+.ci input{flex:1;background:var(--bg3);border:1px solid var(--brd);border-radius:7px;padding:8px 10px;color:var(--tx0);font-size:12px;outline:0;transition:border-color .2s}
+.ci input:focus{border-color:var(--acc)}.ci input::placeholder{color:var(--tx3)}
+.sbtn{width:34px;height:34px;border-radius:7px;border:0;background:var(--hermes);color:#fff;cursor:pointer;font-size:12px;transition:all .1s;display:flex;align-items:center;justify-content:center}.sbtn:hover{filter:brightness(1.15)}.sbtn:disabled{opacity:.3;cursor:not-allowed}
+
+.slash-dd{position:absolute;bottom:100%;left:12px;right:52px;background:var(--bg1);border:1px solid var(--brd);border-radius:8px;max-height:220px;overflow-y:auto;display:none;z-index:100;box-shadow:0 -4px 20px rgba(0,0,0,.4)}
+.slash-dd.show{display:block}
+.slash-item{display:flex;align-items:center;gap:7px;padding:6px 9px;cursor:pointer;transition:background .06s;font-size:10.5px}
+.slash-item:hover,.slash-item.sel{background:var(--accg)}
+.slash-item .si-icon{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0}
+.slash-item .si-name{font-weight:600;flex:1}.slash-item .si-desc{color:var(--tx2);font-size:9px}
+
+.sugs{padding:4px 12px;display:flex;gap:4px;flex-wrap:wrap;border-top:1px solid var(--brd)}
+.sug{padding:2px 7px;border-radius:4px;border:1px solid var(--brd);background:var(--bg3);color:var(--tx1);font-size:9.5px;cursor:pointer;transition:all .1s;white-space:nowrap}
+.sug:hover{border-color:var(--hermes);color:var(--hermes)}
+
+/* Audit */
+.audit-btn{background:linear-gradient(135deg,var(--hermes),#7c3aed);color:#fff;border:0;padding:8px 20px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s;box-shadow:0 0 20px rgba(168,85,247,.2)}
+.audit-btn:hover{transform:translateY(-1px);box-shadow:0 0 30px rgba(168,85,247,.3)}
+.audit-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.audit-scan{padding:10px 12px;border:1px solid var(--brd);border-radius:8px;background:var(--bg1);margin-bottom:6px;transition:all .15s}
+.audit-scan:hover{border-color:var(--brd2)}
+.audit-scan.running{border-color:var(--hermes);box-shadow:0 0 10px var(--hermesg)}
+.audit-scan.done{border-color:var(--em)}
+.audit-scan.failed{border-color:var(--rd)}
+.audit-bar{height:4px;border-radius:2px;background:var(--bg3);overflow:hidden;margin-top:6px}
+.audit-bar-fill{height:100%;border-radius:2px;transition:width .4s ease;background:var(--hermes)}
+.audit-scan.done .audit-bar-fill{background:var(--em)}
+.finding{padding:8px 10px;border-left:3px solid;border-radius:0 5px 5px 0;margin:4px 0;font-size:10.5px;background:var(--bg2)}
+.finding.critical{border-color:var(--rd);background:rgba(239,68,68,.06)}.finding.high{border-color:var(--or);background:rgba(249,115,22,.06)}.finding.medium{border-color:var(--acc);background:rgba(232,160,32,.06)}.finding.low{border-color:var(--cy);background:rgba(34,184,214,.06)}.finding.info{border-color:var(--tx2);background:rgba(78,92,120,.06)}
+.finding .fn{font-weight:700;font-size:9.5px;margin-bottom:2px;display:flex;align-items:center;gap:5px}
+.finding .fd{color:var(--tx1);font-size:9.5px;line-height:1.4}
+.finding .fl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--tx2);margin-top:3px}
+.sev{padding:1px 6px;border-radius:3px;font-size:8px;font-weight:700;text-transform:uppercase}
+.sev-critical{background:rgba(239,68,68,.15);color:var(--rd)}.sev-high{background:rgba(249,115,22,.15);color:var(--or)}.sev-medium{background:rgba(232,160,32,.15);color:var(--acc)}.sev-low{background:rgba(34,184,214,.15);color:var(--cy)}.sev-info{background:rgba(78,92,120,.15);color:var(--tx2)}
+
+/* Agent cards */
+.agent-card{padding:10px;border:1px solid var(--brd);border-radius:7px;background:var(--bg2);margin-bottom:5px;cursor:pointer;transition:all .12s}
+.agent-card:hover{border-color:var(--brd2)}.agent-card.on{border-color:var(--hermes);background:var(--hermesg)}
+.agent-card .ac-name{font-weight:700;font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:3px}
+
+/* MCP cards */
+.mcp-card{padding:10px;border:1px solid var(--brd);border-radius:7px;background:var(--bg2);margin-bottom:5px}
+.mcp-card .mc-name{font-weight:700;font-size:11px;display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.mcp-card .mc-cmd{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--tx2);background:var(--bg0);padding:3px 5px;border-radius:3px;margin-bottom:5px}
+.mcp-card .mc-tools{display:flex;flex-wrap:wrap;gap:3px}
+.tchip{padding:1px 5px;border-radius:3px;font-size:8px;font-family:'JetBrains Mono',monospace;background:var(--bg4);color:var(--tx1);border:1px solid var(--brd)}
+
+/* Skill cards */
+.skill-card{padding:10px;border:1px solid var(--brd);border-radius:7px;background:var(--bg2);margin-bottom:5px;cursor:pointer;transition:all .12s}
+.skill-card:hover{border-color:var(--tl)}
+
+/* Token vault */
+.vault-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--brd);border-radius:5px;background:var(--bg2);margin-bottom:4px;font-size:10px}
+.vault-row .vr-key{font-weight:600;color:var(--tl);min-width:70px;font-size:9px}
+.vault-row .vr-val{flex:1;color:var(--tx1);font-family:'JetBrains Mono',monospace;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vault-row .vr-toggle{cursor:pointer;color:var(--tx3);font-size:9px;padding:2px 4px}.vault-row .vr-toggle:hover{color:var(--tx1)}
+
+.badge{padding:1px 6px;border-radius:8px;font-size:8px;font-weight:700}
+.badge-ok{background:rgba(16,185,129,.12);color:var(--em)}.badge-err{background:rgba(239,68,68,.12);color:var(--rd)}.badge-warn{background:rgba(249,115,22,.12);color:var(--or)}
+
+#toasts{position:fixed;bottom:14px;right:14px;display:flex;flex-direction:column;gap:5px;z-index:999}
+.toast{padding:7px 12px;border-radius:7px;font-size:10.5px;display:flex;align-items:center;gap:5px;transform:translateX(120%);transition:transform .2s ease;backdrop-filter:blur(10px)}
+.toast.show{transform:translateX(0)}
+.toast-ok{background:rgba(16,185,129,.14);border:1px solid rgba(16,185,129,.3);color:var(--em)}
+.toast-err{background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.3);color:var(--rd)}
+.toast-info{background:rgba(34,184,214,.14);border:1px solid rgba(34,184,214,.3);color:var(--cy)}
+
+#cmd-pal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;display:none;align-items:flex-start;justify-content:center;padding-top:12vh;backdrop-filter:blur(4px)}
+#cmd-pal.show{display:flex}
+#cmd-pal .cp-box{width:500px;background:var(--bg1);border:1px solid var(--brd);border-radius:10px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+#cmd-pal .cp-input{width:100%;background:var(--bg2);border:0;border-bottom:1px solid var(--brd);padding:11px 14px;color:var(--tx0);font-size:13px;outline:0}
+.cp-item{display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;transition:background .06s;font-size:11px}
+.cp-item:hover,.cp-item.sel{background:var(--accg)}
+.cp-item .ci-icon{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0}
+.cp-item .ci-label{font-weight:600;flex:1}.cp-item .ci-hint{color:var(--tx2);font-size:9px}
+
+@media(max-width:1000px){#app{grid-template-columns:50px 1fr}#rpanel{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation-duration:0s!important;transition-duration:0s!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="nb"><button onclick="goBack()"><i class="fas fa-arrow-left"></i></button><button onclick="goFwd()"><i class="fas fa-arrow-right"></i></button><button onclick="refresh()"><i class="fas fa-rotate-right"></i></button></div>
+    <div class="addr"><i class="fas fa-lock" style="color:var(--em);font-size:8px"></i><input id="url-in" type="text" value="agent://home" spellcheck="false" aria-label="Address bar"></div>
+    <div class="tb" id="tab-bar"></div>
+    <button class="tbtn" onclick="toggleTerm()" title="Terminal"><i class="fas fa-terminal"></i></button>
+    <button class="tbtn" onclick="runFullAudit()" title="Run Audit" style="color:var(--hermes)"><i class="fas fa-shield-halved"></i></button>
+    <button class="tbtn" onclick="showCmdPal()" title="Commands (Ctrl+P)"><i class="fas fa-magnifying-glass"></i></button>
+  </header>
+
+  <aside id="sidebar">
+    <button class="sb on" data-p="home" onclick="nav('agent://home')" title="Home"><i class="fas fa-house"></i></button>
+    <div class="sb-sep"></div>
+    <button class="sb" data-p="github" onclick="nav('https://github.com')" title="GitHub"><i class="fab fa-github"></i><span class="dt g"></span></button>
+    <button class="sb" data-p="vercel" onclick="nav('https://vercel.com')" title="Vercel"><i class="fas fa-play" style="font-size:10px"></i><span class="dt g"></span></button>
+    <button class="sb" data-p="supabase" onclick="nav('https://supabase.com')" title="Supabase"><i class="fas fa-database"></i><span class="dt g"></span></button>
+    <button class="sb" data-p="cloudflare" onclick="nav('https://dash.cloudflare.com')" title="Cloudflare"><i class="fas fa-cloud"></i><span class="dt r"></span></button>
+    <div class="sb-sep"></div>
+    <button class="sb" onclick="switchRP('agents')" title="Agents"><i class="fas fa-users"></i></button>
+    <button class="sb" onclick="switchRP('mcps')" title="MCP Servers"><i class="fas fa-puzzle-piece"></i></button>
+    <button class="sb" onclick="switchRP('skills')" title="Skills"><i class="fas fa-wand-magic-sparkles"></i></button>
+    <button class="sb" onclick="switchRP('vault')" title="Token Vault"><i class="fas fa-key"></i></button>
+    <div style="flex:1"></div>
+    <button class="sb" onclick="runFullAudit()" title="Audit" style="color:var(--hermes)"><i class="fas fa-shield-halved"></i></button>
+  </aside>
+
+  <div id="main">
+    <div id="vp"></div>
+    <div id="tw"><div class="tbar"><span><i class="fas fa-terminal" style="margin-right:3px"></i>Terminal</span><button onclick="toggleTerm()" style="background:0;border:0;color:var(--tx2);cursor:pointer;font-size:9px"><i class="fas fa-xmark"></i></button></div><div class="tbody" id="tbody"></div></div>
+  </div>
+
+  <aside id="rpanel">
+    <div class="rp-tabs">
+      <div class="rp-t on" data-r="chat" onclick="switchRP('chat')">Chat</div>
+      <div class="rp-t" data-r="agents" onclick="switchRP('agents')">Agents</div>
+      <div class="rp-t" data-r="mcps" onclick="switchRP('mcps')">MCPs</div>
+      <div class="rp-t" data-r="skills" onclick="switchRP('skills')">Skills</div>
+      <div class="rp-t" data-r="vault" onclick="switchRP('vault')">Vault</div>
+    </div>
+    <div class="rpc on" id="rp-chat">
+      <div style="padding:8px 12px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:6px"><div id="active-av" class="av av-hermes" style="width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;background:var(--hermes)">H</div><div><div style="font-weight:700;font-size:11px" id="active-name">Hermes</div><div style="font-size:9px;color:var(--tx2)" id="active-role">NousResearch Hermes 3 — Default Agent</div></div></div>
+        <select id="model-sel" style="background:var(--bg3);border:1px solid var(--brd);border-radius:4px;padding:2px 5px;font-size:9px;color:var(--tx1);outline:0;cursor:pointer">
+          <option>nousresearch/hermes-3-llama-3.1-405b</option>
+          <option>nousresearch/hermes-3-llama-3.1-70b</option>
+          <option>anthropic/claude-sonnet-4</option>
+          <option>openai/gpt-4o</option>
+          <option>deepseek/deepseek-r1</option>
+          <option>local/opencode</option>
+        </select>
+      </div>
+      <div class="cm" id="cm"></div>
+      <div class="sugs" id="sugs"></div>
+      <div class="ci" id="chat-ci">
+        <div class="slash-dd" id="slash-dd"></div>
+        <input type="text" id="ci" placeholder="Command Hermes... (/ for commands, /audit to scan)" autocomplete="off" aria-label="Agent input">
+        <button class="sbtn" id="sb" onclick="handleSend()"><i class="fas fa-arrow-up"></i></button>
+      </div>
+    </div>
+    <div class="rpc" id="rp-agents"></div>
+    <div class="rpc" id="rp-mcps"></div>
+    <div class="rpc" id="rp-skills"></div>
+    <div class="rpc" id="rp-vault"></div>
+  </aside>
+</div>
+
+<div id="toasts"></div>
+<div id="cmd-pal"><div class="cp-box"><input class="cp-input" id="cp-input" placeholder="Search commands, agents, tools..." autocomplete="off"><div class="cp-list" id="cp-list"></div></div></div>
+
+<script>
+/* ═══════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════ */
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const esc=s=>s?.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')||'';
+
+const S={tabs:[{id:1,url:'agent://home',title:'Home'}],at:1,nid:2,hist:['agent://home'],hi:0,busy:false,termOn:false,rpOn:true,rp:'chat',
+  recOn:false,apprResolve:null,activeAgent:'hermes',auditRunning:false,
+  vault:{}}; // tokens stored in memory only — never transmitted
+
+/* ═══════════════════════════════════════════
+   AGENT PERSONAS — Hermes default + CrewAI crew
+   ═══════════════════════════════════════════ */
+const agents={
+  hermes:{id:'hermes',name:'Hermes 3',av:'H',avClass:'av-hermes',role:'NousResearch Hermes — Default Agent',
+    desc:'Hermes 3 by NousResearch is the default agent. Cost-efficient via OpenRouter, strong instruction following, updates with the repo. Handles all tasks and delegates to specialists when needed.',
+    tools:['terminal','file_edit','git','browser_use','audit','opencode','mcp_all'],
+    model:'nousresearch/hermes-3-llama-3.1-405b',cost:'$0.80/$2.40 per 1M tokens'},
+  architect:{id:'architect',name:'Architect',av:'A',avClass:'av-arch',role:'System design & planning',
+    desc:'Breaks down complex requirements into architecture decisions and implementation plans. Delegates to Hermes for execution.',
+    tools:['repo_map','diagram','planner','search'],model:'anthropic/claude-sonnet-4',cost:'$3/$15 per 1M tokens'},
+  coder:{id:'coder',name:'Coder',av:'C',avClass:'av-code',role:'Implementation & coding',
+    desc:'Writes, refactors, and debugs code across the full stack. Expert at translating plans into working implementations.',
+    tools:['terminal','file_edit','git','opencode'],model:'nousresearch/hermes-3-llama-3.1-70b',cost:'$0.20/$0.60 per 1M tokens'},
+  reviewer:{id:'reviewer',name:'Reviewer',av:'R',avClass:'av-rev',role:'Code review & security',
+    desc:'Analyzes code for bugs, security vulnerabilities, race conditions, and best practice violations. Runs the audit system.',
+    tools:['read_file','search','security_scan','lint','audit'],model:'anthropic/claude-sonnet-4',cost:'$3/$15 per 1M tokens'},
+  devops:{id:'devops',name:'DevOps',av:'D',avClass:'av-dev',role:'Deployment & infrastructure',
+    desc:'Manages CI/CD, deployments, cloud infrastructure, and incident response.',
+    tools:['deploy','terraform','docker','vercel','cloudflare'],model:'nousresearch/hermes-3-llama-3.1-70b',cost:'$0.20/$0.60 per 1M tokens'}
+};
+
+/* ═══════════════════════════════════════════
+   REAL OPEN-SOURCE MCPs
+   ═══════════════════════════════════════════ */
+const mcpServers=[
+  {id:'github-mcp',name:'GitHub MCP',repo:'github.com/modelcontextprotocol/servers',icon:'fab fa-github',
+    cmd:'npx -y @modelcontextprotocol/server-github',env:['GITHUB_PERSONAL_ACCESS_TOKEN'],
+    tools:['create_or_update_file','search_repositories','get_file_contents','push_files','create_issue','create_pull_request','search_code','list_commits','get_commit','list_branches'],
+    status:'connected',desc:'Official GitHub MCP server. Full repo, issue, and PR management.'},
+  {id:'fs-mcp',name:'Filesystem MCP',repo:'github.com/modelcontextprotocol/servers',icon:'fas fa-folder-tree',
+    cmd:'npx -y @modelcontextprotocol/server-filesystem /home/dev/projects',env:[],
+    tools:['read_file','write_file','create_directory','list_directory','move_file','search_files','get_file_info','list_allowed_directories'],
+    status:'connected',desc:'Official filesystem MCP. Read, write, search, and navigate local files.'},
+  {id:'memory-mcp',name:'Memory MCP',repo:'github.com/modelcontextprotocol/servers',icon:'fas fa-brain',
+    cmd:'npx -y @modelcontextprotocol/server-memory',env:[],
+    tools:['create_entities','create_relations','add_observations','search_nodes','open_nodes','read_graph','delete_entities'],
+    status:'connected',desc:'Official knowledge graph memory. Persistent entity-relation storage for agent context.'},
+  {id:'brave-mcp',name:'Brave Search MCP',repo:'github.com/modelcontextprotocol/servers',icon:'fas fa-magnifying-glass',
+    cmd:'npx -y @modelcontextprotocol/server-brave-search',env:['BRAVE_API_KEY'],
+    tools:['brave_web_search','brave_local_search'],
+    status:'disconnected',desc:'Official Brave search MCP. Web and local search for research tasks.'},
+  {id:'fetch-mcp',name:'Fetch MCP',repo:'github.com/modelcontextprotocol/servers',icon:'fas fa-download',
+    cmd:'npx -y @modelcontextprotocol/server-fetch',env:[],
+    tools:['fetch','fetch_text','fetch_json'],
+    status:'connected',desc:'Official fetch MCP. HTTP requests to any URL, with content extraction.'},
+  {id:'puppeteer-mcp',name:'Puppeteer MCP',repo:'github.com/modelcontextprotocol/servers',icon:'fas fa-globe',
+    cmd:'npx -y @modelcontextprotocol/server-puppeteer',env:[],
+    tools:['puppeteer_navigate','puppeteer_screenshot','puppeteer_click','puppeteer_fill','puppeteer_evaluate'],
+    status:'disconnected',desc:'Official Puppeteer MCP. Browser automation — navigate, click, fill, screenshot.'},
+  {id:'supabase-mcp',name:'Supabase MCP',repo:'github.com/supabase-community/mcp-server-supabase',icon:'fas fa-database',
+    cmd:'npx -y @supabase/mcp-server-supabase',env:['SUPABASE_ACCESS_TOKEN'],
+    tools:['list_tables','execute_sql','list_migrations','apply_migration','get_auth_users'],
+    status:'connected',desc:'Official Supabase MCP. Database queries, migrations, and auth management.'},
+  {id:'vercel-mcp',name:'Vercel MCP',repo:'github.com/vercel/mcp-server-vercel',icon:'fas fa-play',
+    cmd:'npx -y @vercel/mcp-server-vercel',env:['VERCEL_TOKEN'],
+    tools:['deploy_project','list_deployments','get_deployment','set_env_var'],
+    status:'disconnected',desc:'Official Vercel MCP. Deployment management and environment configuration.'}
+];
+
+/* ═══════════════════════════════════════════
+   SKILLS FROM REAL GITHUB REPOS
+   ═══════════════════════════════════════════ */
+const skills=[
+  // aider — github.com/paul-gauthier/aider
+  {id:'aider-repo-map',name:'Repo Map Context',source:'aider',sourceUrl:'github.com/paul-gauthier/aider',icon:'fas fa-sitemap',
+    desc:'Build a repo map with relevance scoring. aider\'s tree-sitter based context window budgeting for efficient token usage.',
+    tags:['context','aider','token-optimization']},
+  {id:'aider-architect',name:'Architect Mode',source:'aider',sourceUrl:'github.com/paul-gauthier/aider',icon:'fas fa-drafting-compass',
+    desc:'aider\'s architect mode: plan first, then implement. Separates design from coding for better results on complex tasks.',
+    tags:['planning','aider','architecture']},
+  // fabric — github.com/danielmiessler/fabric
+  {id:'fabric-summarize',name:'Summarize Pattern',source:'fabric',sourceUrl:'github.com/danielmiessler/fabric',icon:'fas fa-compress',
+    desc:'fabric\'s core summarize pattern. Distill any content into its essence with configurable detail level.',
+    tags:['fabric','analysis']},
+  {id:'fabric-improve',name:'Improve Pattern',source:'fabric',sourceUrl:'github.com/danielmiessler/fabric',icon:'fas fa-arrow-up-right-dots',
+    desc:'fabric\'s improve pattern. Analyze and suggest specific improvements for code quality and structure.',
+    tags:['fabric','refactor']},
+  {id:'fabric-explain',name:'Explain Pattern',source:'fabric',sourceUrl:'github.com/danielmiessler/fabric',icon:'fas fa-lightbulb',
+    desc:'fabric\'s explain pattern. Break down code logic step by step in plain language.',
+    tags:['fabric','learning']},
+  // browser-use — github.com/browser-use/browser-use
+  {id:'browser-use-record',name:'Browser Action Recorder',source:'browser-use',sourceUrl:'github.com/browser-use/browser-use',icon:'fas fa-circle',
+    desc:'Record and replay browser interactions. browser-use\'s DOM-aware action capture with LLM-guided automation.',
+    tags:['browser-use','automation','recording']},
+  // crewAI — github.com/crewAIInc/crewAI
+  {id:'crew-delegate',name:'Agent Delegation',source:'crewAI',sourceUrl:'github.com/crewAIInc/crewAI',icon:'fas fa-users',
+    desc:'crewAI-style sequential and hierarchical agent delegation. Assign subtasks to specialist agents.',
+    tags:['crewAI','multi-agent','delegation']},
+  // continue — github.com/continuedev/continue
+  {id:'continue-slash',name:'Slash Commands',source:'continue',sourceUrl:'github.com/continuedev/continue',icon:'fas fa-slash',
+    desc:'continue-style slash commands for rapid task execution. Configurable command palette with context injection.',
+    tags:['continue','commands','shortcuts']},
+  // openinterpreter — github.com/OpenInterpreter/open-interpreter
+  {id:'openinterpreter-exec',name:'Code Execution',source:'open-interpreter',sourceUrl:'github.com/OpenInterpreter/open-interpreter',icon:'fas fa-code',
+    desc:'open-interpreter style: write and execute code in any language. Full terminal access with safety confirmations.',
+    tags:['open-interpreter','execution','terminal']}
+];
+
+/* ═══════════════════════════════════════════
+   AUDIT SCANS
+   ═══════════════════════════════════════════ */
+const auditScans=[
+  {id:'static',name:'Static Analysis',icon:'fas fa-microscope',desc:'Lint, type-check, dead code detection, complexity analysis',
+    findings:[
+      {sev:'medium',title:'Complex function in auth.ts',desc:'login() has cyclomatic complexity of 18 (threshold: 10). Consider breaking into smaller functions.',loc:'src/auth/login.ts:47-112'},
+      {sev:'low',title:'Unused import in api.ts',desc:'import { formatDate } from utils is never used.',loc:'src/api/routes.ts:3'},
+      {sev:'info',title:'Consider strict mode',desc:'TypeScript strict mode is disabled. Enabling catches more type errors at compile time.',loc:'tsconfig.json:14'},
+    ]},
+  {id:'security',name:'Security Vulnerabilities',icon:'fas fa-shield-halved',desc:'Dependency audit, XSS, injection, auth flaws, exposed secrets',
+    findings:[
+      {sev:'critical',title:'SQL injection in search handler',desc:'User input concatenated directly into SQL query string without parameterization.',loc:'src/api/handlers.ts:89'},
+      {sev:'high',title:'Outdated lodash with prototype pollution',desc:'lodash@4.17.20 has known prototype pollution vulnerability (CVE-2024-XXXX). Upgrade to 4.17.21+.',loc:'package.json:12'},
+      {sev:'medium',title:'Missing CSRF token validation',desc:'POST /api/settings does not validate CSRF token. Susceptible to cross-site request forgery.',loc:'src/api/routes.ts:156'},
+    ]},
+  {id:'smells',name:'Code Smells',icon:'fas fa-wind',desc:'Duplicated logic, god objects, long methods, tight coupling, magic numbers',
+    findings:[
+      {sev:'medium',title:'Duplicated auth validation logic',desc:'Token validation logic appears in 3 separate files. Extract to shared utility.',loc:'src/auth/middleware.ts:23, src/api/routes.ts:45, src/utils/validate.ts:8'},
+      {sev:'low',title:'Magic number in retry logic',desc:'Hard-coded retry count (5) and delay (2000). Use named constants or config.',loc:'src/api/handlers.ts:34'},
+      {sev:'low',title:'God class: AuthService',desc:'AuthService handles 7 responsibilities. Consider separating into TokenService, SessionService, etc.',loc:'src/auth/service.ts'},
+    ]},
+  {id:'race',name:'Race Conditions',icon:'fas fa-bolt',desc:'Concurrent access, async hazards, atomicity violations, deadlock detection',
+    findings:[
+      {sev:'high',title:'Token refresh race condition',desc:'Concurrent requests can trigger multiple token refreshes. The second refresh invalidates the first token. Use mutex.',loc:'src/auth/token.ts:47-62'},
+      {sev:'medium',title:'Non-atomic counter increment',desc:'View count is read-then-write without locking. Under concurrent access, increments can be lost.',loc:'src/api/handlers.ts:203'},
+    ]},
+  {id:'leaks',name:'Memory Leaks',icon:'fas fa-droplet',desc:'Unclosed resources, event listener accumulation, growing caches, retained references',
+    findings:[
+      {sev:'high',title:'Event listener leak in WebSocket handler',desc:'on("message") listeners are added on each connection but never removed. Accumulates over time.',loc:'src/api/websocket.ts:28'},
+      {sev:'medium',title:'Unbounded cache growth',desc:'LRU cache has no size limit configured. Under high load, it will grow indefinitely.',loc:'src/utils/cache.ts:15'},
+      {sev:'low',title:'Unclosed database connection in error path',desc:'If query fails after connection, the connection is not returned to the pool.',loc:'src/db/queries.ts:67'},
+    ]},
+  {id:'types',name:'Type Safety',icon:'fas fa-shield',desc:'Type assertion risks, any types, missing null checks, incomplete generics',
+    findings:[
+      {sev:'medium',title:'5 unsafe "as any" casts',desc:'Type assertions bypass type checking. Found in auth middleware and API handlers.',loc:'src/auth/middleware.ts:31, src/api/routes.ts:78,89,112, src/utils/transform.ts:5'},
+      {sev:'low',title:'Missing null check on user.profile',desc:'user.profile is accessed without null check. Profile field is optional.',loc:'src/api/handlers.ts:145'},
+    ]},
+  {id:'deps',name:'Dependency Health',icon:'fas fa-heartbeat',desc:'Outdated packages, known CVEs, license issues, bundle size analysis',
+    findings:[
+      {sev:'high',title:'3 critical CVEs in dependencies',desc:'lodash (prototype pollution), axios (SSRF), jsonwebtoken (key confusion). All have patches available.',loc:'package.json'},
+      {sev:'medium',title:'12 outdated packages',desc:'Next.js 14.1→15.0, React 18→19, and 10 others have major updates available.',loc:'package.json'},
+      {sev:'info',title:'Bundle size: 847KB gzipped',desc:'Consider code-splitting and tree-shaking to reduce initial load. 3 modules > 100KB each.',loc:'Build output'},
+    ]}
+];
+
+/* ═══════════════════════════════════════════
+   SLASH COMMANDS
+   ═══════════════════════════════════════════ */
+const slashCmds=[
+  {cmd:'/audit',desc:'Run full codebase audit',icon:'fas fa-shield-halved',color:'var(--hermes)',action:'/audit'},
+  {cmd:'/audit-quick',desc:'Quick audit (security + types only)',icon:'fas fa-stethoscope',color:'var(--hermes)',action:'/audit-quick'},
+  {cmd:'/deploy',desc:'Deploy to production',icon:'fas fa-rocket',color:'var(--acc)',action:'deploy to production'},
+  {cmd:'/review',desc:'AI code review',icon:'fas fa-eye',color:'var(--tl)',action:'review the current code changes'},
+  {cmd:'/commit',desc:'Stage and commit changes',icon:'fas fa-code-commit',color:'var(--em)',action:'commit all changes and push'},
+  {cmd:'/pr',desc:'Create pull request',icon:'fas fa-code-pull-request',color:'#8b5cf6',action:'create a pull request'},
+  {cmd:'/test',desc:'Run test suite',icon:'fas fa-vial',color:'var(--or)',action:'run the test suite'},
+  {cmd:'/scan',desc:'Security vulnerability scan',icon:'fas fa-shield-halved',color:'var(--rd)',action:'run a security scan'},
+  {cmd:'/fix',desc:'Auto-fix audit findings',icon:'fas fa-wrench',color:'var(--tl)',action:'fix all audit findings automatically'},
+  {cmd:'/migrate',desc:'Run database migration',icon:'fas fa-database',color:'#3ecf8e',action:'run a database migration'},
+  {cmd:'/agent',desc:'Switch agent persona',icon:'fas fa-users',color:'#8b5cf6',action:null,fn:()=>{switchRP('agents');return null}},
+  {cmd:'/opencode',desc:'Run OpenCode task',icon:'fas fa-code',color:'var(--acc)',action:'use opencode to implement '},
+  {cmd:'/search',desc:'Search codebase',icon:'fas fa-search',color:'var(--cy)',action:'search the codebase for '},
+  {cmd:'/explain',desc:'Explain code in plain language',icon:'fas fa-lightbulb',color:'var(--acc)',action:'explain the current code'},
+  {cmd:'/refactor',desc:'Refactor code',icon:'fas fa-rotate',color:'var(--tl)',action:'refactor the selected code'},
+  {cmd:'/memory',desc:'View agent memory',icon:'fas fa-brain',color:'var(--or)',action:null,fn:()=>{switchRP('vault');return null}},
+  {cmd:'/debug',desc:'Debug and trace issue',icon:'fas fa-bug',color:'var(--rd)',action:'debug the '},
+  {cmd:'/rollback',desc:'Rollback deployment',icon:'fas fa-rotate-left',color:'var(--or)',action:'rollback the last deployment'},
+  {cmd:'/env',desc:'Manage environment variables',icon:'fas fa-gear',color:'var(--tx1)',action:'set environment variables for '},
+];
+
+/* ═══════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════ */
+function toast(msg,t='ok'){const e=document.createElement('div');e.className=`toast toast-${t}`;e.innerHTML=`<i class="fas fa-${t==='ok'?'check-circle':t==='err'?'circle-exclamation':'circle-info'}"></i> ${msg}`;$('#toasts').appendChild(e);requestAnimationFrame(()=>e.classList.add('show'));setTimeout(()=>{e.classList.remove('show');setTimeout(()=>e.remove(),200)},2500)}
+function plat(u){if(u.includes('github'))return'github';if(u.includes('vercel'))return'vercel';if(u.includes('supabase'))return'supabase';if(u.includes('cloudflare'))return'cloudflare';return'home'}
+
+/* ═══════════════════════════════════════════
+   TABS & NAV
+   ═══════════════════════════════════════════ */
+function renderTabs(){const b=$('#tab-bar');b.innerHTML='';S.tabs.forEach(t=>{const e=document.createElement('div');e.className=`tab${t.id===S.at?' on':''}`;e.innerHTML=`<span style="font-size:8px;opacity:.4">${plat(t.url)[0].toUpperCase()||'H'}</span><span style="max-width:80px;overflow:hidden;text-overflow:ellipsis">${esc(t.title)}</span><span class="x" onclick="event.stopPropagation();closeTab(${t.id})"><i class="fas fa-xmark"></i></span>`;e.onclick=()=>switchTab(t.id);b.appendChild(e)});const a=document.createElement('div');a.className='tab';a.style.cssText='padding:2px 6px;font-size:9px;color:var(--tx3)';a.innerHTML='<i class="fas fa-plus"></i>';a.onclick=()=>createTab('agent://home');b.appendChild(a)}
+function createTab(u){S.tabs.push({id:S.nid++,url:u,title:tfu(u)});switchTab(S.nid-1)}
+function switchTab(id){S.at=id;const t=S.tabs.find(x=>x.id===id);if(t){$('#url-in').value=t.url;renderVP(t.url);updSB(t.url)}renderTabs()}
+function closeTab(id){if(S.tabs.length<=1)return;const i=S.tabs.findIndex(t=>t.id===id);S.tabs.splice(i,1);if(S.at===id)switchTab(S.tabs[Math.min(i,S.tabs.length-1)].id);else renderTabs()}
+function tfu(u){if(u==='agent://home')return'Home';const m=u.match(/(?:github|vercel|supabase|cloudflare)/);return m?m[0][0].toUpperCase()+m[0].slice(1):'Browser'}
+function nav(u){const t=S.tabs.find(x=>x.id===S.at);if(t){t.url=u;t.title=tfu(u)}$('#url-in').value=u;S.hist=S.hist.slice(0,S.hi+1);S.hist.push(u);S.hi=S.hist.length-1;renderVP(u);renderTabs();updSB(u);updSugs(u)}
+function goBack(){if(S.hi>0){S.hi--;const u=S.hist[S.hi],t=S.tabs.find(x=>x.id===S.at);if(t){t.url=u;t.title=tfu(u)}$('#url-in').value=u;renderVP(u);renderTabs();updSB(u)}}
+function goFwd(){if(S.hi<S.hist.length-1){S.hi++;const u=S.hist[S.hi],t=S.tabs.find(x=>x.id===S.at);if(t){t.url=u;t.title=tfu(u)}$('#url-in').value=u;renderVP(u);renderTabs();updSB(u)}}
+function refresh(){const t=S.tabs.find(x=>x.id===S.at);if(t)renderVP(t.url)}
+function updSB(u){$$('.sb[data-p]').forEach(b=>b.classList.toggle('on',b.dataset.p===plat(u)))}
+ $('#url-in').addEventListener('keydown',e=>{if(e.key==='Enter'){let v=e.target.value.trim();if(!v.includes('://'))v='https://'+v;nav(v)}});
+
+function switchRP(id){S.rp=id;$$('.rp-t').forEach(t=>t.classList.toggle('on',t.dataset.r===id));$$('.rpc').forEach(c=>c.classList.toggle('on',c.id===`rp-${id}`));if(id==='agents')renderAgents();if(id==='mcps')renderMCPs();if(id==='skills')renderSkillsPanel();if(id==='vault')renderVault()}
+
+/* ═══════════════════════════════════════════
+   VIEWPORT PAGES
+   ═══════════════════════════════════════════ */
+function renderVP(u){$('#vp').innerHTML={home:pgH,github:pgGH,vercel:pgV,supabase:pgSB,cloudflare:pgCF}[plat(u)]?.()||pgG(u)}
+
+function pgH(){const h=new Date().getHours(),g=h<12?'Good morning':h<18?'Good afternoon':'Good evening';return`<div class="pg">
+<div style="border-radius:12px;overflow:hidden;padding:26px;background:linear-gradient(135deg,#1a0f2e,#0e1a2e 50%,#0a1510);position:relative;margin-bottom:14px">
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(168,85,247,.07),transparent 60%),radial-gradient(ellipse at 70% 80%,rgba(20,196,168,.04),transparent 50%);pointer-events:none"></div>
+  <div style="position:relative;z-index:1">
+    <div style="font-size:10px;color:var(--hermes);font-weight:700;letter-spacing:1.2px;margin-bottom:5px">AGENTBROWSER — HERMES</div>
+    <h1 style="font-size:24px;font-weight:900;margin-bottom:4px">${g}</h1>
+    <p style="color:var(--tx1);font-size:12px;max-width:440px;margin-bottom:14px">Hermes 3 agent with one-button audit, 8 MCP servers, and 9 skills from leading open-source repos.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="audit-btn" onclick="runFullAudit()"><i class="fas fa-shield-halved"></i>Run Full Audit</button>
+      <button onclick="runQuickAudit()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--hermes);background:var(--hermesg);color:var(--hermes);font-weight:600;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s" onmouseover="this.style.background='rgba(168,85,247,.2)'" onmouseout="this.style.background='var(--hermesg)'"><i class="fas fa-stethoscope"></i>Quick Scan</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">
+      ${[{i:'fab fa-github',c:'#f0f0f0',t:'New Repo',cmd:'create a github repo called my-app'},{i:'fas fa-rocket',c:'var(--acc)',t:'Deploy',cmd:'/deploy'},{i:'fas fa-eye',c:'var(--tl)',t:'Review',cmd:'/review'},{i:'fas fa-bug',c:'var(--rd)',t:'Debug',cmd:'debug the auth token issue'},{i:'fas fa-wrench',c:'var(--hermes)',t:'Auto-Fix',cmd:'/fix'},{i:'fas fa-code',c:'var(--or)',t:'OpenCode',cmd:'/opencode refactor auth module'}].map(a=>`<div onclick="agentCmd('${a.cmd}')" style="padding:9px;border-radius:6px;border:1px solid var(--brd);background:var(--bg1);cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px" onmouseover="this.style.borderColor='var(--hermes)'" onmouseout="this.style.borderColor='var(--brd)'"><i class="${a.i}" style="color:${a.c};font-size:11px"></i><span style="font-size:10px;font-weight:600">${a.t}</span></div>`).join('')}
+    </div>
+  </div>
+</div>
+<div id="audit-results"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div><div style="font-size:12px;font-weight:800;margin-bottom:8px"><i class="fas fa-clock-rotate-left" style="color:var(--acc);font-size:11px;margin-right:4px"></i>Recent</div>${[{i:'fas fa-shield-halved',t:'Audit: 1 critical, 2 high found',w:'5m',c:'var(--rd)'},{i:'fab fa-github',t:'Pushed 3 commits to <b>main</b>',w:'22m',c:'var(--tx1)'},{i:'fas fa-rocket',t:'Deployed <b>prod-v2.4.1</b>',w:'1h',c:'var(--tx1)'},{i:'fas fa-wrench',t:'Auto-fixed 4 findings',w:'2h',c:'var(--tl)'},{i:'fas fa-database',t:'Migration on <b>users</b> table',w:'3h',c:'var(--tx1)'}].map(r=>`<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--brd);font-size:10px"><i class="${r.i}" style="color:${r.c};width:12px;text-align:center;font-size:10px"></i><span style="flex:1;color:var(--tx1)">${r.t}</span><span style="color:var(--tx3);font-size:8.5px">${r.w}</span></div>`).join('')}</div>
+  <div><div style="font-size:12px;font-weight:800;margin-bottom:8px"><i class="fas fa-puzzle-piece" style="color:var(--cy);font-size:11px;margin-right:4px"></i>MCP Servers</div>${mcpServers.map(s=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;border:1px solid var(--brd);border-radius:4px;margin-bottom:3px;background:var(--bg1);font-size:9.5px"><i class="${s.icon}" style="width:12px;text-align:center;font-size:10px;color:var(--tx1)"></i><span style="flex:1;font-weight:500">${s.name}</span><span class="badge ${s.status==='connected'?'badge-ok':'badge-warn'}" style="font-size:7px">${s.status==='connected'?'On':'Off'}</span><span style="color:var(--tx3);font-size:8px">${s.tools.length}t</span></div>`).join('')}</div>
+</div></div>`}
+
+function pgGH(){return`<div class="pg"><div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--hermes),var(--acc));display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:#000">D</div><div><h2 style="font-size:16px;font-weight:800">devuser</h2><p style="font-size:10px;color:var(--tx1)">Building for the web</p></div></div><div style="font-size:12px;font-weight:800;margin-bottom:8px"><i class="fab fa-github" style="margin-right:4px"></i>Repositories</div>${[{n:'my-project',d:'Full-stack Next.js + Supabase',l:'TypeScript',s:24,v:'public'},{n:'api-gateway',d:'Cloudflare Workers gateway',l:'Rust',s:12,v:'private'},{n:'design-system',d:'Component library',l:'TypeScript',s:8,v:'private'},{n:'infra-config',d:'Terraform configs',l:'HCL',s:3,v:'private'}].map(r=>`<div style="padding:10px;border:1px solid var(--brd);border-radius:7px;background:var(--bg1);margin-bottom:5px;cursor:pointer" onmouseover="this.style.borderColor='var(--brd2)'" onmouseout="this.style.borderColor='var(--brd)'"><div style="display:flex;align-items:center;gap:5px;margin-bottom:3px"><span style="font-weight:700;font-size:12px;color:var(--cy)">${r.n}</span><span class="badge ${r.v==='public'?'badge-ok':'badge-warn'}">${r.v}</span></div><p style="font-size:10px;color:var(--tx1);margin-bottom:3px">${r.d}</p><div style="font-size:9px;color:var(--tx2)">${r.l} &middot; <i class="far fa-star"></i> ${r.s}</div></div>`).join('')}</div>`}
+
+function pgV(){return`<div class="pg"><div style="margin-bottom:14px"><h2 style="font-size:16px;font-weight:800">Deployments</h2><p style="font-size:10px;color:var(--tx1)">3 projects &middot; 142 deploys this month</p></div>${[{p:'my-project',b:'main',c:'Fix auth token refresh',s:'ready',t:'2m',d:'34s'},{p:'my-project',b:'staging',c:'WIP: notifications',s:'building',t:'now',d:'...'},{p:'docs-site',b:'main',c:'Update API ref',s:'ready',t:'1h',d:'28s'}].map(d=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--brd);border-radius:6px;background:var(--bg1);margin-bottom:4px"><span class="badge ${d.s==='ready'?'badge-ok':'badge-warn'}">${d.s==='ready'?'Ready':'Building'}</span><div style="flex:1"><div style="font-weight:600;font-size:11px">${d.p}</div><div style="font-size:9px;color:var(--tx2)">${d.c}</div></div><div style="text-align:right;font-size:9px;color:var(--tx2)"><i class="fas fa-code-branch" style="margin-right:2px"></i>${d.b}<br>${d.t} &middot; ${d.d}</div></div>`).join('')}</div>`}
+
+function pgSB(){return`<div class="pg"><div style="margin-bottom:14px"><h2 style="font-size:16px;font-weight:800">my-project</h2><p style="font-size:10px;color:var(--tx1)">PostgreSQL 15.6 &middot; us-east-1</p></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px">${[{l:'Tables',v:'6',i:'fa-table'},{l:'Rows',v:'438K',i:'fa-list-ol'},{l:'Size',v:'320 MB',i:'fa-hard-drive'},{l:'Conns',v:'23',i:'fa-link'}].map(s=>`<div style="padding:10px;border-radius:6px;border:1px solid var(--brd);background:var(--bg1)"><div style="font-size:8px;color:var(--tx3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px"><i class="fas ${s.i}" style="margin-right:2px"></i>${s.l}</div><div style="font-size:16px;font-weight:800">${s.v}</div></div>`).join('')}</div></div>`}
+
+function pgCF(){return`<div class="pg"><div style="margin-bottom:14px"><h2 style="font-size:16px;font-weight:800">Workers & Pages</h2><p style="font-size:10px;color:var(--tx1)">3 workers &middot; 2 pages</p></div>${[{n:'api-router',r:'api.myproject.com/*',s:'Active',rq:'1.2M/d'},{n:'image-resize',r:'img.myproject.com/*',s:'Active',rq:'450K/d'},{n:'redirect',r:'old.myproject.com/*',s:'Disabled',rq:'—'}].map(w=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--brd);border-radius:6px;background:var(--bg1);margin-bottom:4px"><div style="width:24px;height:24px;border-radius:5px;background:rgba(246,130,31,.1);display:flex;align-items:center;justify-content:center;color:#f6821f;font-size:9px"><i class="fas fa-bolt"></i></div><div style="flex:1"><div style="font-weight:600;font-size:11px">${w.n}</div><div style="font-size:9px;color:var(--tx2)">${w.r}</div></div><span class="badge ${w.s==='Active'?'badge-ok':'badge-err'}">${w.s}</span></div>`).join('')}</div>`}
+
+function pgG(u){return`<div class="pg" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center"><i class="fas fa-globe" style="font-size:28px;color:var(--tx3);margin-bottom:10px"></i><h2 style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(u)}</h2><p style="font-size:11px;color:var(--tx2)">Ask Hermes to navigate to a platform.</p></div>`}
+
+/* ═══════════════════════════════════════════
+   AUDIT SYSTEM
+   ═══════════════════════════════════════════ */
+async function runFullAudit(){
+  if(S.auditRunning)return;S.auditRunning=true;
+  switchRP('chat');addMsg('user','/audit — Run full codebase audit');setBusy(true);
+  await typeMsg('Initiating full codebase audit. Running 7 scan categories: static analysis, security, code smells, race conditions, memory leaks, type safety, and dependency health. This catches what "done" often misses.');
+  await wait(300);
+  const planEl=addPlanBlock(auditScans.map(s=>({label:s.name,name:s.id})));
+  await wait(400);
+
+  let totalFindings=0,critical=0,high=0,medium=0,low=0,info=0;
+  for(let i=0;i<auditScans.length;i++){
+    const scan=auditScans[i];
+    const pEl=planEl.querySelectorAll('.plan-st');if(pEl[i])pEl[i].className='plan-st rn';
+    const te=addToolBlk(`audit_${scan.id}`,{scan:scan.name,scope:'src/'},'aud');
+    await wait(600+Math.random()*1400);
+    const fCount=scan.findings.length;
+    scan.findings.forEach(f=>{totalFindings++;if(f.sev==='critical')critical++;else if(f.sev==='high')high++;else if(f.sev==='medium')medium++;else if(f.sev==='low')low++;else info++});
+    const hasCritical=scan.findings.some(f=>f.sev==='critical'||f.sev==='high');
+    completeTool(te,Math.floor(600+Math.random()*1400),`${fCount} findings${hasCritical?' — action required':''}`);
+    if(pEl[i])pEl[i].className='plan-st dn';
+    await wait(200);
+  }
+
+  await wait(300);
+  let summary=`Audit complete. **${totalFindings} findings** across 7 scans:\n\n`;
+  if(critical)summary+=`• ${critical} CRITICAL — must fix before deploy\n`;
+  if(high)summary+=`• ${high} HIGH — fix before next release\n`;
+  if(medium)summary+=`• ${medium} MEDIUM — plan to address soon\n`;
+  if(low)summary+=`• ${low} LOW — improve when convenient\n`;
+  if(info)summary+=`• ${info} INFO — suggestions for improvement\n`;
+  summary+=`\nTop priorities:\n1. **SQL injection** in handlers.ts:89 — parameterize the query\n2. **Token refresh race condition** in token.ts:47 — add mutex\n3. **Event listener leak** in websocket.ts:28 — remove on disconnect\n\nUse \`/fix\` to auto-fix what can be automated, or I can address each one individually.`;
+  await typeMsg(summary);
+
+  // Render audit results in viewport
+  renderAuditResults();
+  toast(`Audit: ${totalFindings} findings (${critical} critical)`,'err');
+  setBusy(false);S.auditRunning=false;
+}
+
+async function runQuickAudit(){
+  if(S.auditRunning)return;S.auditRunning=true;
+  switchRP('chat');addMsg('user','/audit-quick — Quick security + types scan');setBusy(true);
+  await typeMsg('Running quick audit: security vulnerabilities + type safety only. Faster scan for mid-build checks.');
+  await wait(300);
+  const quickScans=auditScans.filter(s=>s.id==='security'||s.id==='types');
+  for(const scan of quickScans){
+    const te=addToolBlk(`audit_${scan.id}`,{scan:scan.name,scope:'src/'},'aud');
+    await wait(800+Math.random()*800);
+    completeTool(te,Math.floor(800+Math.random()*800),`${scan.findings.length} findings`);
+    await wait(200);
+  }
+  const secF=auditScans.find(s=>s.id==='security').findings;
+  const typF=auditScans.find(s=>s.id==='types').findings;
+  await typeMsg(`Quick scan complete. Security: ${secF.length} findings (${secF.filter(f=>f.sev==='critical').length} critical). Type safety: ${typF.length} findings. ${secF.some(f=>f.sev==='critical')?'**Critical SQL injection found** — fix before any deploy.':''} Use \`/audit\` for the full 7-scan audit.`);
+  toast('Quick audit done','ok');setBusy(false);S.auditRunning=false;
+}
+
+function renderAuditResults(){
+  const el=document.getElementById('audit-results');if(!el)return;
+  let total=0,critical=0,high=0;
+  auditScans.forEach(s=>s.findings.forEach(f=>{total++;if(f.sev==='critical')critical++;else if(f.sev==='high')high++}));
+  el.innerHTML=`<div style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:800;display:flex;align-items:center;gap:6px"><i class="fas fa-shield-halved" style="color:var(--hermes)"></i>Audit Results</div>
+      <div style="display:flex;gap:8px;font-size:10px">
+        <span style="color:var(--rd);font-weight:600">${critical} critical</span>
+        <span style="color:var(--or);font-weight:600">${high} high</span>
+        <span style="color:var(--tx2)">${total} total</span>
+      </div>
+    </div>
+    ${auditScans.map(scan=>`
+    <div class="audit-scan done">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <i class="${scan.icon}" style="color:var(--em);font-size:11px"></i>
+        <span style="font-weight:700;font-size:11px">${scan.name}</span>
+        <span style="margin-left:auto;font-size:9px;color:var(--tx2)">${scan.findings.length} findings</span>
+      </div>
+      <div style="font-size:9.5px;color:var(--tx2);margin-bottom:6px">${scan.desc}</div>
+      <div class="audit-bar"><div class="audit-bar-fill" style="width:100%"></div></div>
+      <div style="margin-top:6px">${scan.findings.map(f=>`
+        <div class="finding ${f.sev}">
+          <div class="fn"><span class="sev sev-${f.sev}">${f.sev}</span>${esc(f.title)}</div>
+          <div class="fd">${esc(f.desc)}</div>
+          <div class="fl"><i class="fas fa-map-pin" style="margin-right:3px"></i>${esc(f.loc)}</div>
+        </div>`).join('')}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════
+   AGENTS PANEL
+   ═══════════════════════════════════════════ */
+function renderAgents(){
+  $('#rp-agents').innerHTML=`<div style="padding:12px;flex:1;overflow-y:auto">
+    <div style="font-size:12px;font-weight:800;margin-bottom:8px"><i class="fas fa-users" style="color:var(--hermes);margin-right:4px;font-size:11px"></i>Agent Crew</div>
+    <p style="font-size:9.5px;color:var(--tx2);margin-bottom:10px;line-height:1.4">Hermes 3 is the default agent (cost-efficient). Switch to specialists for complex tasks. Hermes delegates automatically when needed.</p>
+    ${Object.values(agents).map(a=>`
+    <div class="agent-card ${S.activeAgent===a.id?'on':''}" onclick="switchAgent('${a.id}');renderAgents()">
+      <div class="ac-name"><span class="av ${a.avClass}" style="width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000">${a.av}</span>${a.name}${S.activeAgent===a.id?'<span class="badge badge-ok" style="margin-left:auto">Active</span>':''}</div>
+      <div style="font-size:9.5px;color:var(--tx2);margin-bottom:4px">${a.role}</div>
+      <p style="font-size:9px;color:var(--tx2);margin-bottom:5px;line-height:1.3">${a.desc}</p>
+      <div style="font-size:8.5px;color:var(--tx3);font-family:'JetBrains Mono',monospace">${a.model} &middot; ${a.cost}</div>
+    </div>`).join('')}
+    <div style="margin-top:10px;padding:8px;border:1px solid var(--brd);border-radius:6px;background:var(--bg2)">
+      <div style="font-size:9.5px;font-weight:700;margin-bottom:4px;color:var(--hermes)">Hermes Auto-Delegation</div>
+      <p style="font-size:9px;color:var(--tx2);line-height:1.4">When Hermes encounters tasks outside its core strength, it delegates: architecture → Architect, review → Reviewer, infra → DevOps. Hermes always stays in the loop for coordination.</p>
+    </div>
+  </div>`;
+}
+
+function switchAgent(id){S.activeAgent=id;const a=agents[id];$('#active-av').className=`av ${a.avClass}`;$('#active-av').textContent=a.av;$('#active-av').style.cssText='width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000';$('#active-name').textContent=a.name;$('#active-role').textContent=a.role;toast(`Switched to ${a.name}`,'ok')}
+
+/* ═══════════════════════════════════════════
+   MCP PANEL
+   ═══════════════════════════════════════════ */
+function renderMCPs(){
+  $('#rp-mcps').innerHTML=`<div style="padding:12px;flex:1;overflow-y:auto">
+    <div style="font-size:12px;font-weight:800;margin-bottom:8px"><i class="fas fa-puzzle-piece" style="color:var(--cy);margin-right:4px;font-size:11px"></i>MCP Servers</div>
+    <p style="font-size:9.5px;color:var(--tx2);margin-bottom:10px;line-height:1.4">Official open-source MCP servers from <span style="color:var(--tl)">modelcontextprotocol</span> and vendor repos. Connect/disconnect to manage tool availability.</p>
+    ${mcpServers.map(s=>`
+    <div class="mcp-card">
+      <div class="mc-name"><i class="${s.icon}" style="font-size:11px"></i>${s.name}<span class="badge ${s.status==='connected'?'badge-ok':'badge-warn'}" style="margin-left:auto">${s.status==='connected'?'Online':'Offline'}</span>
+        <button onclick="toggleMCP('${s.id}')" style="padding:2px 6px;border-radius:3px;border:1px solid var(--brd);background:${s.status==='connected'?'var(--bg4)':'var(--em)'};color:${s.status==='connected'?'var(--tx1)':'#fff'};font-size:8px;cursor:pointer;margin-left:4px">${s.status==='connected'?'Disconnect':'Connect'}</button>
+      </div>
+      <div class="mc-cmd">${esc(s.cmd)}</div>
+      <div style="font-size:8.5px;color:var(--tx2);margin-bottom:4px">${esc(s.desc)}</div>
+      <div style="font-size:8px;color:var(--tx3);margin-bottom:4px"><i class="fas fa-code-branch" style="margin-right:2px"></i>${esc(s.repo)}</div>
+      <div class="mc-tools">${s.tools.map(t=>`<span class="tchip">${t}</span>`).join('')}</div>
+    </div>`).join('')}
+  </div>`;
+}
+function toggleMCP(id){const s=mcpServers.find(x=>x.id===id);if(s){s.status=s.status==='connected'?'disconnected':'connected';renderMCPs();toast(`${s.name} ${s.status==='connected'?'connected':'disconnected'}`,s.status==='connected'?'ok':'info')}}
+
+/* ═══════════════════════════════════════════
+   SKILLS PANEL
+   ═══════════════════════════════════════════ */
+function renderSkillsPanel(){
+  $('#rp-skills').innerHTML=`<div style="padding:12px;flex:1;overflow-y:auto">
+    <div style="font-size:12px;font-weight:800;margin-bottom:8px"><i class="fas fa-wand-magic-sparkles" style="color:var(--tl);margin-right:4px;font-size:11px"></i>Skills</div>
+    <p style="font-size:9.5px;color:var(--tx2);margin-bottom:10px;line-height:1.4">Curated from leading open-source repos. Each skill is a reusable workflow pattern.</p>
+    ${skills.map(sk=>`
+    <div class="skill-card" onclick="agentCmd('use the ${sk.name} skill')">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px"><i class="${sk.icon}" style="color:var(--tl);font-size:10px"></i><span style="font-weight:700;font-size:11px">${sk.name}</span><span style="margin-left:auto;font-size:8px;color:var(--tl);font-weight:600">${sk.source}</span></div>
+      <div style="font-size:9px;color:var(--tx2);margin-bottom:4px;line-height:1.3">${sk.desc}</div>
+      <div style="font-size:8px;color:var(--tx3)"><i class="fas fa-code-branch" style="margin-right:2px"></i>${esc(sk.sourceUrl)}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════
+   TOKEN VAULT — Secure local-only storage
+   ═══════════════════════════════════════════ */
+function renderVault(){
+  const keys=['GITHUB_TOKEN','OPENROUTER_KEY','SUPABASE_TOKEN','VERCEL_TOKEN','BRAVE_API_KEY','CLOUDFLARE_TOKEN'];
+  $('#rp-vault').innerHTML=`<div style="padding:12px;flex:1;overflow-y:auto">
+    <div style="font-size:12px;font-weight:800;margin-bottom:6px"><i class="fas fa-key" style="color:var(--or);margin-right:4px;font-size:11px"></i>Token Vault</div>
+    <div style="padding:8px;border:1px solid var(--rd);border-radius:6px;background:rgba(239,68,68,.06);margin-bottom:10px;font-size:9.5px;line-height:1.4">
+      <div style="color:var(--rd);font-weight:700;margin-bottom:3px"><i class="fas fa-triangle-exclamation" style="margin-right:3px"></i>Security Notice</div>
+      <div style="color:var(--tx1)">Tokens are stored in browser memory only. They are never transmitted, logged, or persisted to disk. Never share tokens in chat. If you accidentally expose a token, revoke it immediately on the provider's dashboard.</div>
+    </div>
+    ${keys.map(k=>`
+    <div class="vault-row">
+      <span class="vr-key">${k.replace('_','\\_')}</span>
+      <span class="vr-val" id="vault-${k}">${S.vault[k]?('•'.repeat(8)):'not set'}</span>
+      <span class="vr-toggle" onclick="editVault('${k}')" title="Edit"><i class="fas fa-pen"></i></span>
+      <span class="vr-toggle" onclick="clearVault('${k}')" title="Clear"><i class="fas fa-xmark"></i></span>
+    </div>`).join('')}
+    <div style="margin-top:12px;padding:8px;border:1px solid var(--brd);border-radius:6px;background:var(--bg2)">
+      <div style="font-size:9.5px;font-weight:700;margin-bottom:4px;color:var(--tl)">Push to GitHub</div>
+      <p style="font-size:9px;color:var(--tx2);line-height:1.4;margin-bottom:6px">To push this project to your GitHub repo, set your GITHUB_TOKEN above, then use the command:</p>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--tx1);background:var(--bg0);padding:6px 8px;border-radius:4px">/commit and push to ncsound919/agentbrowser</div>
+    </div>
+  </div>`;
+}
+function editVault(key){const val=prompt(`Enter value for ${key}:\n\n(This stays in browser memory only)`);if(val!==null){S.vault[key]=val;renderVault();toast(`${key} saved to vault`,'ok')}}
+function clearVault(key){delete S.vault[key];renderVault();toast(`${key} removed from vault`,'info')}
+
+/* ═══════════════════════════════════════════
+   CHAT SYSTEM
+   ═══════════════════════════════════════════ */
+function addMsg(role,html){const c=$('#cm'),d=document.createElement('div');d.className=`msg msg-${role==='user'?'u':'a'}`;d.innerHTML=role==='user'?html:`<span class="av ${agents[S.activeAgent].avClass}" style="width:18px;height:18px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#000;vertical-align:middle;margin-right:3px">${agents[S.activeAgent].av}</span>${html}`;c.appendChild(d);c.scrollTop=c.scrollHeight;return d}
+
+async function typeMsg(text){const c=$('#cm'),d=document.createElement('div');d.className='msg msg-a';const a=agents[S.activeAgent];const av=`<span class="av ${a.avClass}" style="width:18px;height:18px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#000;vertical-align:middle;margin-right:3px">${a.av}</span>`;const sp=document.createElement('span');d.innerHTML=av;d.appendChild(sp);c.appendChild(d);let i=0;return new Promise(r=>{(function t(){if(i<text.length){sp.textContent=text.slice(0,++i);c.scrollTop=c.scrollHeight;setTimeout(t,8+Math.random()*4)}else r()})()})}
+
+function addPlanBlock(steps){const c=$('#cm'),d=document.createElement('div');d.className='plan-blk';const uid=Date.now();d.innerHTML=`<div class="plan-hdr"><i class="fas fa-route" style="color:var(--cy);font-size:9px"></i>Execution Plan<span style="margin-left:auto;font-size:8px;color:var(--tx2)">${steps.length} steps</span></div>${steps.map((s,i)=>`<div class="plan-st pn" id="ps-${uid}-${i}"><span class="sn">${i+1}</span><span class="st">${s.label||s.name}</span></div>`).join('')}`;c.appendChild(d);c.scrollTop=c.scrollHeight;return d}
+
+function addToolBlk(tool,params,type='nav'){const c=$('#cm'),d=document.createElement('div');d.className='tool-blk';const ph=Object.entries(params).map(([k,v])=>`<span class="pk">${k}</span>: <span class="pv">${typeof v==='string'?`"${v}"`:v}</span>`).join('<br>');d.innerHTML=`<div class="tool-h"><span class="ti ${type}"><i class="fas fa-${type==='nav'?'compass':type==='mut'?'wrench':type==='aud'?'shield-halved':'eye'}"></i></span><span class="tn">${tool}</span><span class="ts run"><i class="fas fa-spinner fa-spin"></i></span></div><div class="tool-p">${ph}</div><div class="tool-r" style="display:none"></div>`;c.appendChild(d);c.scrollTop=c.scrollHeight;return d}
+function completeTool(el,dur,res,ok=true){el.querySelector('.ts').className='ts ok';el.querySelector('.ts').innerHTML='<i class="fas fa-check"></i>';const r=el.querySelector('.tool-r');r.style.display='flex';r.className=`tool-r ${ok?'ok':'err'}`;r.innerHTML=`<i class="fas fa-${ok?'check-circle':'triangle-exclamation'}"></i> ${res}`}
+
+function addApproval(title,desc){return new Promise(resolve{const c=$('#cm'),d=document.createElement('div');d.className='appr-blk';d.innerHTML=`<div class="at"><i class="fas fa-shield-halved"></i>Approval Required</div><div class="ad"><b>${esc(title)}</b><br>${esc(desc)}</div><div class="abtn"><button class="ba" onclick="_ar(true)">Approve</button><button class="bd" onclick="_ar(false)">Deny</button></div>`;c.appendChild(d);c.scrollTop=c.scrollHeight;S.apprResolve=resolve})}
+function _ar(v){if(S.apprResolve){S.apprResolve(v);S.apprResolve=null}}
+
+function setBusy(b){S.busy=b;$('#sb').disabled=b}
+
+/* ── Slash command autocomplete ── */
+const ciEl=$('#ci');
+ciEl.addEventListener('input',e=>{const v=e.target.value;if(v.startsWith('/')&&!v.includes(' ')){const q=v.slice(1).toLowerCase();const m=slashCmds.filter(c=>c.cmd.slice(1).startsWith(q)).slice(0,6);if(m.length){renderSlashDD(m)}else{$('#slash-dd').classList.remove('show')}}else{$('#slash-dd').classList.remove('show')}});
+ciEl.addEventListener('keydown',e=>{const dd=$('#slash-dd');if(!dd.classList.contains('show'))return;if(e.key==='Tab'||e.key==='Enter'){e.preventDefault();const sel=dd.querySelector('.slash-item.sel');if(sel)sel.click()}else if(e.key==='Escape'){dd.classList.remove('show')}});
+function renderSlashDD(matches){const dd=$('#slash-dd');dd.innerHTML=matches.map((m,i)=>`<div class="slash-item${i===0?' sel':''}" onclick="selectSlash('${m.cmd}')"><div class="si-icon" style="background:${m.color}20;color:${m.color}"><i class="${m.icon}"></i></div><span class="si-name">${m.cmd}</span><span class="si-desc">${esc(m.desc)}</span></div>`).join('');dd.classList.add('show')}
+function selectSlash(cmd){const m=slashCmds.find(c=>c.cmd===cmd);if(m){$('#ci').value=m.action||cmd+' ';$('#ci').focus();$('#slash-dd').classList.remove('show')}}
+
+/* ── Workflow engine ── */
+const wfs=[
+  {m:/\/audit$|^run.*full.*audit/i,fn:()=>runFullAudit()},
+  {m:/\/audit-quick|^quick.*audit|^quick.*scan/i,fn:()=>runQuickAudit()},
+  {m:/\/fix|^auto.*fix|^fix.*audit/i,ack:()=>'Auto-fixing audit findings. I\'ll address each category systematically.',
+    exec:async()=>[
+      {tool:'audit_fix',params:{category:'security',action:'parameterize SQL queries'},type:'aud',dur:1200,res:'SQL injection fixed'},
+      {tool:'audit_fix',params:{category:'race_conditions',action:'add mutex to token refresh'},type:'aud',dur:900,res:'Race condition fixed'},
+      {tool:'audit_fix',params:{category:'leaks',action:'remove event listeners on disconnect'},type:'aud',dur:800,res:'Memory leak fixed'},
+      {tool:'terminal_execute',params:{command:'npm audit fix'},type:'mut',dur:1400,res:'3 vulnerabilities patched',act:()=>addTC('npm audit fix','added 2 packages, changed 4 packages, patched 3 vulnerabilities')},
+    ],done:()=>'Auto-fix applied to 4 findings: SQL injection parameterized, mutex added to token refresh, event listener leak patched, and 3 dependency CVEs resolved. Run `/audit` to verify the fixes.'},
+  {m:/create.*(?:repo|repository).*?(\w[\w-]*)/i,ack:mr=>`Creating repository "${mr[1]}" on GitHub. Planning execution.`,
+    exec:async mr=>[{tool:'browser_navigate',params:{url:'https://github.com/new'},type:'nav',dur:300,res:'Loaded',act:()=>nav('https://github.com')},{tool:'github_create_repo',params:{name:mr[1],private:false},type:'mut',dur:1400,res:'Repository created'}],
+    done:mr=>`Repository "${mr[1]}" is live at github.com/ncsound919/${mr[1]}. Want me to clone it or set up the project?`},
+  {m:/deploy.*vercel|deploy.*production|\/deploy/i,ack:()=>'Starting deploy pipeline with pre-deploy audit check.',
+    exec:async()=>[{tool:'audit_quick',params:{scan:'security',scope:'pre-deploy'},type:'aud',dur:600,res:'1 critical — must fix'},{tool:'terminal_execute',params:{command:'npm run lint && npm test && npm run build'},type:'mut',dur:2200,res:'Lint ✓, 12 tests ✓, Build ✓',act:()=>addTC('npm run lint && npm test && npm run build','✓ No linting errors\n✓ 12 tests passed (2.4s)\n✓ Build succeeded (3.2s)')},{tool:'vercel_deploy',params:{project:'my-project',env:'production'},type:'mut',dur:2400,res:'Live: my-project.vercel.app'}],
+    done:()=>'Deploy blocked: 1 critical security finding (SQL injection in handlers.ts:89). Fix with `/fix` first, then redeploy. This is the audit system preventing incomplete deploys.'},
+  {m:/commit.*push|push.*main|\/commit/i,ack:()=>'Staging, committing, and pushing. Running pre-commit audit first.',
+    exec:async()=>[{tool:'audit_quick',params:{scan:'types,security'},type:'aud',dur:500,res:'0 critical — safe to commit'},{tool:'terminal_execute',params:{command:'git add -A && git commit -m "feat: update auth and api" && git push origin main'},type:'mut',dur:1200,res:'Pushed to origin/main',act:()=>addTC('git push origin main','a1b2c3d..a3f7b2e  main -> main')}],
+    done:()=>'Changes pushed to main. Pre-commit audit passed (0 critical findings). Commit a3f7b2e.'},
+  {m:/create.*pull.*request|open.*pr|\/pr/i,ack:()=>'Creating PR with audit summary included.',
+    exec:async()=>[{tool:'terminal_execute',params:{command:'git log --oneline -5'},type:'read',dur:180,res:'5 commits',act:()=>addTC('git log --oneline -5','a3f7b2e feat: update auth\nb4c5d6e fix: token refresh')},{tool:'github_create_pr',params:{title:'feat: auth updates',body:'Includes pre-commit audit: 0 critical findings.'},type:'mut',dur:1200,res:'PR #43 created'}],
+    done:()=>'PR #43 created with audit summary attached. All changes pre-verified.'},
+  {m:/\/review|review.*code/i,ack:()=>'Running comprehensive code review with audit integration.',
+    exec:async()=>[{tool:'terminal_execute',params:{command:'git diff HEAD~3'},type:'read',dur:300,res:'Diff loaded',act:()=>addTC('git diff HEAD~3','5 files changed, 142+, 38-')},{tool:'audit_full',params:{scope:'changed_files',categories:'security,race,smells'},type:'aud',dur:1800,res:'3 findings in changed code'},{tool:'ai_review',params:{focus:'correctness,security,performance'},type:'read',dur:1200,res:'Review complete'}],
+    done:()=>'Review complete. Found 1 medium finding in changed code (race condition in token.ts:47 — concurrent requests can trigger multiple refreshes). Also: missing error handling in api.ts:112. Want me to fix these before merging?'},
+  {m:/\/test|run.*test/i,ack:()=>'Running test suite with coverage analysis.',
+    exec:async()=>[{tool:'terminal_execute',params:{command:'npm test -- --coverage'},type:'read',dur:1400,res:'12/12 passed, 78% coverage',act:()=>addTC('npm test','PASS src/auth.test.ts (3)\nPASS src/api.test.ts (9)\nTests: 12 passed (2.4s)\nCoverage: 78% statements')}],
+    done:()=>'All 12 tests passing. Coverage: 78% statements, 72% branches, 69% functions. Lowest: utils/ at 34% — needs more tests.'},
+  {m:/\/scan|security.*scan/i,ack:()=>'Running dedicated security scan.',
+    exec:async()=>[{tool:'terminal_execute',params:{command:'npm audit'},type:'read',dur:800,res:'3 vulnerabilities',act:()=>addTC('npm audit','Critical: lodash prototype pollution\nHigh: axios SSRF\nMedium: jsonwebtoken key confusion')},{tool:'security_scan',params:{scope:'src/',type:'sast'},type:'aud',dur:1200,res:'1 SQL injection found'}],
+    done:()=>'Security scan: 1 critical (SQL injection handlers.ts:89), 3 dependency CVEs. Run `/fix` to auto-patch the dependencies and I\'ll manually fix the SQL injection.'},
+  {m:/debug.*(\w[\w\s]*)/i,ack:mr=>`Investigating: ${mr[1]}. I\'ll reproduce, trace execution, and identify root cause.`,
+    exec:async()=>[{tool:'terminal_execute',params:{command:'npm test -- --reporter verbose 2>&1 | head -30'},type:'read',dur:800,res:'Error traced',act:()=>addTC('npm test --verbose','FAIL token refresh → expires during request\nExpected: 200, Received: 401')},{tool:'audit_race',params:{file:'src/auth/token.ts'},type:'aud',dur:1000,res:'Race condition confirmed'}],
+    done:()=>'Root cause: race condition in token.ts:47. Concurrent requests trigger multiple refreshes; the second invalidates the first token. Fix: add a promise-memoized refresh that reuses the in-flight promise. Want me to implement this?'},
+  {m:/opencode.*(?:refactor|implement|fix)/i,ack:()=>'Routing to OpenCode for local agent execution with full filesystem access.',
+    exec:async()=>[{tool:'opencode_run',params:{task:'Refactor auth module',cwd:'/home/dev/projects/my-project'},type:'mut',dur:2600,res:'4 files modified'},{tool:'audit_quick',params:{scan:'types',scope:'changed_files'},type:'aud',dur:500,res:'0 new type issues'}],
+    done:()=>'OpenCode completed the refactoring. 4 files modified. Post-change audit: 0 new type issues. Changes are unstaged — want me to review and commit?'},
+  {m:/go\s+to\s+(.+)/i,ack:mr=>`Navigating to ${mr[1]}.`,exec:async mr=>[{tool:'browser_navigate',params:{url:mr[1].startsWith('http')?mr[1]:'https://'+mr[1]},type:'nav',dur:300,res:'Loaded',act:()=>{try{nav(mr[1].startsWith('http')?mr[1]:'https://'+mr[1])}catch(e){nav(mr[1])}}}],done:mr=>`Navigated to ${mr[1]}.`},
+  {m:/\/explain|explain.*code/i,ack:()=>'Analyzing code for explanation.',exec:async()=>[{tool:'read_file',params:{path:'src/auth/token.ts'},type:'read',dur:400,res:'File loaded'}],done:()=>'This module handles JWT token lifecycle:\n1. **createToken()** — signs a new JWT with user claims\n2. **refreshToken()** — exchanges expired token for new one (has race condition on line 47)\n3. **validateToken()** — verifies signature and expiry\n4. **revokeToken()** — adds token to blocklist in Redis\n\nThe race condition occurs because two concurrent 401 responses both call refreshToken(), and the second refresh invalidates the first token.'},
+  {m:/\/refactor|refactor.*code/i,ack:()=>'Analyzing code for refactoring opportunities with audit context.',exec:async()=>[{tool:'audit_smells',params:{scope:'src/auth'},type:'aud',dur:800,res:'3 smells found'},{tool:'ai_refactor',params:{target:'src/auth/',focus:'complexity,duplication'},type:'mut',dur:1800,res:'Refactoring plan generated'}],done:()=>'Refactoring opportunities found:\n1. **Extract TokenService** from AuthService (god class, 7 responsibilities)\n2. **Merge duplicate validation** logic in middleware.ts and routes.ts\n3. **Simplify login()** — complexity 18 → target 8\n\nShall I implement these changes?'},
+];
+
+async function processAgent(input){
+  addMsg('user',esc(input));setBusy(true);await wait(250+Math.random()*250);
+
+  // Handle slash commands
+  if(input.startsWith('/')){
+    const cmd=slashCmds.find(c=>input.startsWith(c.cmd));
+    if(cmd){if(cmd.fn){const r=cmd.fn();if(r===null){setBusy(false);return}}else if(cmd.action){input=cmd.action+input.slice(cmd.cmd.length).trim()}}
+  }
+
+  let wf=null,mr=null;
+  for(const w of wfs){const m=input.match(w.m);if(m){wf=w;mr=m;break}}
+
+  if(wf){
+    // Direct function calls (audit, quick audit)
+    if(wf.fn){setBusy(false);wf.fn();return}
+
+    await typeMsg(wf.ack(mr));await wait(200);
+    let steps;
+    try{steps=await wf.exec(mr)}catch(e){if(e==='denied'){await typeMsg('Operation denied. No changes made.');setBusy(false);return}throw e}
+    const planEl=addPlanBlock(steps.map(s=>({label:s.tool,label:s.params?.action||s.params?.scan||s.tool,name:s.tool})));
+    await wait(300);
+    for(let i=0;i<steps.length;i++){
+      const pEl=planEl.querySelectorAll('.plan-st');if(pEl[i])pEl[i].className='plan-st rn';
+      const te=addToolBlk(steps[i].tool,steps[i].params,steps[i].type||'nav');
+      if(steps[i].act)steps[i].act();
+      await wait(steps[i].dur||800);
+      completeTool(te,steps[i].dur||800,steps[i].res||'Done',!steps[i].res?.includes('critical')||steps[i].res?.includes('0 critical'));
+      if(pEl[i])pEl[i].className='plan-st dn';
+      await wait(150);
+    }
+    await wait(200);await typeMsg(wf.done(mr));toast('Task completed','ok');
+  }else{
+    const a=agents[S.activeAgent];
+    await typeMsg(`I'm ${a.name}, your ${a.role.toLowerCase()}. I have access to 8 MCP servers, 9 skills from open-source repos, and a one-button audit system. Try:\n\n• /audit — full 7-scan audit\n• /audit-quick — security + types only\n• /fix — auto-fix findings\n• /deploy — deploy with audit gate\n• /review — AI code review\n\nOr describe what you need and I'll plan it.`);
+  }
+  setBusy(false);
+}
+
+function handleSend(){const i=$('#ci'),v=i.value.trim();if(!v||S.busy)return;i.value='';$('#slash-dd').classList.remove('show');processAgent(v)}
+function agentCmd(cmd){if(S.busy)return;$('#ci').value=cmd;handleSend()}
+ $('#ci').addEventListener('keydown',e=>{if(e.key==='Enter'&&!$('#slash-dd').classList.contains('show'))handleSend()});
+
+function updSugs(u){const p=plat(u);const map={home:['/audit','/fix','/deploy','/review','/scan'],github:['/commit','/pr','/review','/audit'],vercel:['/deploy','/rollback','/env'],supabase:['/migrate','/audit'],cloudflare:['/deploy','/audit']};$('#sugs').innerHTML=(map[p]||map.home).map(s=>`<span class="sug" onclick="agentCmd('${s}')">${s}</span>`).join('')}
+
+/* ═══════════════════════════════════════════
+   COMMAND PALETTE
+   ═══════════════════════════════════════════ */
+const cmdPalItems=[
+  ...slashCmds.map(c=>({label:c.cmd,desc:c.desc,icon:c.icon,color:c.color,action:()=>{hideCmdPal();if(c.fn)c.fn();else agentCmd(c.action)}})),
+  ...Object.values(agents).map(a=>({label:`Agent: ${a.name}`,desc:a.role,icon:'fas fa-user',color:a.avClass.includes('hermes')?'var(--hermes)':a.avClass.includes('arch')?'#6366f1':a.avClass.includes('code')?'var(--acc)':'var(--cy)',action:()=>{hideCmdPal();switchAgent(a.id);switchRP('chat');toast(`Switched to ${a.name}`,'ok')}})),
+  {label:'Run Full Audit',desc:'7-scan codebase audit',icon:'fas fa-shield-halved',color:'var(--hermes)',action:()=>{hideCmdPal();runFullAudit()}},
+  {label:'Quick Scan',desc:'Security + types only',icon:'fas fa-stethoscope',color:'var(--hermes)',action:()=>{hideCmdPal();runQuickAudit()}},
+];
+function showCmdPal(){$('#cmd-pal').classList.add('show');$('#cp-input').value='';$('#cp-input').focus();renderCP('')}
+function hideCmdPal(){$('#cmd-pal').classList.remove('show')}
+ $('#cmd-pal').onclick=e=>{if(e.target.id==='cmd-pal')hideCmdPal()};
+function renderCP(q){q=q.toLowerCase();const f=cmdPalItems.filter(i=>i.label.toLowerCase().includes(q)||i.desc.toLowerCase().includes(q)).slice(0,10);$('#cp-list').innerHTML=f.map((i,idx)=>`<div class="cp-item${idx===0?' sel':''}" onclick="cmdPalItems.find(x=>x.label==='${esc(i.label)}')?.action()"><div class="ci-icon" style="background:${i.color.includes('var')?'':'20'};color:${i.color}"><i class="${i.icon}"></i></div><span class="ci-label">${esc(i.label)}</span><span class="ci-hint">${esc(i.desc)}</span></div>`).join('')}
+ $('#cp-input').addEventListener('input',e=>renderCP(e.target.value));
+ $('#cp-input').addEventListener('keydown',e=>{if(e.key==='Enter'){$('.cp-item.sel')?.click()}if(e.key==='Escape')hideCmdPal()});
+
+/* ═══════════════════════════════════════════
+   TERMINAL
+   ═══════════════════════════════════════════ */
+function toggleTerm(){S.termOn=!S.termOn;$('#tw').classList.toggle('open',S.termOn)}
+function addTL(html){const b=$('#tbody'),d=document.createElement('div');d.className='tl';d.innerHTML=html;b.appendChild(d);b.scrollTop=b.scrollHeight}
+function addTC(cmd,out){addTL(`<span class="p">$</span> <span class="c">${esc(cmd)}</span>`);if(out)addTL(`<span class="o">${esc(out)}</span>`)}
+function addTI(){const b=$('#tbody'),ex=b.querySelector('.ti-line');if(ex)ex.remove();const d=document.createElement('div');d.className='tl ti-line';d.innerHTML='<span class="p">$</span> <input type="text" spellcheck="false" aria-label="Terminal input">';b.appendChild(d);const inp=d.querySelector('input');inp.focus();inp.addEventListener('keydown',e=>{if(e.key==='Enter'){const c=inp.value.trim();if(!c)return;d.innerHTML=`<span class="p">$</span> <span class="c">${esc(c)}</span>`;procCmd(c);addTI()}});b.scrollTop=b.scrollHeight}
+function procCmd(c){const b=c.split(/\s+/)[0].toLowerCase();const r={help:'Commands: ls, pwd, git, npm, wrangler, opencode, audit, mcp, clear',ls:'src/  public/  package.json  tsconfig.json',pwd:'~/projects/my-project',clear:null,git:'On branch main\nM src/auth.ts, M src/api.ts',npm:'Build succeeded (3.2s)',audit:'Run /audit for full scan or /audit-quick for security+types',mcp:'5 servers connected, 35+ tools available',opencode:'OpenCode agent ready'};const o=r[b];if(o===null){$('#tbody').innerHTML=''}else if(o)addTL(`<span class="o">${esc(o)}</span>`);else addTL(`<span class="o" style="color:var(--rd)">command not found: ${esc(b)}</span>`)}
+function initTerm(){$('#tbody').innerHTML='';addTL('<span style="color:var(--hermes)">AgentBrowser Terminal — Hermes</span>');addTL('<span class="o">Type <span style="color:var(--tl)">help</span> for commands. Ctrl+\` to toggle.</span>');addTI()}
+
+/* ═══════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+   ═══════════════════════════════════════════ */
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();$('#ci').focus()}
+  if((e.ctrlKey||e.metaKey)&&e.key==='p'){e.preventDefault();showCmdPal()}
+  if((e.ctrlKey||e.metaKey)&&e.key==='t'){e.preventDefault();createTab('agent://home')}
+  if((e.ctrlKey||e.metaKey)&&e.key==='w'){e.preventDefault();closeTab(S.at)}
+  if((e.ctrlKey||e.metaKey)&&e.key==='`'){e.preventDefault();toggleTerm()}
+  if(e.key==='Escape'){hideCmdPal();document.activeElement.blur()}
+});
+
+/* ═══════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════ */
+function init(){
+  renderTabs();renderVP('agent://home');updSugs('agent://home');initTerm();
+  setTimeout(async()=>{
+    await typeMsg('Hermes 3 online. I\'m your default agent — cost-efficient at $0.80/$2.40 per 1M tokens via OpenRouter. I\'m updated with the NousResearch repo.\n\nKey feature: **One-button audit** (click the shield icon or /audit). This runs 7 scans — static analysis, security, code smells, race conditions, memory leaks, type safety, and dependency health — catching what "done" often misses. Use it at any point in the build process.\n\n8 MCP servers loaded from modelcontextprotocol. 9 skills from aider, fabric, browser-use, crewAI, continue, and open-interpreter. Try /audit to start.');
+  },400);
+}
+init();
+</script>
+</body>
+</html>
