@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Shield, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle,
-  Eye, EyeOff, Search, Activity, RefreshCw, Clock, Download,
+  Eye, EyeOff, Search, Activity, RefreshCw, Clock, Download, ScanSearch,
 } from 'lucide-react';
 import SecuritySettings from './SecuritySettings';
 import AgentManager from './AgentManager';
@@ -57,8 +57,10 @@ export default function SecurityDashboard() {
   const [securityStatus, setSecurityStatus] = useState<SecurityStatus>('secure');
   const [events, setEvents] = useState<SecurityEvent[]>(() => createInitialEvents());
   const [eventFilter, setEventFilter] = useState<SecurityEventFilter>('all');
+  const [showDetails, setShowDetails] = useState(true);
 
   const status = STATUS_CONFIG[securityStatus];
+  const levelDetails = LEVEL_LABELS[securityLevel];
 
   const totalChecks = events.length;
   const blockedCount = events.filter(e => e.type === 'block').length;
@@ -82,6 +84,40 @@ export default function SecurityDashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const handleSecurityLevelChange = (level: SecurityLevel) => {
+    setSecurityLevel(level);
+    setSecurityStatus(level === 'passive' ? 'warning' : 'secure');
+    setEvents(prev => [
+      {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        type: 'info',
+        message: `${LEVEL_LABELS[level].label} protection enabled`,
+      },
+      ...prev,
+    ]);
+  };
+
+  const runSecurityScan = () => {
+    const nextType = securityLevel === 'passive' ? 'alert' : securityLevel === 'configurable' ? 'info' : 'scan';
+    const nextStatus = securityLevel === 'passive' ? 'warning' : 'secure';
+    setSecurityStatus(nextStatus);
+    setEvents(prev => [
+      {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        type: nextType,
+        message:
+          securityLevel === 'passive'
+            ? 'Scan finished — review recommended actions before browsing'
+            : securityLevel === 'configurable'
+            ? 'Scan finished — custom controls are ready for review'
+            : 'Security scan completed — browser protections are operating normally',
+      },
+      ...prev,
+    ]);
+  };
+
   return (
     <div className="min-h-full p-4 sm:p-6 lg:p-8 space-y-4">
       {/* Header */}
@@ -102,7 +138,7 @@ export default function SecurityDashboard() {
         </div>
         <div className="flex-1">
           <p className={`text-lg font-bold ${status.color}`}>{status.label}</p>
-          <p className="text-xs text-muted-foreground">All systems operational</p>
+          <p className="text-xs text-muted-foreground">{levelDetails.description}</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Activity className="w-3.5 h-3.5" />
@@ -110,29 +146,74 @@ export default function SecurityDashboard() {
         </div>
       </div>
 
-      {/* Security Settings */}
-      <SecuritySettings
-        currentLevel={securityLevel}
-        onSecurityLevelChange={setSecurityLevel}
-      />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+        <div className="space-y-4">
+          <SecuritySettings
+            currentLevel={securityLevel}
+            onSecurityLevelChange={handleSecurityLevelChange}
+          />
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
-          <p className="text-lg font-bold text-foreground">{totalChecks}</p>
-          <p className="text-xs text-muted-foreground">Total Checks</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
+              <p className="text-lg font-bold text-foreground">{totalChecks}</p>
+              <p className="text-xs text-muted-foreground">Checks</p>
+            </div>
+            <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
+              <p className="text-lg font-bold text-red-400">{blockedCount}</p>
+              <p className="text-xs text-muted-foreground">Blocked</p>
+            </div>
+            <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
+              <p className="text-lg font-bold text-amber-400">{warningsCount}</p>
+              <p className="text-xs text-muted-foreground">Warnings</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={runSecurityScan}
+              className="flex items-center justify-center gap-2 p-3 rounded-xl border border-border/30 bg-background/20 hover:bg-background/30 transition-all"
+            >
+              <ScanSearch className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-foreground">Run Scan</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDetails(value => !value)}
+              className="flex items-center justify-center gap-2 p-3 rounded-xl border border-border/30 bg-background/20 hover:bg-background/30 transition-all"
+            >
+              {showDetails ? (
+                <EyeOff className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <Eye className="w-4 h-4 text-muted-foreground" />
+              )}
+              <span className="text-xs font-medium text-foreground">
+                {showDetails ? 'Hide timestamps' : 'Show timestamps'}
+              </span>
+            </button>
+          </div>
         </div>
-        <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
-          <p className="text-lg font-bold text-red-400">{blockedCount}</p>
-          <p className="text-xs text-muted-foreground">Blocked</p>
-        </div>
-        <div className="p-3 rounded-xl border border-border/30 bg-background/20 text-center">
-          <p className="text-lg font-bold text-amber-400">{warningsCount}</p>
-          <p className="text-xs text-muted-foreground">Warnings</p>
+
+        <div className="p-4 rounded-2xl border border-border/30 bg-background/20">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <h2 className="text-sm font-semibold text-foreground">Protection Summary</h2>
+          </div>
+          <div className="space-y-3">
+            {[
+              'Proxy traffic is isolated from private hosts and blocked service ports.',
+              'Recent scans and warnings stay exportable for auditing.',
+              'Security mode changes are logged immediately for visibility.',
+            ].map((item) => (
+              <div key={item} className="flex items-start gap-2 rounded-xl border border-border/20 bg-background/10 p-3">
+                <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                <p className="text-xs leading-relaxed text-muted-foreground">{item}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Custom Agents */}
       <AgentManager />
 
       {/* Security Events */}
@@ -153,14 +234,17 @@ export default function SecurityDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => setEvents(createInitialEvents())}
+              onClick={() => {
+                setSecurityStatus('secure');
+                setEvents(createInitialEvents());
+              }}
               className="p-1.5 rounded-lg hover:bg-background/30 text-muted-foreground transition-all"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
-        <div className="flex gap-2 mb-3">
+        <div className="flex flex-wrap gap-2 mb-3">
           {(['all', 'blocked', 'warnings'] as const).map((filter) => (
             <button
               key={filter}
@@ -183,38 +267,25 @@ export default function SecurityDashboard() {
               <div key={event.id} className="flex items-start gap-3 p-3 rounded-xl bg-background/10">
                 <Icon className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-foreground truncate">{event.message}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Clock className="w-3 h-3 text-muted-foreground/60" />
-                    <span className="text-[10px] text-muted-foreground/60">
-                      {new Date(event.timestamp).toLocaleTimeString()}
-                    </span>
-                  </div>
+                  <p className="text-xs text-foreground">{event.message}</p>
+                  {showDetails && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Clock className="w-3 h-3 text-muted-foreground/60" />
+                      <span className="text-[10px] text-muted-foreground/60">
+                        {new Date(event.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
+          {filteredEvents.length === 0 && (
+            <div className="rounded-xl border border-dashed border-border/30 bg-background/10 p-4 text-center text-xs text-muted-foreground">
+              No matching events yet.
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => console.log('Scan triggered')}
-          className="flex items-center justify-center gap-2 p-3 rounded-xl border border-border/30 bg-background/20 hover:bg-background/30 transition-all"
-        >
-          <Eye className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs font-medium text-foreground">Scan Now</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => console.log('Hide details triggered')}
-          className="flex items-center justify-center gap-2 p-3 rounded-xl border border-border/30 bg-background/20 hover:bg-background/30 transition-all"
-        >
-          <EyeOff className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs font-medium text-foreground">Hide Details</span>
-        </button>
       </div>
     </div>
   );

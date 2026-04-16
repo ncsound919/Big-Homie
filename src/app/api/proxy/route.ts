@@ -9,6 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const MAX_BODY = 10 * 1024 * 1024; // 10 MB cap
 const FETCH_TIMEOUT = 15_000; // 15 s
+const BLOCKED_PORTS = new Set([
+  '21', '22', '23', '25', '53', '111', '135', '137', '138', '139', '143',
+  '389', '445', '465', '587', '636', '993', '995', '1433', '1521', '2049',
+  '2375', '2376', '3306', '3389', '5432', '5900', '6379', '9200', '11211', '27017',
+]);
 
 function isLocalHostname(hostname: string): boolean {
   return hostname === 'localhost' || hostname.endsWith('.localhost');
@@ -52,11 +57,14 @@ function isBlockedIpv6(hostname: string): boolean {
 /** Reject URLs that point at private / internal IPs (SSRF guard). */
 function isBlockedHost(urlStr: string): boolean {
   try {
-    const { hostname } = new URL(urlStr);
+    const { hostname, password, port, username } = new URL(urlStr);
     const normalized = hostname.toLowerCase();
 
     return (
       !normalized ||
+      Boolean(username) ||
+      Boolean(password) ||
+      (Boolean(port) && BLOCKED_PORTS.has(port)) ||
       isLocalHostname(normalized) ||
       isBlockedIpv4(normalized) ||
       isBlockedIpv6(normalized)
@@ -64,6 +72,23 @@ function isBlockedHost(urlStr: string): boolean {
   } catch {
     return true;
   }
+}
+
+function createProxyHeaders(contentType: string, isHtml: boolean): HeadersInit {
+  return {
+    'Content-Type': contentType,
+    'Cache-Control': isHtml ? 'private, no-store' : 'private, max-age=300',
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    ...(isHtml
+      ? {
+          'Content-Security-Policy':
+            "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; frame-ancestors 'self'; sandbox allow-forms allow-popups allow-scripts allow-same-origin",
+        }
+      : {}),
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -107,10 +132,7 @@ export async function GET(req: NextRequest) {
       }
       return new NextResponse(body, {
         status: upstream.status,
-        headers: {
-          'Content-Type': ct,
-          'Cache-Control': 'public, max-age=300',
-        },
+        headers: createProxyHeaders(ct, false),
       });
     }
 
@@ -131,10 +153,7 @@ export async function GET(req: NextRequest) {
 
     return new NextResponse(html, {
       status: upstream.status,
-      headers: {
-        'Content-Type': ct,
-        'Cache-Control': 'public, max-age=300',
-      },
+      headers: createProxyHeaders(ct, true),
     });
   } catch (err) {
     const message =

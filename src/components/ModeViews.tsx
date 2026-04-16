@@ -6,11 +6,11 @@ import {
   BookOpen, FileText, Code2, BarChart3, Filter,
   Link2, Play, Table, Braces,
   Plus, X, Star, Download,
-  Bookmark, History, Shield, Lock, MoreHorizontal,
-  VolumeX, Share2,
-  Camera, Home, RefreshCw,
-  Mic, Wand2, FileDown, Trash2, ExternalLink,
-  AlertTriangle, Loader2, Bug,
+  Bookmark, History, Shield, Lock,
+  VolumeX,
+  Home, RefreshCw,
+  Wand2, FileDown, Trash2, ExternalLink,
+  AlertTriangle, CheckCircle2, Loader2, Bug,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════
@@ -61,12 +61,17 @@ const QUICK_LINKS: { icon: typeof Globe; label: string; color: string; url: stri
   { icon: Globe, label: 'Google', color: 'text-blue-400', url: 'https://www.google.com/webhp?igu=1' },
   { icon: Code2, label: 'GitHub', color: 'text-foreground/80', url: 'https://github.com' },
   { icon: BookOpen, label: 'Wikipedia', color: 'text-emerald-400', url: 'https://en.m.wikipedia.org' },
-  { icon: BarChart3, label: 'Analytics', color: 'text-orange-400', url: 'https://analytics.google.com' },
   { icon: FileText, label: 'Docs', color: 'text-cyan-400', url: 'https://developer.mozilla.org' },
   { icon: Search, label: 'DuckDuckGo', color: 'text-amber-400', url: 'https://duckduckgo.com' },
   { icon: Shield, label: 'Privacy', color: 'text-emerald-400', url: 'https://privacyguides.org' },
   { icon: Bug, label: 'Ladybird', color: 'text-rose-400', url: 'https://ladybird.org' },
 ];
+
+const BROWSER_GUARDS = [
+  { label: 'Sandboxed', description: 'Embedded pages stay isolated inside the browser frame.' },
+  { label: 'No referrer', description: 'Cross-site requests do not receive your browsing source.' },
+  { label: 'Protected proxy', description: 'Private hosts and sensitive service ports are blocked.' },
+] as const;
 
 function normalizeUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -255,6 +260,23 @@ export function BrowseView() {
   const canGoBack = (activeTab?.historyIndex ?? 0) > 0;
   const canGoForward = activeTab ? activeTab.historyIndex < activeTab.history.length - 1 : false;
   const isOnPage = !!activeTab?.url;
+  const activeDomain = activeTab?.url ? domainFromUrl(activeTab.url) : 'Start browsing';
+  const connectionState = activeTab?.url?.startsWith('https://')
+    ? { label: 'Secure', icon: CheckCircle2, className: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' }
+    : activeTab?.url
+    ? { label: 'Check site', icon: AlertTriangle, className: 'text-amber-400 bg-amber-500/10 border-amber-500/20' }
+    : { label: 'Ready', icon: Shield, className: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
+  const ConnectionIcon = connectionState.icon;
+
+  const clearHistory = useCallback(() => {
+    setGlobalHistory([]);
+    setPanel('none');
+  }, []);
+
+  const openExternally = useCallback(() => {
+    if (!activeTab?.url) return;
+    window.open(activeTab.url, '_blank', 'noopener,noreferrer');
+  }, [activeTab]);
 
   return (
     <div className="h-full flex flex-col">
@@ -379,11 +401,13 @@ export function BrowseView() {
           <Download className="w-3.5 h-3.5" />
         </button>
         <div className="w-px h-4 bg-border/20" />
-        <button className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/10 transition-all" title="Screenshot">
-          <Camera className="w-3.5 h-3.5" />
-        </button>
-        <button className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/10 transition-all" title="Share">
-          <Share2 className="w-3.5 h-3.5" />
+        <button
+          onClick={openExternally}
+          disabled={!isOnPage}
+          className={`p-1.5 rounded-lg transition-all ${isOnPage ? 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/10' : 'text-muted-foreground/20'}`}
+          title="Open in new tab"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={() => setShowAISidebar(v => !v)}
@@ -392,9 +416,35 @@ export function BrowseView() {
         >
           <Wand2 className="w-3.5 h-3.5" />
         </button>
-        <button className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/10 transition-all" title="More">
-          <MoreHorizontal className="w-3.5 h-3.5" />
-        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border/20 bg-background/20">
+        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold ${connectionState.className}`}>
+          <ConnectionIcon className="w-3 h-3" />
+          {connectionState.label}
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border/30 bg-background/30 text-[10px] text-muted-foreground">
+          <Globe className="w-3 h-3 text-blue-400" />
+          <span className="truncate max-w-[180px]">{activeDomain}</span>
+        </div>
+        <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border/30 bg-background/30 text-[10px] text-muted-foreground">
+          <Shield className="w-3 h-3 text-emerald-400" />
+          Sandboxed proxy
+        </div>
+        <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border/30 bg-background/30 text-[10px] text-muted-foreground">
+          <History className="w-3 h-3 text-cyan-400" />
+          {globalHistory.length} recent
+        </div>
+        {globalHistory.length > 0 && (
+          <button
+            type="button"
+            onClick={clearHistory}
+            className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border/30 bg-background/30 text-[10px] text-muted-foreground hover:text-foreground hover:border-border/50 transition-all"
+          >
+            <Trash2 className="w-3 h-3" />
+            Clear history
+          </button>
+        )}
       </div>
 
       {/* ─── Main Content Area ─── */}
@@ -487,8 +537,8 @@ export function BrowseView() {
                 <div className="h-full w-1/3 bg-blue-500 animate-[loading-bar_1.5s_ease-in-out_infinite]" />
               </div>
             )}
-            {/* Error overlay */}
-            {activeTab.error ? (
+              {/* Error overlay */}
+             {activeTab.error ? (
               <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
                 <div className="text-center space-y-3 max-w-sm px-6">
                   <div className="mx-auto w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
@@ -497,7 +547,7 @@ export function BrowseView() {
                   <h3 className="text-sm font-semibold text-foreground">Can&apos;t display this page</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">{activeTab.error}</p>
                   <div className="flex items-center justify-center gap-2 pt-1">
-                    <button onClick={() => { window.open(activeTab.url, '_blank', 'noopener,noreferrer'); }} className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all">
+                    <button onClick={openExternally} className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all">
                       Open in new window
                     </button>
                     <button onClick={goHome} className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-muted/10 border border-border/30 text-muted-foreground hover:bg-muted/20 transition-all">
@@ -535,12 +585,12 @@ export function BrowseView() {
               </div>
               <h2 className="text-lg font-bold text-foreground">AgentBrowser</h2>
               <p className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
-                AI-powered browsing with built-in automation. Type a URL, search with natural language,
-                or let AI navigate for you.
+                Faster browsing with the essentials up front: search, trusted shortcuts,
+                and safer embedded page handling by default.
               </p>
 
               {/* Quick links grid */}
-              <div className="grid grid-cols-4 gap-3 max-w-sm mx-auto pt-2">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 max-w-2xl mx-auto pt-2">
                 {QUICK_LINKS.map(link => (
                   <button
                     key={link.label}
@@ -553,9 +603,53 @@ export function BrowseView() {
                 ))}
               </div>
 
-              {/* Feature badges */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
-                {['Ad blocker', 'AI summarize', 'Auto-fill', 'Password vault', 'Tab groups', 'Reader mode', 'Screenshot'].map(feat => (
+              <div className="grid gap-3 pt-1 text-left sm:grid-cols-3">
+                {BROWSER_GUARDS.map(guard => (
+                  <div key={guard.label} className="rounded-2xl border border-border/20 bg-background/20 p-4">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                      <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                      {guard.label}
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                      {guard.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {globalHistory.length > 0 && (
+                <div className="rounded-2xl border border-border/20 bg-background/20 p-4 text-left">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                      <History className="w-3.5 h-3.5 text-cyan-400" />
+                      Recent pages
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearHistory}
+                      className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {globalHistory.slice(0, 5).map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => navigateTo(entry.url)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border/30 bg-background/30 px-3 py-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-all"
+                      >
+                        <Globe className="w-3 h-3 text-blue-400" />
+                        <span className="max-w-[140px] truncate">{entry.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                {['Bookmarks', 'History', 'Downloads', 'AI assist'].map(feat => (
                   <span key={feat} className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-blue-500/8 border border-blue-500/15 text-blue-400/80">{feat}</span>
                 ))}
               </div>
