@@ -143,7 +143,7 @@ class WorkingMemory:
             return
         lowest_key = min(
             self.items,
-            key=lambda k: (self.items[k].importance, -self.items[k].access_count),
+            key=lambda k: (self.items[k].importance, self.items[k].access_count),
         )
         del self.items[lowest_key]
 
