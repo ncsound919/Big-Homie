@@ -372,13 +372,17 @@ class LLMGateway:
                         self.thoughts_logger.log_cost_analysis(
                             operation=f"{attempt_provider.value}/{attempt_model}",
                             estimated_cost=attempt_estimate.estimated_cost,
-                            budget_impact=f"Daily: ${budget_status.daily_spent:.2f}/${budget_status.daily_limit:.2f}",
+                            budget_impact=(
+                                f"Daily: ${budget_status.daily_spent:.2f}"
+                                f"/${budget_status.daily_limit:.2f}"
+                            ),
                         )
 
                     approved = await self.cost_guard.check_budget_and_approve(attempt_estimate)
                     if not approved:
                         logger.warning(
-                            f"Operation denied by cost guard for {attempt_provider.value}/{attempt_model}"
+                            f"Operation denied by cost guard for "
+                            f"{attempt_provider.value}/{attempt_model}"
                         )
                         if attempt_index == 0:
                             return {
@@ -397,7 +401,9 @@ class LLMGateway:
 
                 if attempt_index > 0:
                     logger.warning(
-                        f"Falling back to {attempt_provider.value}/{attempt_model} for {task_type.value}"
+                        f"Falling back to "
+                        f"{attempt_provider.value}/{attempt_model} "
+                        f"for {task_type.value}"
                     )
                     if self.thoughts_logger:
                         self.thoughts_logger.log_decision(
@@ -925,7 +931,8 @@ class LLMGateway:
                     tool_args = tool_call.input
                     tool_call_id = tool_call.id
                 else:
-                    # OpenAI ChatCompletionMessageToolCall: .function.name/.arguments (JSON str), .id
+                    # OpenAI ChatCompletionMessageToolCall:
+                    # .function.name/.arguments (JSON str), .id
                     tool_name = tool_call.function.name
                     tool_args = json.loads(tool_call.function.arguments)
                     tool_call_id = tool_call.id
@@ -950,7 +957,8 @@ class LLMGateway:
 
             # Build provider-specific follow-up messages
             if provider == Provider.ANTHROPIC.value:
-                # Anthropic: replay original content blocks in assistant turn, then tool_result blocks in user turn
+                # Anthropic: replay original content blocks in
+                # assistant turn, then tool_result blocks in user turn
                 current_messages.append(
                     {
                         "role": "assistant",
@@ -971,7 +979,8 @@ class LLMGateway:
                     }
                 )
             else:
-                # OpenAI: assistant message carries serialised tool_calls; one "tool" message per result
+                # OpenAI: assistant message carries serialised
+                # tool_calls; one "tool" message per result
                 current_messages.append(
                     {
                         "role": "assistant",

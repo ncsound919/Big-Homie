@@ -102,7 +102,8 @@ class LogReviewSystem:
                                 filtered.append(line)
                         except ValueError:
                             logger.debug(
-                                f"log_review: skipping line with unparseable timestamp: {line[:80]!r}"
+                                f"log_review: skipping line with "
+                                f"unparseable timestamp: {line[:80]!r}"
                             )
                 lines = filtered
 
@@ -232,14 +233,39 @@ class LogReviewSystem:
     def _suggest_fix(self, error_signature: str, category: str) -> str:
         """Generate suggested fix for error pattern"""
         fixes = {
-            "api": "Check API key configuration and rate limits. Add retry logic with exponential backoff.",
-            "llm": "Verify model availability and API key. Check token limits and request formatting.",
-            "memory": "Check database file permissions. Verify ChromaDB installation and storage path.",
-            "file": "Verify file paths exist. Add proper error handling for file operations.",
-            "network": "Add timeout and retry logic. Check network connectivity and firewall settings.",
-            "parsing": "Add JSON validation before parsing. Handle malformed responses gracefully.",
-            "config": "Verify .env file exists and contains required keys. Check settings validation.",
-            "browser": "Check Playwright installation. Add wait conditions before interacting with elements.",
+            "api": (
+                "Check API key configuration and rate limits. "
+                "Add retry logic with exponential backoff."
+            ),
+            "llm": (
+                "Verify model availability and API key. "
+                "Check token limits and request formatting."
+            ),
+            "memory": (
+                "Check database file permissions. "
+                "Verify ChromaDB installation and storage path."
+            ),
+            "file": (
+                "Verify file paths exist. "
+                "Add proper error handling for file operations."
+            ),
+            "network": (
+                "Add timeout and retry logic. "
+                "Check network connectivity and firewall settings."
+            ),
+            "parsing": (
+                "Add JSON validation before parsing. "
+                "Handle malformed responses gracefully."
+            ),
+            "config": (
+                "Verify .env file exists and contains required keys. "
+                "Check settings validation."
+            ),
+            "browser": (
+                "Check Playwright installation. "
+                "Add wait conditions before interacting "
+                "with elements."
+            ),
         }
 
         return fixes.get(category, "Review error context and add appropriate error handling.")

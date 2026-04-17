@@ -292,7 +292,8 @@ class MarketingDashboardWidget(QWidget):
                     messages = [
                         {
                             "role": "system",
-                            "content": "You are a world-class marketing copywriter and content strategist. "
+                            "content": "You are a world-class marketing "
+                            "copywriter and content strategist. "
                             "Produce polished, engaging content that drives real results.",
                         },
                         {"role": "user", "content": self._prompt},

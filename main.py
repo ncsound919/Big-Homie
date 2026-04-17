@@ -106,10 +106,13 @@ class AgentWorker(QThread):
             if preview and preview["warning_triggered"]:
                 self.preflight_notice.emit(
                     f"Estimated request cost ${preview['estimated_cost']:.4f} "
-                    f"using {preview['model']} exceeds the ${preview['warning_threshold']:.2f} spend warning threshold."
+                    f"using {preview['model']} exceeds the "
+                    f"${preview['warning_threshold']:.2f} "
+                    f"spend warning threshold."
                 )
                 self.status_update.emit(
-                    f"Estimated cost ${preview['estimated_cost']:.4f} — above spend warning threshold"
+                    f"Estimated cost ${preview['estimated_cost']:.4f}"
+                    " — above spend warning threshold"
                 )
 
             self.progress_update.emit(50, "Generating response")
@@ -528,7 +531,8 @@ class BigHomieGUI(QMainWindow):
             if "Cron" in self.tabs.tabText(i):
                 self.tabs.setCurrentIndex(i)
                 self.status_bar.showMessage(
-                    f"Skill '{skill_name}' ready to schedule — click ➕ Add Task and link the skill."
+                    f"Skill '{skill_name}' ready to schedule"
+                    " — click ➕ Add Task and link the skill."
                 )
                 return
 
@@ -538,7 +542,8 @@ class BigHomieGUI(QMainWindow):
         history = memory.get_task_history(limit=100)
         for item in history:
             self.history_list.addItem(
-                f"[{item['timestamp']}] {item['task'][:50]}... - {item['status']} (${item['cost']:.4f})"
+                f"[{item['timestamp']}] {item['task'][:50]}..."
+                f" - {item['status']} (${item['cost']:.4f})"
             )
 
     def new_session(self):
@@ -561,7 +566,9 @@ class BigHomieGUI(QMainWindow):
         reply = QMessageBox.warning(
             self,
             "Clear Memory",
-            "Clear Memory is not implemented yet. No history, skills, or preferences will be deleted.\n\n"
+            "Clear Memory is not implemented yet. "
+            "No history, skills, or preferences "
+            "will be deleted.\n\n"
             "Select Yes to acknowledge this message.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
