@@ -522,7 +522,7 @@ class BigHomieGUI(QMainWindow):
             color = color_map.get(state, "#9E9E9E")
             self.kairos_status_label.setText(f"🔮 KAIROS: {state}")
             self.kairos_status_label.setStyleSheet(f"font-weight: bold; color: {color};")
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     def _on_skill_scheduled(self, skill_name: str):
@@ -777,7 +777,7 @@ class BigHomieGUI(QMainWindow):
         # Could load window geometry, last session, etc.
         pass
 
-    def closeEvent(self, event):
+    def closeEvent(self, event):  # noqa: N802
         """Handle window close"""
         reply = QMessageBox.question(
             self,

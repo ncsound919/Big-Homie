@@ -323,10 +323,10 @@ class ContextWindowManager:
                 f"Truncating system messages to fit."
             )
             # Keep system messages but cap them; preserve at least some conversation
-            MIN_CONVERSATION_BUDGET_RATIO = 0.1  # Reserve 10% of limit for conversation
-            MIN_CONVERSATION_TOKENS = 512  # Absolute minimum conversation budget
+            min_conversation_budget_ratio = 0.1  # Reserve 10% of limit for conversation
+            min_conversation_tokens = 512  # Absolute minimum conversation budget
             remaining_budget = max(
-                int(limit * MIN_CONVERSATION_BUDGET_RATIO), MIN_CONVERSATION_TOKENS
+                int(limit * min_conversation_budget_ratio), min_conversation_tokens
             )
             # Trim system messages to leave room
             system_budget = limit - remaining_budget

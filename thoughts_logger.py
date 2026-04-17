@@ -17,7 +17,7 @@ from config import settings
 try:
     from rich.console import Console
     from rich.panel import Panel
-    from rich.syntax import Syntax
+    from rich.syntax import Syntax  # noqa: F401
 
     RICH_AVAILABLE = True
 except ImportError:

@@ -26,7 +26,7 @@ class TestAuditTrail:
     def test_log_entry_has_required_fields(self, audit_trail, tmp_path):
         audit_trail.log(action="create_file", details={"path": "/tmp/x"})
         log_file = tmp_path / "audit.jsonl"
-        entries = [json.loads(l) for l in log_file.read_text().splitlines() if l]
+        entries = [json.loads(line) for line in log_file.read_text().splitlines() if line]
         entry = entries[-1]
         assert "action" in entry
         assert "timestamp" in entry

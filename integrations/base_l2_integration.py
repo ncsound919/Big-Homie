@@ -180,7 +180,7 @@ class BaseL2Integration:
 
             try:
                 tx_receipt = await asyncio.to_thread(self.w3.eth.get_transaction_receipt, tx_hash)
-            except Exception:
+            except Exception:  # noqa: S110
                 pass  # Transaction might not be mined yet
 
             return BaseL2Result(

@@ -365,7 +365,7 @@ Execute each step in order and provide the complete output."""
             try:
                 self._get_memory().record_skill_result(skill.name, True, duration)
             except Exception:
-                pass
+                logger.debug(f"Failed to record skill result for {skill.name}")
 
             return SkillExecutionResult(
                 skill_id=skill_id,
@@ -385,7 +385,7 @@ Execute each step in order and provide the complete output."""
             try:
                 self._get_memory().record_skill_result(skill.name, False, duration)
             except Exception:
-                pass
+                logger.debug(f"Failed to record skill failure for {skill.name}")
 
             return SkillExecutionResult(
                 skill_id=skill_id, success=False, error=str(e), duration_seconds=duration

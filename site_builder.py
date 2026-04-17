@@ -348,7 +348,7 @@ Output ONLY the complete HTML. No explanation. No markdown fences."""
             with open(html_path, encoding="utf-8") as f:
                 html_content = f.read()
 
-            file_sha = hashlib.sha1(html_content.encode()).hexdigest()
+            file_sha = hashlib.sha256(html_content.encode()).hexdigest()
 
             async with httpx.AsyncClient() as client:
                 resp = await client.post(

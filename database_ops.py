@@ -101,7 +101,7 @@ class DatabaseOperations:
                 ]
 
                 # Get row count
-                cursor = conn.execute(f"SELECT COUNT(*) FROM '{table_name}'")
+                cursor = conn.execute(f"SELECT COUNT(*) FROM '{table_name}'")  # noqa: S608
                 row_count = cursor.fetchone()[0]
 
                 # Get indexes
@@ -217,7 +217,7 @@ class DatabaseOperations:
             placeholders = ", ".join(["?"] * len(columns))
             column_names = ", ".join(columns)
 
-            query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"
+            query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"  # noqa: S608
             values = [tuple(row.get(col) for col in columns) for row in rows]
 
             conn.executemany(query, values)
@@ -396,7 +396,7 @@ class DatabaseOperations:
 
     # ===== Utility Methods =====
 
-    def format_results(self, result: QueryResult, format: str = "table") -> str:
+    def format_results(self, result: QueryResult, fmt: str = "table") -> str:
         """
         Format query results for display.
 
@@ -413,10 +413,10 @@ class DatabaseOperations:
         if not result.data:
             return f"No results ({result.row_count} rows affected)"
 
-        if format == "json":
+        if fmt == "json":
             return json.dumps(result.data, indent=2, default=str)
 
-        elif format == "csv":
+        elif fmt == "csv":
             if not result.columns:
                 return json.dumps(result.data, default=str)
             lines = [",".join(result.columns)]

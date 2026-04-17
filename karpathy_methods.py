@@ -238,7 +238,7 @@ class TemperatureCalibrator:
     }
 
     @property
-    def TEMPERATURE_MAP(self) -> dict[TaskNature, float]:
+    def TEMPERATURE_MAP(self) -> dict[TaskNature, float]:  # noqa: N802
         """Temperature map populated from settings, with hard-coded fallbacks."""
         return {
             TaskNature.FACTUAL: getattr(settings, "karpathy_temp_factual", 0.0),

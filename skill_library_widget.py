@@ -109,7 +109,7 @@ class CreateSkillDialog(QDialog):
         self.accept()
 
     def _parse_workflow(self) -> list:
-        lines = [l.strip() for l in self._workflow.toPlainText().splitlines() if l.strip()]
+        lines = [line.strip() for line in self._workflow.toPlainText().splitlines() if line.strip()]
         if not lines:
             raise ValueError("At least one workflow step is required.")
         steps = []

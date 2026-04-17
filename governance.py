@@ -406,7 +406,7 @@ class AuditTrail:
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
         # Use parameterized query for limit as well
-        query = f"SELECT * FROM audit_log {where} ORDER BY timestamp DESC LIMIT ?"
+        query = f"SELECT * FROM audit_log {where} ORDER BY timestamp DESC LIMIT ?"  # noqa: S608
         params.append(limit)
 
         with self._conn() as db:
@@ -706,7 +706,7 @@ except Exception as e:
         # Start with minimal environment
         env = {
             "PATH": "/usr/bin:/bin",
-            "HOME": "/tmp",
+            "HOME": "/tmp",  # noqa: S108
             "LANG": "en_US.UTF-8",
             "PYTHONDONTWRITEBYTECODE": "1",
         }
@@ -962,7 +962,7 @@ class KillSwitch:
                     details={"reason": reason},
                 )
             except Exception:
-                pass
+                logger.debug("Failed to log kill switch event to audit trail")
 
             logger.critical("🚨 All systems halted. State preserved.")
 

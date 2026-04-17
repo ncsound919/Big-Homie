@@ -137,7 +137,7 @@ class PersistentShellManager:
                 try:
                     process.kill()
                     await process.wait()
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
             raise
 

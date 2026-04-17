@@ -465,7 +465,7 @@ Respond with ONLY the context label (e.g. @content). No explanation."""
                 if ctx.value in raw:
                     return ctx
         except Exception:
-            pass
+            logger.debug("Failed to classify GSD context from LLM response")
         return GSDContext.MISC
 
     # ── Reflect (weekly review) ───────────────────────────────────────────────
