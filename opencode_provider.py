@@ -13,8 +13,8 @@ Usage:
     from opencode_provider import opencode_chat, is_opencode_available
 """
 
-import os
 import logging
+import os
 from typing import Optional
 
 try:
@@ -32,9 +32,16 @@ OPENCODE_TIMEOUT: int = int(os.getenv("OPENCODE_TIMEOUT", "120"))
 
 # Task types that should always route through opencode
 CODE_TASK_TYPES = {
-    "code", "scaffold", "debug", "refactor", "review",
-    "generate_file", "write_script", "build_endpoint",
-    "saas_scaffold", "maas_scaffold",
+    "code",
+    "scaffold",
+    "debug",
+    "refactor",
+    "review",
+    "generate_file",
+    "write_script",
+    "build_endpoint",
+    "saas_scaffold",
+    "maas_scaffold",
 }
 
 
@@ -111,6 +118,7 @@ def install_opencode_as_default() -> bool:
     """
     try:
         import router  # type: ignore
+
         original_route = getattr(router, "route_coding_task", None)
 
         if original_route is None:

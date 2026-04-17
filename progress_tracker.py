@@ -2,17 +2,20 @@
 Progress Tracker for Big Homie
 Provides visual feedback during long-running operations
 """
+
 import time
-from typing import Optional, Callable
 from enum import Enum
-from datetime import datetime
+from typing import Callable, Optional
+
 from loguru import logger
+
 
 class ProgressState(str, Enum):
     IDLE = "idle"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+
 
 class ProgressTracker:
     """Tracks and displays progress for long-running tasks"""
@@ -92,6 +95,7 @@ class ProgressTracker:
         if not self.start_time:
             return 0.0
         return time.time() - self.start_time
+
 
 # Global progress tracker instance
 progress_tracker = ProgressTracker()

@@ -3,45 +3,49 @@ Safety & Governance - Tier 7
 Human-in-the-Loop Gates, Observability & Audit Trail,
 Sandboxed Execution, Kill Switch Protocol
 """
+
 import asyncio
+import hashlib
 import json
 import os
-import hashlib
-import signal
 import sqlite3
 import sys
-import time
 import threading
-from typing import Dict, List, Any, Optional, Callable
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from enum import Enum
-from loguru import logger
-from config import settings
+from pathlib import Path
+from typing import Any, Callable, Optional
 
+from loguru import logger
+
+from config import settings
 
 # ===================================================================
 # Human-in-the-Loop Gates
 # ===================================================================
 
+
 class ActionRiskLevel(str, Enum):
     """Risk levels for agent actions"""
-    LOW = "low"          # Auto-approve
-    MEDIUM = "medium"    # Notify user
-    HIGH = "high"        # Require approval
+
+    LOW = "low"  # Auto-approve
+    MEDIUM = "medium"  # Notify user
+    HIGH = "high"  # Require approval
     CRITICAL = "critical"  # Require explicit confirmation
 
 
 @dataclass
 class ApprovalRequest:
     """A request for human approval"""
+
     request_id: str
     action: str
     risk_level: ActionRiskLevel
     description: str
     estimated_impact: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     approved: Optional[bool] = None
     approver: Optional[str] = None
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -61,13 +65,13 @@ class HumanInTheLoop:
     """
 
     def __init__(self):
-        self.pending_requests: Dict[str, ApprovalRequest] = {}
-        self.approval_history: List[ApprovalRequest] = []
+        self.pending_requests: dict[str, ApprovalRequest] = {}
+        self.approval_history: list[ApprovalRequest] = []
         self.approval_callback: Optional[Callable] = None
         self.auto_approve_low: bool = True
 
         # Risk classification rules
-        self.risk_rules: Dict[str, ActionRiskLevel] = {
+        self.risk_rules: dict[str, ActionRiskLevel] = {
             # Low risk
             "search": ActionRiskLevel.LOW,
             "read": ActionRiskLevel.LOW,
@@ -115,8 +119,8 @@ class HumanInTheLoop:
         description: str,
         estimated_impact: str = "",
         risk_level: Optional[ActionRiskLevel] = None,
-        metadata: Optional[Dict] = None,
-        timeout: float = 300.0
+        metadata: Optional[dict] = None,
+        timeout: float = 300.0,
     ) -> bool:
         """
         Request human approval for an action.
@@ -139,24 +143,21 @@ class HumanInTheLoop:
             risk_level=risk_level,
             description=description,
             estimated_impact=estimated_impact,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         self.pending_requests[request.request_id] = request
 
         logger.info(
-            f"🔒 Approval requested [{risk_level.value}]: {action}\n"
-            f"   Description: {description}"
+            f"🔒 Approval requested [{risk_level.value}]: {action}\n   Description: {description}"
         )
 
         # If callback is set, use it for approval
         if self.approval_callback:
             try:
                 approved = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
-                        None, self.approval_callback, request
-                    ),
-                    timeout=timeout
+                    asyncio.get_event_loop().run_in_executor(None, self.approval_callback, request),
+                    timeout=timeout,
                 )
             except asyncio.TimeoutError:
                 logger.warning(f"Approval timed out for: {action}")
@@ -187,16 +188,18 @@ class HumanInTheLoop:
 # Observability & Audit Trail
 # ===================================================================
 
+
 @dataclass
 class AuditEntry:
     """An immutable audit log entry"""
+
     entry_id: str
     timestamp: str
     event_type: str
     actor: str
     action: str
     target: str
-    details: Dict[str, Any]
+    details: dict[str, Any]
     hash: str  # SHA-256 hash for integrity verification
     previous_hash: str  # Chain to previous entry
 
@@ -266,7 +269,7 @@ class AuditTrail:
         actor: str,
         action: str,
         target: str = "",
-        details: Optional[Dict] = None
+        details: Optional[dict] = None,
     ) -> AuditEntry:
         """
         Log an auditable event.
@@ -288,7 +291,11 @@ class AuditTrail:
         details = details or {}
 
         # Create hash for integrity
-        entry_data = f"{timestamp}:{event_type}:{actor}:{action}:{target}:{json.dumps(details, sort_keys=True)}"
+        details_json = json.dumps(details, sort_keys=True)
+        entry_data = (
+            f"{timestamp}:{event_type}:{actor}"
+            f":{action}:{target}:{details_json}"
+        )
         entry_hash = self._compute_hash(entry_data, self._last_hash)
 
         entry = AuditEntry(
@@ -300,18 +307,28 @@ class AuditTrail:
             target=target,
             details=details,
             hash=entry_hash,
-            previous_hash=self._last_hash
+            previous_hash=self._last_hash,
         )
 
         # Persist
         with self._conn() as db:
             db.execute(
                 """INSERT INTO audit_log
-                   (entry_id, timestamp, event_type, actor, action, target, details, hash, previous_hash)
+                   (entry_id, timestamp, event_type,
+                    actor, action, target, details,
+                    hash, previous_hash)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (entry.entry_id, entry.timestamp, entry.event_type,
-                 entry.actor, entry.action, entry.target,
-                 json.dumps(entry.details), entry.hash, entry.previous_hash)
+                (
+                    entry.entry_id,
+                    entry.timestamp,
+                    entry.event_type,
+                    entry.actor,
+                    entry.action,
+                    entry.target,
+                    json.dumps(entry.details),
+                    entry.hash,
+                    entry.previous_hash,
+                ),
             )
             db.commit()
 
@@ -319,7 +336,7 @@ class AuditTrail:
 
         return entry
 
-    def verify_integrity(self) -> Dict[str, Any]:
+    def verify_integrity(self) -> dict[str, Any]:
         """
         Verify the integrity of the entire audit trail.
 
@@ -328,7 +345,9 @@ class AuditTrail:
         """
         with self._conn() as db:
             rows = db.execute(
-                "SELECT entry_id, timestamp, event_type, actor, action, target, details, hash, previous_hash "
+                "SELECT entry_id, timestamp, event_type,"
+                " actor, action, target, details,"
+                " hash, previous_hash "
                 "FROM audit_log ORDER BY timestamp"
             ).fetchall()
 
@@ -344,10 +363,7 @@ class AuditTrail:
             except (TypeError, json.JSONDecodeError):
                 canonical_details = row[6]
 
-            entry_data = (
-                f"{row[1]}:{row[2]}:{row[3]}:{row[4]}:{row[5]}:"
-                f"{canonical_details}"
-            )
+            entry_data = f"{row[1]}:{row[2]}:{row[3]}:{row[4]}:{row[5]}:{canonical_details}"
             expected_hash = self._compute_hash(entry_data, expected_prev)
 
             if row[8] != expected_prev:
@@ -364,8 +380,9 @@ class AuditTrail:
             "valid": broken_at is None,
             "entries": len(rows),
             "broken_at_index": broken_at,
-            "message": "Integrity verified" if broken_at is None
-                       else f"Chain broken at entry {broken_at}"
+            "message": "Integrity verified"
+            if broken_at is None
+            else f"Chain broken at entry {broken_at}",
         }
 
     def query(
@@ -373,8 +390,8 @@ class AuditTrail:
         event_type: Optional[str] = None,
         actor: Optional[str] = None,
         since: Optional[str] = None,
-        limit: int = 100
-    ) -> List[Dict]:
+        limit: int = 100,
+    ) -> list[dict]:
         """Query the audit trail"""
         conditions = []
         params = []
@@ -407,29 +424,32 @@ class AuditTrail:
                 "action": r[4],
                 "target": r[5],
                 "details": json.loads(r[6]) if r[6] else {},
-                "hash": r[7]
+                "hash": r[7],
             }
             for r in rows
         ]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get audit trail statistics"""
         with self._conn() as db:
             total = db.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
             types = db.execute(
-                "SELECT event_type, COUNT(*) FROM audit_log GROUP BY event_type ORDER BY COUNT(*) DESC"
+                "SELECT event_type, COUNT(*) FROM audit_log"
+                " GROUP BY event_type"
+                " ORDER BY COUNT(*) DESC"
             ).fetchall()
 
         return {
             "total_entries": total,
             "by_type": {r[0]: r[1] for r in types},
-            "integrity": self.verify_integrity()
+            "integrity": self.verify_integrity(),
         }
 
 
 # ===================================================================
 # Sandboxed Execution
 # ===================================================================
+
 
 @dataclass(init=False)
 class SandboxConfig:
@@ -442,13 +462,14 @@ class SandboxConfig:
         underlying execution backend explicitly enforces them. The local
         executor should not treat them as strict security boundaries.
     """
+
     timeout_seconds: int = 30
     requested_max_memory_mb: int = 512
     max_output_size: int = 100000
-    allowed_imports: Optional[List[str]] = None
-    blocked_imports: List[str] = field(default_factory=lambda: [
-        "subprocess", "shutil", "ctypes", "importlib"
-    ])
+    allowed_imports: Optional[list[str]] = None
+    blocked_imports: list[str] = field(
+        default_factory=lambda: ["subprocess", "shutil", "ctypes", "importlib"]
+    )
     requested_network_access: bool = False
     requested_filesystem_read: bool = True
     filesystem_write: bool = False
@@ -458,8 +479,8 @@ class SandboxConfig:
         timeout_seconds: int = 30,
         requested_max_memory_mb: int = 512,
         max_output_size: int = 100000,
-        allowed_imports: Optional[List[str]] = None,
-        blocked_imports: Optional[List[str]] = None,
+        allowed_imports: Optional[list[str]] = None,
+        blocked_imports: Optional[list[str]] = None,
         requested_network_access: bool = False,
         requested_filesystem_read: bool = True,
         filesystem_write: bool = False,
@@ -512,9 +533,12 @@ class SandboxConfig:
     @filesystem_read.setter
     def filesystem_read(self, value: bool) -> None:
         self.requested_filesystem_read = value
+
+
 @dataclass
 class SandboxResult:
     """Result of sandboxed execution"""
+
     success: bool
     output: str = ""
     error: Optional[str] = None
@@ -546,9 +570,7 @@ class SandboxedExecution:
         return self._audit
 
     async def execute_python(
-        self,
-        code: str,
-        config: Optional[SandboxConfig] = None
+        self, code: str, config: Optional[SandboxConfig] = None
     ) -> SandboxResult:
         """
         Execute Python code in a sandboxed environment.
@@ -569,7 +591,7 @@ class SandboxedExecution:
             actor="sandbox",
             action="execute_python",
             target="python_code",
-            details={"code_length": len(code)}
+            details={"code_length": len(code)},
         )
 
         # Safety: check for blocked imports
@@ -578,7 +600,7 @@ class SandboxedExecution:
                 return SandboxResult(
                     success=False,
                     error=f"Blocked import: {blocked}",
-                    execution_time_ms=(time.time() - start) * 1000
+                    execution_time_ms=(time.time() - start) * 1000,
                 )
 
         # Execute in subprocess with timeout
@@ -587,16 +609,17 @@ class SandboxedExecution:
             wrapper = self._create_sandbox_wrapper(code, cfg)
 
             process = await asyncio.create_subprocess_exec(
-                sys.executable, "-c", wrapper,
+                sys.executable,
+                "-c",
+                wrapper,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=self._get_restricted_env()
+                env=self._get_restricted_env(),
             )
 
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=cfg.timeout_seconds
+                    process.communicate(), timeout=cfg.timeout_seconds
                 )
             except asyncio.TimeoutError:
                 process.kill()
@@ -604,7 +627,7 @@ class SandboxedExecution:
                 return SandboxResult(
                     success=False,
                     error=f"Execution timed out after {cfg.timeout_seconds}s",
-                    execution_time_ms=(time.time() - start) * 1000
+                    execution_time_ms=(time.time() - start) * 1000,
                 )
 
             output = stdout.decode("utf-8", errors="replace")
@@ -612,20 +635,18 @@ class SandboxedExecution:
 
             # Truncate large outputs
             if len(output) > cfg.max_output_size:
-                output = output[:cfg.max_output_size] + "\n... [truncated]"
+                output = output[: cfg.max_output_size] + "\n... [truncated]"
 
             return SandboxResult(
                 success=process.returncode == 0,
                 output=output,
                 error=errors if errors else None,
-                execution_time_ms=(time.time() - start) * 1000
+                execution_time_ms=(time.time() - start) * 1000,
             )
 
         except Exception as e:
             return SandboxResult(
-                success=False,
-                error=str(e),
-                execution_time_ms=(time.time() - start) * 1000
+                success=False, error=str(e), execution_time_ms=(time.time() - start) * 1000
             )
 
     def _create_sandbox_wrapper(self, code: str, config: SandboxConfig) -> str:
@@ -647,8 +668,12 @@ class SandboxedExecution:
             )
             restrictions.append(
                 "import pathlib\n"
-                "def _block_write_text(self, *a, **kw): raise PermissionError('Write access denied in sandbox')\n"
-                "def _block_write_bytes(self, *a, **kw): raise PermissionError('Write access denied in sandbox')\n"
+                "def _block_write_text(self, *a, **kw):"
+                " raise PermissionError("
+                "'Write access denied in sandbox')\n"
+                "def _block_write_bytes(self, *a, **kw):"
+                " raise PermissionError("
+                "'Write access denied in sandbox')\n"
                 "pathlib.Path.write_text = _block_write_text\n"
                 "pathlib.Path.write_bytes = _block_write_bytes"
             )
@@ -672,14 +697,14 @@ import builtins
 {chr(10).join(restrictions)}
 {import_checks}
 try:
-{chr(10).join('    ' + line for line in code.splitlines())}
+{chr(10).join("    " + line for line in code.splitlines())}
 except Exception as e:
     print(f"Error: {{type(e).__name__}}: {{e}}", file=sys.stderr)
     sys.exit(1)
 """
         return wrapper
 
-    def _get_restricted_env(self) -> Dict[str, str]:
+    def _get_restricted_env(self) -> dict[str, str]:
         """Get restricted environment variables for sandbox"""
         # Start with minimal environment
         env = {
@@ -691,9 +716,14 @@ except Exception as e:
 
         # Never pass through sensitive variables
         sensitive = {
-            "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
-            "STRIPE_API_KEY", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY",
-            "DATABASE_URL", "POSTGRES_URL"
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENROUTER_API_KEY",
+            "STRIPE_API_KEY",
+            "GITHUB_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "DATABASE_URL",
+            "POSTGRES_URL",
         }
 
         for key, value in os.environ.items():
@@ -706,16 +736,40 @@ except Exception as e:
 
     # Allowlisted shell commands that can be executed
     ALLOWED_COMMANDS = {
-        "ls", "cat", "head", "tail", "grep", "find", "wc", "sort", "uniq",
-        "echo", "date", "pwd", "whoami", "env", "which", "file", "stat",
-        "diff", "tr", "cut", "awk", "sed", "python3", "python", "pip",
-        "node", "npm", "git", "curl", "wget",
+        "ls",
+        "cat",
+        "head",
+        "tail",
+        "grep",
+        "find",
+        "wc",
+        "sort",
+        "uniq",
+        "echo",
+        "date",
+        "pwd",
+        "whoami",
+        "env",
+        "which",
+        "file",
+        "stat",
+        "diff",
+        "tr",
+        "cut",
+        "awk",
+        "sed",
+        "python3",
+        "python",
+        "pip",
+        "node",
+        "npm",
+        "git",
+        "curl",
+        "wget",
     }
 
     async def execute_shell(
-        self,
-        command: str,
-        config: Optional[SandboxConfig] = None
+        self, command: str, config: Optional[SandboxConfig] = None
     ) -> SandboxResult:
         """
         Execute a shell command with sandbox restrictions.
@@ -732,26 +786,24 @@ except Exception as e:
         for pattern in dangerous:
             if pattern in command:
                 return SandboxResult(
-                    success=False,
-                    error=f"Blocked dangerous command pattern: {pattern}"
+                    success=False, error=f"Blocked dangerous command pattern: {pattern}"
                 )
 
         # Parse command into executable + args
         import shlex
+
         try:
             parts = shlex.split(command)
         except ValueError as e:
             return SandboxResult(
                 success=False,
                 error=f"Failed to parse command: {e}",
-                execution_time_ms=(time.time() - start) * 1000
+                execution_time_ms=(time.time() - start) * 1000,
             )
 
         if not parts:
             return SandboxResult(
-                success=False,
-                error="Empty command",
-                execution_time_ms=(time.time() - start) * 1000
+                success=False, error="Empty command", execution_time_ms=(time.time() - start) * 1000
             )
 
         base_cmd = os.path.basename(parts[0])
@@ -760,15 +812,15 @@ except Exception as e:
             return SandboxResult(
                 success=False,
                 error=f"Path-based commands not allowed in sandbox: {parts[0]!r}. "
-                      f"Use bare command names only.",
-                execution_time_ms=(time.time() - start) * 1000
+                f"Use bare command names only.",
+                execution_time_ms=(time.time() - start) * 1000,
             )
         if base_cmd not in self.ALLOWED_COMMANDS:
             return SandboxResult(
                 success=False,
                 error=f"Command not in allowlist: {base_cmd!r}. "
-                      f"Allowed: {', '.join(sorted(self.ALLOWED_COMMANDS))}",
-                execution_time_ms=(time.time() - start) * 1000
+                f"Allowed: {', '.join(sorted(self.ALLOWED_COMMANDS))}",
+                execution_time_ms=(time.time() - start) * 1000,
             )
 
         self._get_audit().log(
@@ -776,7 +828,7 @@ except Exception as e:
             actor="sandbox",
             action="execute_shell",
             target="shell_command",
-            details={"command": command[:200]}
+            details={"command": command[:200]},
         )
 
         try:
@@ -784,20 +836,18 @@ except Exception as e:
                 *parts,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=self._get_restricted_env()
+                env=self._get_restricted_env(),
             )
 
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=cfg.timeout_seconds
+                    process.communicate(), timeout=cfg.timeout_seconds
                 )
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()
                 return SandboxResult(
-                    success=False,
-                    error=f"Command timed out after {cfg.timeout_seconds}s"
+                    success=False, error=f"Command timed out after {cfg.timeout_seconds}s"
                 )
 
             output = stdout.decode("utf-8", errors="replace")
@@ -805,16 +855,14 @@ except Exception as e:
 
             return SandboxResult(
                 success=process.returncode == 0,
-                output=output[:cfg.max_output_size],
+                output=output[: cfg.max_output_size],
                 error=errors if errors else None,
-                execution_time_ms=(time.time() - start) * 1000
+                execution_time_ms=(time.time() - start) * 1000,
             )
 
         except Exception as e:
             return SandboxResult(
-                success=False,
-                error=str(e),
-                execution_time_ms=(time.time() - start) * 1000
+                success=False, error=str(e), execution_time_ms=(time.time() - start) * 1000
             )
 
 
@@ -822,23 +870,26 @@ except Exception as e:
 # Kill Switch Protocol
 # ===================================================================
 
+
 class KillSwitchState(str, Enum):
     """Kill switch states"""
-    ARMED = "armed"        # Ready to trigger
+
+    ARMED = "armed"  # Ready to trigger
     TRIGGERED = "triggered"  # Kill switch activated
     RECOVERING = "recovering"  # Restoring state
-    NORMAL = "normal"      # Normal operation
+    NORMAL = "normal"  # Normal operation
 
 
 @dataclass
 class AgentState:
     """Snapshot of agent state for recovery"""
+
     state_id: str
     timestamp: str
-    active_tasks: List[Dict] = field(default_factory=list)
-    pending_operations: List[Dict] = field(default_factory=list)
-    sub_agents: List[Dict] = field(default_factory=list)
-    memory_snapshot: Dict[str, Any] = field(default_factory=dict)
+    active_tasks: list[dict] = field(default_factory=list)
+    pending_operations: list[dict] = field(default_factory=list)
+    sub_agents: list[dict] = field(default_factory=list)
+    memory_snapshot: dict[str, Any] = field(default_factory=dict)
 
 
 class KillSwitch:
@@ -859,8 +910,8 @@ class KillSwitch:
 
     def __init__(self):
         self.state = KillSwitchState.ARMED
-        self._saved_states: List[AgentState] = []
-        self._shutdown_callbacks: List[Callable] = []
+        self._saved_states: list[AgentState] = []
+        self._shutdown_callbacks: list[Callable] = []
         self._lock = threading.Lock()
 
     def trigger(self, reason: str = "Manual trigger") -> AgentState:
@@ -875,8 +926,10 @@ class KillSwitch:
         with self._lock:
             if self.state == KillSwitchState.TRIGGERED:
                 logger.warning("Kill switch already triggered")
-                return self._saved_states[-1] if self._saved_states else AgentState(
-                    state_id="none", timestamp=datetime.now().isoformat()
+                return (
+                    self._saved_states[-1]
+                    if self._saved_states
+                    else AgentState(state_id="none", timestamp=datetime.now().isoformat())
                 )
 
             self.state = KillSwitchState.TRIGGERED
@@ -896,6 +949,7 @@ class KillSwitch:
             # 3. Halt heartbeat
             try:
                 from heartbeat import heartbeat
+
                 heartbeat.stop()
                 logger.info("Heartbeat stopped")
             except Exception as e:
@@ -908,7 +962,7 @@ class KillSwitch:
                     actor="kill_switch",
                     action="triggered",
                     target="all_systems",
-                    details={"reason": reason}
+                    details={"reason": reason},
                 )
             except Exception:
                 pass
@@ -920,31 +974,33 @@ class KillSwitch:
     def _capture_state(self) -> AgentState:
         """Capture current agent state for recovery"""
         import uuid
-        state = AgentState(
-            state_id=str(uuid.uuid4()),
-            timestamp=datetime.now().isoformat()
-        )
+
+        state = AgentState(state_id=str(uuid.uuid4()), timestamp=datetime.now().isoformat())
 
         # Capture active tasks from sub-agent orchestrator
         try:
             from sub_agents import orchestrator
+
             for wf_id, wf in orchestrator.active_workflows.items():
-                state.active_tasks.append({
-                    "workflow_id": wf_id,
-                    "description": wf.description,
-                    "task_count": len(wf.tasks),
-                    "completed": len([t for t in wf.tasks if t.status.value == "completed"])
-                })
+                state.active_tasks.append(
+                    {
+                        "workflow_id": wf_id,
+                        "description": wf.description,
+                        "task_count": len(wf.tasks),
+                        "completed": len([t for t in wf.tasks if t.status.value == "completed"]),
+                    }
+                )
         except Exception as e:
             logger.warning(f"Failed to capture sub-agent state: {e}")
 
         # Capture memory snapshot
         try:
             from memory import memory
+
             state.memory_snapshot = {
                 "preferences": {
                     "last_heartbeat": memory.get_preference(self.PREF_KEY_HEARTBEAT),
-                    "last_log_review": memory.get_preference(self.PREF_KEY_LOG_REVIEW)
+                    "last_log_review": memory.get_preference(self.PREF_KEY_LOG_REVIEW),
                 }
             }
         except Exception as e:
@@ -978,13 +1034,13 @@ class KillSwitch:
         """Register a shutdown callback"""
         self._shutdown_callbacks.append(callback)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get kill switch status"""
         return {
             "state": self.state.value,
             "saved_states": len(self._saved_states),
             "shutdown_callbacks": len(self._shutdown_callbacks),
-            "last_trigger": self._saved_states[-1].timestamp if self._saved_states else None
+            "last_trigger": self._saved_states[-1].timestamp if self._saved_states else None,
         }
 
 

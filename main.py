@@ -2,37 +2,51 @@
 Big Homie - Main GUI Application
 Cross-platform desktop application with modern UI
 """
-import sys
+
 import asyncio
-import uuid
-from pathlib import Path
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTextEdit, QLineEdit, QPushButton, QLabel, QTabWidget,
-    QListWidget, QSplitter, QStatusBar, QMenuBar, QMenu, QMessageBox
-)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QIcon, QPixmap, QAction, QFont
-from loguru import logger
-from config import settings
-from memory import memory
-from llm_gateway import llm, TaskType
-from progress_tracker import progress_tracker
-from correction_ledger import correction_ledger
-from tone_preference import tone_analyzer, preference_tracker
-from content_utils import smart_truncator, markdown_exporter
-from fact_metadata import fact_checker, metadata_tagger
-from time_awareness import time_awareness
-from financial_settings_widget import SecureFinancialSettings
-from cron_manager_widget import CronManagerWidget
-from skill_library_widget import SkillLibraryWidget
-from finance_dashboard_widget import FinanceDashboardWidget
-from marketing_dashboard_widget import MarketingDashboardWidget
 import json
+import sys
+import uuid
 from datetime import datetime
+from pathlib import Path
+
+from loguru import logger
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QAction, QFont, QIcon, QPixmap
+from PyQt6.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QStatusBar,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from config import settings
+from content_utils import markdown_exporter
+from correction_ledger import correction_ledger
+from cron_manager_widget import CronManagerWidget
+from fact_metadata import fact_checker, metadata_tagger
+from finance_dashboard_widget import FinanceDashboardWidget
+from financial_settings_widget import SecureFinancialSettings
+from llm_gateway import TaskType, llm
+from marketing_dashboard_widget import MarketingDashboardWidget
+from memory import memory
+from skill_library_widget import SkillLibraryWidget
+from time_awareness import time_awareness
+from tone_preference import preference_tracker, tone_analyzer
+
 
 class AgentWorker(QThread):
     """Background worker for agent tasks"""
+
     result_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     status_update = pyqtSignal(str)
@@ -83,7 +97,7 @@ class AgentWorker(QThread):
 
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": self.task}
+                {"role": "user", "content": self.task},
             ]
 
             self.progress_update.emit(30, "Checking costs")
@@ -101,9 +115,7 @@ class AgentWorker(QThread):
             self.progress_update.emit(50, "Generating response")
 
             # Get completion
-            result = loop.run_until_complete(
-                llm.complete(messages, task_type=self.task_type)
-            )
+            result = loop.run_until_complete(llm.complete(messages, task_type=self.task_type))
 
             response = result["content"]
 
@@ -125,11 +137,16 @@ class AgentWorker(QThread):
 
             # Save to memory with metadata
             memory.add_message(self.session_id, "user", self.task, {"tone": tone_analysis})
-            memory.add_message(self.session_id, "assistant", response, {
-                "tags": list(tags),
-                "fact_check": fact_analysis,
-                "model": result.get("_model", "unknown")
-            })
+            memory.add_message(
+                self.session_id,
+                "assistant",
+                response,
+                {
+                    "tags": list(tags),
+                    "fact_check": fact_analysis,
+                    "model": result.get("_model", "unknown"),
+                },
+            )
 
             # Determine domain without mutating the tags set
             tags_list = list(tags)
@@ -141,7 +158,7 @@ class AgentWorker(QThread):
                 domain=domain,
                 status="success",
                 result={"response": response, "tags": tags_list},
-                cost=llm.get_total_cost()
+                cost=llm.get_total_cost(),
             )
 
             self.progress_update.emit(100, "Complete")
@@ -185,6 +202,7 @@ Response Format:
 - Cite sources when relevant
 - Suggest next steps"""
 
+
 class BigHomieGUI(QMainWindow):
     """Main application window"""
 
@@ -227,11 +245,20 @@ class BigHomieGUI(QMainWindow):
         if logo_path.exists():
             logo_label = QLabel()
             pixmap = QPixmap(str(logo_path))
-            logo_label.setPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            logo_label.setPixmap(
+                pixmap.scaled(
+                    64,
+                    64,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
             header_layout.addWidget(logo_label)
 
         # Title
-        title_label = QLabel(f"<h1>{settings.app_name}</h1><p>Your AI-Powered Multi-Domain Agent</p>")
+        title_label = QLabel(
+            f"<h1>{settings.app_name}</h1><p>Your AI-Powered Multi-Domain Agent</p>"
+        )
         header_layout.addWidget(title_label)
         header_layout.addStretch()
 
@@ -242,7 +269,7 @@ class BigHomieGUI(QMainWindow):
         header_layout.addWidget(self.kairos_status_label)
 
         # Cost display
-        self.cost_label = QLabel(f"Session Cost: $0.00")
+        self.cost_label = QLabel("Session Cost: $0.00")
         self.cost_label.setStyleSheet("font-weight: bold; color: #4CAF50;")
         header_layout.addWidget(self.cost_label)
 
@@ -482,12 +509,12 @@ class BigHomieGUI(QMainWindow):
                 return
             state = daemon.state.value if hasattr(daemon.state, "value") else str(daemon.state)
             color_map = {
-                "running":       "#4CAF50",
-                "idle":          "#2196F3",
-                "processing":    "#FFC107",
-                "paused":        "#FF9800",
-                "stopped":       "#F44336",
-                "initializing":  "#9C27B0",
+                "running": "#4CAF50",
+                "idle": "#2196F3",
+                "processing": "#FFC107",
+                "paused": "#FF9800",
+                "stopped": "#F44336",
+                "initializing": "#9C27B0",
             }
             color = color_map.get(state, "#9E9E9E")
             self.kairos_status_label.setText(f"🔮 KAIROS: {state}")
@@ -517,9 +544,10 @@ class BigHomieGUI(QMainWindow):
     def new_session(self):
         """Start new session"""
         reply = QMessageBox.question(
-            self, "New Session",
+            self,
+            "New Session",
             "Clear current chat and start new session?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.chat_display.clear()
@@ -531,16 +559,17 @@ class BigHomieGUI(QMainWindow):
     def clear_memory(self):
         """Handle clear-memory request"""
         reply = QMessageBox.warning(
-            self, "Clear Memory",
+            self,
+            "Clear Memory",
             "Clear Memory is not implemented yet. No history, skills, or preferences will be deleted.\n\n"
             "Select Yes to acknowledge this message.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
             QMessageBox.information(
                 self,
                 "Not Implemented",
-                "Clear Memory is not available yet, and no data has been deleted."
+                "Clear Memory is not available yet, and no data has been deleted.",
             )
             self.status_bar.showMessage("Clear Memory not implemented; no data deleted")
 
@@ -556,7 +585,7 @@ class BigHomieGUI(QMainWindow):
         export_dir = settings.data_dir / "exports"
         export_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         json_path = export_dir / f"big_homie_history_{timestamp}.json"
         markdown_path = export_dir / f"big_homie_history_{timestamp}.md"
         exported_at = datetime.now().isoformat()
@@ -567,16 +596,14 @@ class BigHomieGUI(QMainWindow):
             "session_messages": session_messages,
         }
 
-        with open(json_path, 'w', encoding='utf-8') as f:
+        with open(json_path, "w", encoding="utf-8") as f:
             json.dump(json_payload, f, indent=2, ensure_ascii=False)
-        with open(markdown_path, 'w', encoding='utf-8') as f:
+        with open(markdown_path, "w", encoding="utf-8") as f:
             f.write(self._format_history_markdown(history, session_messages, exported_at))
 
         self.status_bar.showMessage(f"History exported to {markdown_path}")
         QMessageBox.information(
-            self,
-            "Export Complete",
-            f"History exported to:\n- {json_path}\n- {markdown_path}"
+            self, "Export Complete", f"History exported to:\n- {json_path}\n- {markdown_path}"
         )
 
     def _format_history_markdown(self, history, session_messages, exported_at: str) -> str:
@@ -611,14 +638,16 @@ class BigHomieGUI(QMainWindow):
                 lines.append("")
                 result = item.get("result", {})
                 if result:
-                    lines.extend([
-                        "#### Result",
-                        "",
-                        "```json",
-                        json.dumps(result, indent=2),
-                        "```",
-                        "",
-                    ])
+                    lines.extend(
+                        [
+                            "#### Result",
+                            "",
+                            "```json",
+                            json.dumps(result, indent=2),
+                            "```",
+                            "",
+                        ]
+                    )
 
         if not session_messages and not history:
             lines.extend(["No chat or task history was available to export.", ""])
@@ -644,44 +673,33 @@ class BigHomieGUI(QMainWindow):
             <li>Tone mirroring and preference learning</li>
             <li>Correction ledger for continuous improvement</li>
             </ul>
-            <p>Built with Python, PyQt6, and cutting-edge AI frameworks</p>"""
+            <p>Built with Python, PyQt6, and cutting-edge AI frameworks</p>""",
         )
 
     def export_current_chat(self):
         """Export current chat session as markdown"""
         session_messages = memory.get_session_messages(self.session_id, limit=1000)
         if not session_messages:
-            QMessageBox.information(self, "Export Chat", "No messages in current session to export.")
+            QMessageBox.information(
+                self, "Export Chat", "No messages in current session to export."
+            )
             return
 
         filepath = markdown_exporter.export_conversation(
-            messages=session_messages,
-            title=f"Chat Session {self.session_id}"
+            messages=session_messages, title=f"Chat Session {self.session_id}"
         )
 
-        QMessageBox.information(
-            self,
-            "Export Complete",
-            f"Chat exported to:\n{filepath}"
-        )
+        QMessageBox.information(self, "Export Complete", f"Chat exported to:\n{filepath}")
 
     def view_corrections(self):
         """View correction ledger summary"""
         summary = correction_ledger.get_learnings_summary()
-        QMessageBox.information(
-            self,
-            "Correction Ledger",
-            summary
-        )
+        QMessageBox.information(self, "Correction Ledger", summary)
 
     def view_preferences(self):
         """View learned preferences summary"""
         summary = preference_tracker.get_preferences_summary()
-        QMessageBox.information(
-            self,
-            "Learned Preferences",
-            summary
-        )
+        QMessageBox.information(self, "Learned Preferences", summary)
 
     def apply_theme(self):
         """Apply dark theme"""
@@ -755,14 +773,16 @@ class BigHomieGUI(QMainWindow):
     def closeEvent(self, event):
         """Handle window close"""
         reply = QMessageBox.question(
-            self, "Exit",
+            self,
+            "Exit",
             "Are you sure you want to exit Big Homie?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
             event.accept()
         else:
             event.ignore()
+
 
 def main():
     """Main entry point"""
@@ -775,6 +795,7 @@ def main():
     window.show()
 
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()

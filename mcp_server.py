@@ -2,17 +2,20 @@
 Native MCP Server Mode for Big Homie
 Connect Big Homie to Claude Desktop, Cursor, and VS Code as a callable service
 """
+
 import asyncio
 import json
 import sys
-from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Callable, Optional
+
 from loguru import logger
-from pathlib import Path
+
 
 class MCPMessageType(str, Enum):
     """MCP message types"""
+
     INITIALIZE = "initialize"
     INITIALIZED = "initialized"
     TOOLS_LIST = "tools/list"
@@ -23,15 +26,18 @@ class MCPMessageType(str, Enum):
     PROMPTS_GET = "prompts/get"
     COMPLETION_COMPLETE = "completion/complete"
 
+
 @dataclass
 class MCPMessage:
     """MCP protocol message"""
+
     jsonrpc: str = "2.0"
     id: Optional[int] = None
     method: Optional[str] = None
-    params: Optional[Dict] = None
+    params: Optional[dict] = None
     result: Optional[Any] = None
-    error: Optional[Dict] = None
+    error: Optional[dict] = None
+
 
 class MCPServer:
     """
@@ -53,15 +59,12 @@ class MCPServer:
 
     def __init__(self):
         """Initialize the MCP server"""
-        self.tools: Dict[str, Dict] = {}
-        self.resources: Dict[str, Dict] = {}
-        self.prompts: Dict[str, Dict] = {}
-        self.handlers: Dict[str, Callable] = {}
+        self.tools: dict[str, dict] = {}
+        self.resources: dict[str, dict] = {}
+        self.prompts: dict[str, dict] = {}
+        self.handlers: dict[str, Callable] = {}
         self._register_handlers()
-        self.server_info = {
-            "name": "big-homie",
-            "version": "1.0.0"
-        }
+        self.server_info = {"name": "big-homie", "version": "1.0.0"}
 
     def _register_handlers(self):
         """Register MCP method handlers"""
@@ -91,7 +94,7 @@ class MCPServer:
             await loop.connect_read_pipe(lambda: protocol, sys.stdin.buffer)
             return reader
 
-        async def write_stdout(message: Dict):
+        async def write_stdout(message: dict):
             """Write message to stdout"""
             output = json.dumps(message) + "\n"
             sys.stdout.buffer.write(output.encode())
@@ -118,22 +121,17 @@ class MCPServer:
 
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON: {e}")
-                await write_stdout({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32700,
-                        "message": "Parse error"
-                    }
-                })
+                await write_stdout(
+                    {"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}}
+                )
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
-                await write_stdout({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32603,
-                        "message": f"Internal error: {str(e)}"
+                await write_stdout(
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
                     }
-                })
+                )
 
     async def handle_message(self, request: MCPMessage) -> Optional[MCPMessage]:
         """
@@ -149,55 +147,34 @@ class MCPServer:
 
         if not method:
             return MCPMessage(
-                id=request.id,
-                error={
-                    "code": -32600,
-                    "message": "Invalid request: missing method"
-                }
+                id=request.id, error={"code": -32600, "message": "Invalid request: missing method"}
             )
 
         handler = self.handlers.get(method)
 
         if not handler:
             return MCPMessage(
-                id=request.id,
-                error={
-                    "code": -32601,
-                    "message": f"Method not found: {method}"
-                }
+                id=request.id, error={"code": -32601, "message": f"Method not found: {method}"}
             )
 
         try:
             result = await handler(request.params or {})
-            return MCPMessage(
-                id=request.id,
-                result=result
-            )
+            return MCPMessage(id=request.id, result=result)
         except Exception as e:
             logger.error(f"Handler error for {method}: {e}")
-            return MCPMessage(
-                id=request.id,
-                error={
-                    "code": -32603,
-                    "message": str(e)
-                }
-            )
+            return MCPMessage(id=request.id, error={"code": -32603, "message": str(e)})
 
-    async def _handle_initialize(self, params: Dict) -> Dict:
+    async def _handle_initialize(self, params: dict) -> dict:
         """Handle initialize request"""
         logger.info(f"MCP client initializing: {params.get('clientInfo', {})}")
 
         return {
             "protocolVersion": "2024-11-05",
             "serverInfo": self.server_info,
-            "capabilities": {
-                "tools": {},
-                "resources": {},
-                "prompts": {}
-            }
+            "capabilities": {"tools": {}, "resources": {}, "prompts": {}},
         }
 
-    async def _handle_tools_list(self, params: Dict) -> Dict:
+    async def _handle_tools_list(self, params: dict) -> dict:
         """List available tools"""
         from mcp_integration import mcp
 
@@ -208,23 +185,25 @@ class MCPServer:
                 continue
 
             # Convert to MCP tool format
-            tools.append({
-                "name": tool_name,
-                "description": tool_def.description,
-                "inputSchema": {
-                    "type": "object",
-                    "properties": tool_def.parameters,
-                    "required": [
-                        param_name
-                        for param_name, param_def in tool_def.parameters.items()
-                        if not param_def.get("optional", False)
-                    ]
+            tools.append(
+                {
+                    "name": tool_name,
+                    "description": tool_def.description,
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": tool_def.parameters,
+                        "required": [
+                            param_name
+                            for param_name, param_def in tool_def.parameters.items()
+                            if not param_def.get("optional", False)
+                        ],
+                    },
                 }
-            })
+            )
 
         return {"tools": tools}
 
-    async def _handle_tools_call(self, params: Dict) -> Dict:
+    async def _handle_tools_call(self, params: dict) -> dict:
         """Execute a tool"""
         from mcp_integration import mcp
 
@@ -242,16 +221,9 @@ class MCPServer:
         if not result.success:
             raise ValueError(result.error or "Tool execution failed")
 
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps(result.data, indent=2)
-                }
-            ]
-        }
+        return {"content": [{"type": "text", "text": json.dumps(result.data, indent=2)}]}
 
-    async def _handle_resources_list(self, params: Dict) -> Dict:
+    async def _handle_resources_list(self, params: dict) -> dict:
         """List available resources"""
         # Resources could include:
         # - Memory/knowledge base
@@ -263,16 +235,18 @@ class MCPServer:
 
         # Add agent profiles as resources
         for profile in profile_manager.list_profiles():
-            resources.append({
-                "uri": f"profile://{profile.profile_id}",
-                "name": f"Agent Profile: {profile.name}",
-                "description": profile.role,
-                "mimeType": "application/json"
-            })
+            resources.append(
+                {
+                    "uri": f"profile://{profile.profile_id}",
+                    "name": f"Agent Profile: {profile.name}",
+                    "description": profile.role,
+                    "mimeType": "application/json",
+                }
+            )
 
         return {"resources": resources}
 
-    async def _handle_resources_read(self, params: Dict) -> Dict:
+    async def _handle_resources_read(self, params: dict) -> dict:
         """Read a resource"""
         uri = params.get("uri")
 
@@ -294,64 +268,44 @@ class MCPServer:
                     {
                         "uri": uri,
                         "mimeType": "application/json",
-                        "text": json.dumps(profile.to_dict(), indent=2)
+                        "text": json.dumps(profile.to_dict(), indent=2),
                     }
                 ]
             }
 
         raise ValueError(f"Unknown resource URI: {uri}")
 
-    async def _handle_prompts_list(self, params: Dict) -> Dict:
+    async def _handle_prompts_list(self, params: dict) -> dict:
         """List available prompt templates"""
         prompts = [
             {
                 "name": "analyze_code",
                 "description": "Analyze code for issues and improvements",
                 "arguments": [
-                    {
-                        "name": "code",
-                        "description": "Code to analyze",
-                        "required": True
-                    },
-                    {
-                        "name": "language",
-                        "description": "Programming language",
-                        "required": False
-                    }
-                ]
+                    {"name": "code", "description": "Code to analyze", "required": True},
+                    {"name": "language", "description": "Programming language", "required": False},
+                ],
             },
             {
                 "name": "explain_concept",
                 "description": "Explain a technical concept",
                 "arguments": [
-                    {
-                        "name": "concept",
-                        "description": "Concept to explain",
-                        "required": True
-                    }
-                ]
+                    {"name": "concept", "description": "Concept to explain", "required": True}
+                ],
             },
             {
                 "name": "debug_error",
                 "description": "Help debug an error message",
                 "arguments": [
-                    {
-                        "name": "error",
-                        "description": "Error message",
-                        "required": True
-                    },
-                    {
-                        "name": "context",
-                        "description": "Additional context",
-                        "required": False
-                    }
-                ]
-            }
+                    {"name": "error", "description": "Error message", "required": True},
+                    {"name": "context", "description": "Additional context", "required": False},
+                ],
+            },
         ]
 
         return {"prompts": prompts}
 
-    async def _handle_prompts_get(self, params: Dict) -> Dict:
+    async def _handle_prompts_get(self, params: dict) -> dict:
         """Get a prompt template"""
         name = params.get("name")
         arguments = params.get("arguments", {})
@@ -364,10 +318,10 @@ class MCPServer:
                         "role": "user",
                         "content": {
                             "type": "text",
-                            "text": f"Please analyze this {arguments.get('language', '')} code for potential issues, improvements, and best practices:\n\n```\n{arguments.get('code', '')}\n```"
-                        }
+                            "text": f"Please analyze this {arguments.get('language', '')} code for potential issues, improvements, and best practices:\n\n```\n{arguments.get('code', '')}\n```",
+                        },
                     }
-                ]
+                ],
             },
             "explain_concept": {
                 "description": "Explain a technical concept",
@@ -376,10 +330,10 @@ class MCPServer:
                         "role": "user",
                         "content": {
                             "type": "text",
-                            "text": f"Please explain the following technical concept in clear, accessible terms:\n\n{arguments.get('concept', '')}"
-                        }
+                            "text": f"Please explain the following technical concept in clear, accessible terms:\n\n{arguments.get('concept', '')}",
+                        },
                     }
-                ]
+                ],
             },
             "debug_error": {
                 "description": "Help debug an error",
@@ -390,13 +344,17 @@ class MCPServer:
                             "type": "text",
                             "text": (
                                 f"I'm getting the following error:\n\n{arguments.get('error', '')}\n\n"
-                                + (f"Context: {arguments.get('context', '')}\n\n" if arguments.get('context') else "")
+                                + (
+                                    f"Context: {arguments.get('context', '')}\n\n"
+                                    if arguments.get("context")
+                                    else ""
+                                )
                                 + "Can you help me understand what's causing this and how to fix it?"
-                            )
-                        }
+                            ),
+                        },
                     }
-                ]
-            }
+                ],
+            },
         }
 
         if name not in prompts:
@@ -404,7 +362,7 @@ class MCPServer:
 
         return prompts[name]
 
-    def generate_config_for_claude_desktop(self) -> Dict:
+    def generate_config_for_claude_desktop(self) -> dict:
         """
         Generate configuration for Claude Desktop
 
@@ -416,12 +374,12 @@ class MCPServer:
                 "big-homie": {
                     "command": sys.executable,
                     "args": ["-m", "mcp_server_main"],
-                    "env": {}
+                    "env": {},
                 }
             }
         }
 
-    def generate_config_for_vscode(self) -> Dict:
+    def generate_config_for_vscode(self) -> dict:
         """
         Generate configuration for VS Code
 
@@ -430,16 +388,15 @@ class MCPServer:
         """
         return {
             "claude.mcpServers": {
-                "big-homie": {
-                    "command": "python",
-                    "args": ["-m", "mcp_server_main"]
-                }
+                "big-homie": {"command": "python", "args": ["-m", "mcp_server_main"]}
             }
         }
+
 
 # Global MCP server instance
 mcp_server = MCPServer()
 
 if __name__ == "__main__":
     import sys
+
     asyncio.run(mcp_server.start_stdio_server())

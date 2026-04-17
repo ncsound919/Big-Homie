@@ -2,11 +2,12 @@
 Marketing Dashboard Widget
 Content generation, campaign scheduling, marketing skill shortcuts, and activity log.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
+from loguru import logger
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -25,34 +26,33 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from loguru import logger
-
 
 # Marketing skill shortcuts keyed by label → skill tags
 MARKETING_SHORTCUTS = {
-    "📝 Blog Post":         ["writing", "blog", "content"],
-    "📧 Email Campaign":    ["marketing", "email", "outreach"],
+    "📝 Blog Post": ["writing", "blog", "content"],
+    "📧 Email Campaign": ["marketing", "email", "outreach"],
     "📱 Social Media Post": ["marketing", "social", "content"],
-    "🎯 Ad Copy":           ["marketing", "ads", "copy"],
-    "🔍 SEO Analysis":      ["research", "seo", "analytics"],
-    "📊 Market Research":   ["research", "market", "analytics"],
-    "🎥 Video Script":      ["writing", "video", "script"],
-    "💬 Press Release":     ["writing", "pr", "content"],
+    "🎯 Ad Copy": ["marketing", "ads", "copy"],
+    "🔍 SEO Analysis": ["research", "seo", "analytics"],
+    "📊 Market Research": ["research", "market", "analytics"],
+    "🎥 Video Script": ["writing", "video", "script"],
+    "💬 Press Release": ["writing", "pr", "content"],
 }
 
 # Marketing integration status keys
 MARKETING_INTEGRATIONS = {
-    "Twilio (SMS/Voice)":   "TWILIO_ACCOUNT_SID",
-    "Stripe (Billing)":     "STRIPE_API_KEY",
-    "Shopify":              "SHOPIFY_ACCESS_TOKEN",
-    "Perplexity AI":        "PERPLEXITY_API_KEY",
-    "SerpAPI":              "SERP_API_KEY",
-    "HuggingFace":          "HUGGINGFACE_API_KEY",
+    "Twilio (SMS/Voice)": "TWILIO_ACCOUNT_SID",
+    "Stripe (Billing)": "STRIPE_API_KEY",
+    "Shopify": "SHOPIFY_ACCESS_TOKEN",
+    "Perplexity AI": "PERPLEXITY_API_KEY",
+    "SerpAPI": "SERP_API_KEY",
+    "HuggingFace": "HUGGINGFACE_API_KEY",
 }
 
 
 def _env_configured(key: str) -> bool:
     import os
+
     val = os.environ.get(key, "").strip()
     return bool(val) and val not in ("your_key_here", "changeme", "")
 
@@ -69,7 +69,7 @@ class MarketingDashboardWidget(QWidget):
     - Integration status
     """
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._registry = None
         self._content_history: list[dict] = []
@@ -80,6 +80,7 @@ class MarketingDashboardWidget(QWidget):
         if self._registry is None:
             try:
                 from skill_acquisition import skill_registry
+
                 self._registry = skill_registry
             except Exception as e:
                 logger.warning(f"Could not load skill registry: {e}")
@@ -117,18 +118,32 @@ class MarketingDashboardWidget(QWidget):
         form.addRow("Topic:", self._topic_input)
 
         self._platform_combo = QComboBox()
-        self._platform_combo.addItems([
-            "Blog Post", "Email Newsletter", "Twitter/X Thread",
-            "LinkedIn Post", "Instagram Caption", "YouTube Script",
-            "Press Release", "Ad Copy",
-        ])
+        self._platform_combo.addItems(
+            [
+                "Blog Post",
+                "Email Newsletter",
+                "Twitter/X Thread",
+                "LinkedIn Post",
+                "Instagram Caption",
+                "YouTube Script",
+                "Press Release",
+                "Ad Copy",
+            ]
+        )
         form.addRow("Platform:", self._platform_combo)
 
         self._tone_combo = QComboBox()
-        self._tone_combo.addItems([
-            "Professional", "Casual", "Persuasive", "Educational",
-            "Witty", "Inspirational", "Technical",
-        ])
+        self._tone_combo.addItems(
+            [
+                "Professional",
+                "Casual",
+                "Persuasive",
+                "Educational",
+                "Witty",
+                "Inspirational",
+                "Technical",
+            ]
+        )
         form.addRow("Tone:", self._tone_combo)
 
         self._audience_input = QLineEdit()
@@ -147,7 +162,7 @@ class MarketingDashboardWidget(QWidget):
         # Skill shortcuts
         shortcuts_box = QGroupBox("Marketing Skill Shortcuts")
         shortcuts_layout = QVBoxLayout(shortcuts_box)
-        shortcut_grid_row: Optional[QHBoxLayout] = None
+        shortcut_grid_row: QHBoxLayout | None = None
         col = 0
         for label, tags in MARKETING_SHORTCUTS.items():
             if col % 2 == 0:
@@ -175,7 +190,7 @@ class MarketingDashboardWidget(QWidget):
         integ_box = QGroupBox("Marketing Integrations")
         integ_layout = QVBoxLayout(integ_box)
         self._integ_labels: dict[str, QLabel] = {}
-        for name, env_key in MARKETING_INTEGRATIONS.items():
+        for name, _env_key in MARKETING_INTEGRATIONS.items():
             row = QHBoxLayout()
             lbl = QLabel(name)
             status = QLabel()
@@ -233,9 +248,7 @@ class MarketingDashboardWidget(QWidget):
             if lbl:
                 configured = _env_configured(env_key)
                 lbl.setText("✅ configured" if configured else "⬜ not set")
-                lbl.setStyleSheet(
-                    "color: #4CAF50;" if configured else "color: #9E9E9E;"
-                )
+                lbl.setStyleSheet("color: #4CAF50;" if configured else "color: #9E9E9E;")
 
     def _generate_content(self):
         topic = self._topic_input.text().strip()
@@ -257,8 +270,10 @@ class MarketingDashboardWidget(QWidget):
 
         self._output_area.setPlainText("Generating content…")
 
-        from PyQt6.QtCore import QThread, pyqtSignal as Signal
         import asyncio
+
+        from PyQt6.QtCore import QThread
+        from PyQt6.QtCore import pyqtSignal as Signal
 
         class _Worker(QThread):
             done = Signal(str)
@@ -273,10 +288,13 @@ class MarketingDashboardWidget(QWidget):
                 asyncio.set_event_loop(loop)
                 try:
                     from llm_gateway import llm
+
                     messages = [
-                        {"role": "system", "content":
-                            "You are a world-class marketing copywriter and content strategist. "
-                            "Produce polished, engaging content that drives real results."},
+                        {
+                            "role": "system",
+                            "content": "You are a world-class marketing copywriter and content strategist. "
+                            "Produce polished, engaging content that drives real results.",
+                        },
                         {"role": "user", "content": self._prompt},
                     ]
                     result = loop.run_until_complete(llm.complete(messages))
@@ -317,9 +335,10 @@ class MarketingDashboardWidget(QWidget):
         skills = registry.search_skills(tags=tags)
         if not skills:
             QMessageBox.information(
-                self, "No Skill Found",
+                self,
+                "No Skill Found",
                 f"No skill found for tags: {', '.join(tags)}\n"
-                "Create one in the 🎯 Skills Library tab."
+                "Create one in the 🎯 Skills Library tab.",
             )
             return
 
@@ -327,8 +346,10 @@ class MarketingDashboardWidget(QWidget):
         topic = self._topic_input.text().strip() or "the selected topic"
         self._output_area.setPlainText(f"Running skill: {skill.name}…")
 
-        from PyQt6.QtCore import QThread, pyqtSignal as Signal
         import asyncio
+
+        from PyQt6.QtCore import QThread
+        from PyQt6.QtCore import pyqtSignal as Signal
 
         class _Worker(QThread):
             done = Signal(object)
@@ -355,9 +376,9 @@ class MarketingDashboardWidget(QWidget):
 
         params = {"topic": topic, "audience": self._audience_input.text().strip() or "general"}
         worker = _Worker(registry, skill.skill_id, params)
-        worker.done.connect(lambda r: self._output_area.setPlainText(
-            str(r.output or r.error or "No output")
-        ))
+        worker.done.connect(
+            lambda r: self._output_area.setPlainText(str(r.output or r.error or "No output"))
+        )
         worker.error.connect(lambda e: self._output_area.setPlainText(f"Error: {e}"))
         worker.start()
         self._active_worker = worker
@@ -369,6 +390,7 @@ class MarketingDashboardWidget(QWidget):
 
     def _copy_output(self):
         from PyQt6.QtWidgets import QApplication
+
         QApplication.clipboard().setText(self._output_area.toPlainText())
         QMessageBox.information(self, "Copied", "Content copied to clipboard.")
 
@@ -386,6 +408,5 @@ class MarketingDashboardWidget(QWidget):
                         return
             parent = parent.parent()
         QMessageBox.information(
-            self, "Cron Manager",
-            "Open the ⏰ Cron Jobs tab to schedule marketing campaigns."
+            self, "Cron Manager", "Open the ⏰ Cron Jobs tab to schedule marketing campaigns."
         )

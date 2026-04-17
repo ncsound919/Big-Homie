@@ -2,18 +2,23 @@
 Vision Analysis Module
 Multimodal vision capabilities using OpenRouter for cost-effective image analysis
 """
+
 import base64
 import json
-from typing import Dict, Any, Optional, List
-from pathlib import Path
 from dataclasses import dataclass
-from PIL import Image
+from pathlib import Path
+from typing import Optional
+
 from loguru import logger
+from PIL import Image
+
 from config import settings
+
 
 @dataclass
 class VisionResult:
     """Result of vision analysis"""
+
     success: bool
     analysis: str
     confidence: Optional[float] = None
@@ -21,6 +26,7 @@ class VisionResult:
     model_used: Optional[str] = None
     cost: Optional[float] = None
     error: Optional[str] = None
+
 
 class VisionAnalyzer:
     """
@@ -41,33 +47,33 @@ class VisionAnalyzer:
                 "id": "google/gemini-flash-1.5-8b",
                 "name": "Gemini Flash 1.5 8B",
                 "cost_per_1m": 0.04,  # Very cheap, good for screenshots
-                "quality": "fast"
+                "quality": "fast",
             },
             {
                 "id": "anthropic/claude-3-haiku",
                 "name": "Claude 3 Haiku",
                 "cost_per_1m": 0.25,
-                "quality": "good"
+                "quality": "good",
             },
             {
                 "id": "google/gemini-pro-1.5",
                 "name": "Gemini Pro 1.5",
                 "cost_per_1m": 1.25,
-                "quality": "high"
+                "quality": "high",
             },
             {
                 "id": "anthropic/claude-3.5-sonnet",
                 "name": "Claude 3.5 Sonnet",
                 "cost_per_1m": 3.0,
-                "quality": "excellent"
-            }
+                "quality": "excellent",
+            },
         ]
 
     def _encode_image(self, image_path: str) -> str:
         """Encode image to base64"""
         try:
             with open(image_path, "rb") as image_file:
-                return base64.b64encode(image_file.read()).decode('utf-8')
+                return base64.b64encode(image_file.read()).decode("utf-8")
         except Exception as e:
             logger.error(f"Failed to encode image: {e}")
             raise
@@ -76,13 +82,13 @@ class VisionAnalyzer:
         """Get MIME type from image extension"""
         suffix = Path(image_path).suffix.lower()
         mime_types = {
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp'
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
         }
-        return mime_types.get(suffix, 'image/png')
+        return mime_types.get(suffix, "image/png")
 
     def _optimize_image(self, image_path: str, max_size: tuple = (1920, 1080)) -> str:
         """
@@ -97,7 +103,9 @@ class VisionAnalyzer:
                 img.thumbnail(max_size, Image.Resampling.LANCZOS)
 
                 # Save optimized version
-                optimized_path = str(Path(image_path).with_stem(f"{Path(image_path).stem}_optimized"))
+                optimized_path = str(
+                    Path(image_path).with_stem(f"{Path(image_path).stem}_optimized")
+                )
                 img.save(optimized_path, quality=85, optimize=True)
                 logger.debug(f"Optimized image: {image_path} -> {optimized_path}")
                 return optimized_path
@@ -108,11 +116,7 @@ class VisionAnalyzer:
             return image_path
 
     async def analyze_image(
-        self,
-        image_path: str,
-        prompt: str,
-        quality: str = "fast",
-        optimize: bool = True
+        self, image_path: str, prompt: str, quality: str = "fast", optimize: bool = True
     ) -> VisionResult:
         """
         Analyze an image using vision model
@@ -134,7 +138,7 @@ class VisionAnalyzer:
             # Select model based on quality preference
             model = next(
                 (m for m in self.vision_models if m["quality"] == quality),
-                self.vision_models[0]  # Default to cheapest
+                self.vision_models[0],  # Default to cheapest
             )
 
             # Encode image
@@ -149,17 +153,12 @@ class VisionAnalyzer:
                 {
                     "role": "user",
                     "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
+                        {"type": "text", "text": prompt},
                         {
                             "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{base64_image}"
-                            }
-                        }
-                    ]
+                            "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                        },
+                    ],
                 }
             ]
 
@@ -171,10 +170,9 @@ class VisionAnalyzer:
                 return VisionResult(
                     success=False,
                     analysis="",
-                    error="OpenRouter API key not configured (set OPENROUTER_API_KEY)"
+                    error="OpenRouter API key not configured (set OPENROUTER_API_KEY)",
                 )
 
-            from llm_gateway import llm
             response = await llm.vision_complete(messages, model["id"])
             analysis_text = response.get("content", "").strip()
 
@@ -184,27 +182,17 @@ class VisionAnalyzer:
             cost = (total_tokens / 1_000_000) * model["cost_per_1m"]
 
             result = VisionResult(
-                success=True,
-                analysis=analysis_text,
-                model_used=model["id"],
-                cost=cost
+                success=True, analysis=analysis_text, model_used=model["id"], cost=cost
             )
 
             return result
 
         except Exception as e:
             logger.error(f"Vision analysis failed: {e}")
-            return VisionResult(
-                success=False,
-                analysis="",
-                error=str(e)
-            )
+            return VisionResult(success=False, analysis="", error=str(e))
 
     async def analyze_screenshot_error(
-        self,
-        screenshot_path: str,
-        error_message: str,
-        context: Optional[Dict] = None
+        self, screenshot_path: str, error_message: str, context: Optional[dict] = None
     ) -> VisionResult:
         """
         Analyze a screenshot in context of an error
@@ -221,7 +209,7 @@ class VisionAnalyzer:
 
 Error Message: {error_message}
 
-Context: {json.dumps(context, indent=2, default=str) if context else 'None'}
+Context: {json.dumps(context, indent=2, default=str) if context else "None"}
 
 Please:
 1. Identify what's visible in the screenshot
@@ -232,13 +220,11 @@ Please:
         return await self.analyze_image(
             screenshot_path,
             prompt,
-            quality="good"  # Use better model for error diagnosis
+            quality="good",  # Use better model for error diagnosis
         )
 
     async def audit_ui_design(
-        self,
-        image_path: str,
-        focus_areas: Optional[List[str]] = None
+        self, image_path: str, focus_areas: Optional[list[str]] = None
     ) -> VisionResult:
         """
         Perform UI/UX audit on a design mockup or screenshot
@@ -267,13 +253,11 @@ Provide 3-5 specific actionable improvements."""
         return await self.analyze_image(
             image_path,
             prompt,
-            quality="high"  # Use better model for design work
+            quality="high",  # Use better model for design work
         )
 
     async def extract_text_from_image(
-        self,
-        image_path: str,
-        use_local_ocr: bool = True
+        self, image_path: str, use_local_ocr: bool = True
     ) -> VisionResult:
         """
         Extract text from image using OCR
@@ -289,6 +273,7 @@ Provide 3-5 specific actionable improvements."""
         if use_local_ocr:
             try:
                 import pytesseract
+
                 img = Image.open(image_path)
                 text = pytesseract.image_to_string(img)
 
@@ -298,7 +283,7 @@ Provide 3-5 specific actionable improvements."""
                         success=True,
                         analysis="Text extracted successfully",
                         extracted_text=text,
-                        cost=0.0
+                        cost=0.0,
                     )
             except ImportError:
                 logger.warning("pytesseract not available, falling back to vision API")
@@ -311,13 +296,14 @@ Provide 3-5 specific actionable improvements."""
         result = await self.analyze_image(
             image_path,
             prompt,
-            quality="fast"  # Use cheapest model for OCR
+            quality="fast",  # Use cheapest model for OCR
         )
 
         if result.success:
             result.extracted_text = result.analysis
 
         return result
+
 
 # Global vision analyzer instance
 vision_analyzer = VisionAnalyzer()

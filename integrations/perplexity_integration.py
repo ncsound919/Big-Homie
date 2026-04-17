@@ -2,18 +2,24 @@
 Perplexity AI Integration
 Provides advanced AI search and research capabilities with citations
 """
-import httpx
-from typing import Dict, List, Optional, Any
+
 from dataclasses import dataclass
+from typing import Any, Optional
+
+import httpx
 from loguru import logger
+
 from config import settings
+
 
 @dataclass
 class PerplexityResult:
     """Result of a Perplexity operation"""
+
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
+
 
 class PerplexityIntegration:
     """
@@ -32,7 +38,7 @@ class PerplexityIntegration:
         if settings.perplexity_api_key:
             self.headers = {
                 "Authorization": f"Bearer {settings.perplexity_api_key}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
     async def health_check(self) -> bool:
@@ -48,7 +54,7 @@ class PerplexityIntegration:
         query: str,
         model: Optional[str] = None,
         temperature: float = 0.2,
-        max_tokens: int = 4096
+        max_tokens: int = 4096,
     ) -> PerplexityResult:
         """
         Perform a search query with Perplexity AI
@@ -70,43 +76,30 @@ class PerplexityIntegration:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a helpful research assistant. Provide accurate, well-cited information."
+                        "content": "You are a helpful research assistant. Provide accurate, well-cited information.",
                     },
-                    {
-                        "role": "user",
-                        "content": query
-                    }
+                    {"role": "user", "content": query},
                 ],
                 "temperature": temperature,
                 "max_tokens": max_tokens,
                 "return_citations": True,
-                "return_images": False
+                "return_images": False,
             }
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url,
-                    headers=self.headers,
-                    json=payload,
-                    timeout=60.0
-                )
+                response = await client.post(url, headers=self.headers, json=payload, timeout=60.0)
 
                 if response.status_code == 200:
                     data = response.json()
                     return PerplexityResult(success=True, data=data)
                 else:
-                    return PerplexityResult(
-                        success=False,
-                        error=f"Search failed: {response.text}"
-                    )
+                    return PerplexityResult(success=False, error=f"Search failed: {response.text}")
         except Exception as e:
             logger.error(f"Perplexity search failed: {e}")
             return PerplexityResult(success=False, error=str(e))
 
     async def research(
-        self,
-        topic: str,
-        focus_areas: Optional[List[str]] = None
+        self, topic: str, focus_areas: Optional[list[str]] = None
     ) -> PerplexityResult:
         """
         Perform comprehensive research on a topic
@@ -123,6 +116,7 @@ class PerplexityIntegration:
             query += f"\n\nFocus on these specific areas: {', '.join(focus_areas)}"
 
         return await self.search(query, max_tokens=8192)
+
 
 # Global instance
 perplexity = PerplexityIntegration()

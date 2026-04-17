@@ -2,12 +2,13 @@
 Cron Manager Widget
 UI for creating, viewing, and managing scheduled tasks (KAIROS daemon integration).
 """
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
+from loguru import logger
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -30,13 +31,12 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from loguru import logger
 
 
 class AddCronDialog(QDialog):
     """Dialog for adding a new cron task."""
 
-    def __init__(self, skill_names: list[str], parent: Optional[QWidget] = None):
+    def __init__(self, skill_names: list[str], parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("Add Scheduled Task")
         self.setMinimumWidth(440)
@@ -130,7 +130,7 @@ class CronManagerWidget(QWidget):
 
     task_run_requested = pyqtSignal(str)  # task_id
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._daemon = None
         self._skill_registry = None
@@ -146,6 +146,7 @@ class CronManagerWidget(QWidget):
         if self._daemon is None:
             try:
                 from kairos_daemon import kairos, start_kairos
+
                 start_kairos()
                 self._daemon = kairos
             except Exception as e:
@@ -156,6 +157,7 @@ class CronManagerWidget(QWidget):
         if self._skill_registry is None:
             try:
                 from skill_acquisition import skill_registry
+
                 self._skill_registry = skill_registry
             except Exception as e:
                 logger.warning(f"Could not load skill registry: {e}")
@@ -197,8 +199,7 @@ class CronManagerWidget(QWidget):
         self._executed_label = QLabel("Executed: 0")
         self._failed_label = QLabel("Failed: 0")
         self._cost_label = QLabel("Hourly cost: $0.00")
-        for lbl in [self._uptime_label, self._executed_label,
-                    self._failed_label, self._cost_label]:
+        for lbl in [self._uptime_label, self._executed_label, self._failed_label, self._cost_label]:
             metrics_layout.addWidget(lbl)
         metrics_layout.addStretch()
         root.addWidget(metrics_box)
@@ -271,6 +272,7 @@ class CronManagerWidget(QWidget):
             return
         try:
             from kairos_daemon import DaemonState
+
             if daemon.state == DaemonState.PAUSED:
                 daemon.resume()
                 self._pause_btn.setText("⏸ Pause")
@@ -295,8 +297,13 @@ class CronManagerWidget(QWidget):
         try:
             status = daemon.get_status()
             state = status.get("state", "unknown")
-            color = {"running": "#4CAF50", "idle": "#2196F3", "processing": "#FFC107",
-                     "paused": "#FF9800", "stopped": "#F44336"}.get(state, "#D4D4D4")
+            color = {
+                "running": "#4CAF50",
+                "idle": "#2196F3",
+                "processing": "#FFC107",
+                "paused": "#FF9800",
+                "stopped": "#F44336",
+            }.get(state, "#D4D4D4")
             self._status_label.setText(f"Daemon: {state}")
             self._status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
@@ -315,7 +322,9 @@ class CronManagerWidget(QWidget):
         self._table.setRowCount(len(tasks))
         for row, task in enumerate(tasks):
             self._table.setItem(row, 0, QTableWidgetItem(task.name))
-            priority_str = task.priority.value if hasattr(task.priority, "value") else str(task.priority)
+            priority_str = (
+                task.priority.value if hasattr(task.priority, "value") else str(task.priority)
+            )
             self._table.setItem(row, 1, QTableWidgetItem(priority_str))
 
             interval_str = "—"
@@ -357,12 +366,16 @@ class CronManagerWidget(QWidget):
         daemon = self._get_daemon()
         if has_sel and daemon:
             row = self._table.currentRow()
-            task_id = self._table.item(row, 0).data(Qt.ItemDataRole.UserRole) if self._table.item(row, 0) else None
+            task_id = (
+                self._table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+                if self._table.item(row, 0)
+                else None
+            )
             if task_id and task_id in daemon.scheduled_tasks:
                 task = daemon.scheduled_tasks[task_id]
                 self._toggle_btn.setText("▶ Enable" if not task.enabled else "⏸ Disable")
 
-    def _selected_task_id(self) -> Optional[str]:
+    def _selected_task_id(self) -> str | None:
         row = self._table.currentRow()
         if row < 0:
             return None
@@ -387,6 +400,7 @@ class CronManagerWidget(QWidget):
 
         try:
             from kairos_daemon import DaemonTask, TaskPriority
+
             priority_map = {
                 "critical": TaskPriority.CRITICAL,
                 "high": TaskPriority.HIGH,
@@ -407,9 +421,15 @@ class CronManagerWidget(QWidget):
                         None,
                     )
                     if skill_id:
+
                         async def _skill_handler(_sid=skill_id, _reg=registry):
                             result = await _reg.execute_skill(_sid)
-                            return {"output": result.output, "success": result.success, "cost": result.cost}
+                            return {
+                                "output": result.output,
+                                "success": result.success,
+                                "cost": result.cost,
+                            }
+
                         handler = _skill_handler
 
             task = DaemonTask(
@@ -465,7 +485,8 @@ class CronManagerWidget(QWidget):
         if not task:
             return
         reply = QMessageBox.question(
-            self, "Remove Task",
+            self,
+            "Remove Task",
             f"Remove task '{task.name}'?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )

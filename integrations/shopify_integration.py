@@ -2,16 +2,20 @@
 Shopify Ecommerce Integration
 Store management: products, orders, customers, inventory, and fulfillment
 """
-import httpx
-from typing import Dict, List, Optional, Any
+
 from dataclasses import dataclass
+from typing import Any, Optional
+
+import httpx
 from loguru import logger
+
 from config import settings
 
 
 @dataclass
 class ShopifyResult:
     """Result of a Shopify operation"""
+
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
@@ -39,10 +43,14 @@ class ShopifyIntegration:
         domain = settings.shopify_shop_domain
         token = settings.shopify_access_token
         self.base_url = f"https://{domain}/admin/api/{self.API_VERSION}" if domain else ""
-        self.headers = {
-            "X-Shopify-Access-Token": token,
-            "Content-Type": "application/json",
-        } if token else {}
+        self.headers = (
+            {
+                "X-Shopify-Access-Token": token,
+                "Content-Type": "application/json",
+            }
+            if token
+            else {}
+        )
 
     def _require_config(self) -> Optional[ShopifyResult]:
         """
@@ -101,7 +109,7 @@ class ShopifyIntegration:
         body_html: str,
         vendor: str,
         product_type: str,
-        variants: Optional[List[Dict]] = None,
+        variants: Optional[list[dict]] = None,
         tags: str = "",
         status: str = "draft",
     ) -> ShopifyResult:
@@ -121,7 +129,7 @@ class ShopifyIntegration:
         if err:
             return err
         try:
-            product: Dict[str, Any] = {
+            product: dict[str, Any] = {
                 "title": title,
                 "body_html": body_html,
                 "vendor": vendor,
@@ -147,7 +155,7 @@ class ShopifyIntegration:
             logger.error(f"Shopify create_product failed: {e}")
             return ShopifyResult(success=False, error=str(e))
 
-    async def update_product(self, product_id: int, updates: Dict) -> ShopifyResult:
+    async def update_product(self, product_id: int, updates: dict) -> ShopifyResult:
         """Update an existing product"""
         err = self._require_config()
         if err:
@@ -224,7 +232,7 @@ class ShopifyIntegration:
         if err:
             return err
         try:
-            fulfillment: Dict[str, Any] = {
+            fulfillment: dict[str, Any] = {
                 "notify_customer": notify_customer,
             }
             if tracking_number:
@@ -293,10 +301,11 @@ class ShopifyIntegration:
         if err:
             return err
         import datetime as _dt
+
         # Use now as the start date so the discount is immediately active
         starts_at = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
-            price_rule: Dict[str, Any] = {
+            price_rule: dict[str, Any] = {
                 "title": title,
                 "value_type": value_type,
                 "value": f"-{value}",

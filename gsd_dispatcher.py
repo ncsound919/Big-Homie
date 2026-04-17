@@ -31,45 +31,44 @@ Usage:
   await gsd.process_inbox()
 """
 
-import os
 import asyncio
-import uuid
 import json
 import logging
+import os
 import sqlite3
-from enum import Enum
+import uuid
 from dataclasses import dataclass, field
-from typing import Optional, Callable
 from datetime import datetime
+from enum import Enum
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-GSD_DB_PATH = os.path.expanduser(
-    os.getenv("GSD_DB_PATH", "~/.big_homie/gsd_inbox.db")
-)
+GSD_DB_PATH = os.path.expanduser(os.getenv("GSD_DB_PATH", "~/.big_homie/gsd_inbox.db"))
 
 
 # ─── Enums & Dataclasses ──────────────────────────────────────────────────────
 
+
 class GSDStage(str, Enum):
-    INBOX     = "inbox"      # Just captured, not yet classified
+    INBOX = "inbox"  # Just captured, not yet classified
     CLARIFIED = "clarified"  # Classified, not yet organized
     ORGANIZED = "organized"  # Routed to context, ready to engage
-    ACTIVE    = "active"     # Currently being executed
-    DONE      = "done"       # Completed
-    SOMEDAY   = "someday"    # Deferred / low priority
-    TRASH     = "trash"      # Discarded
+    ACTIVE = "active"  # Currently being executed
+    DONE = "done"  # Completed
+    SOMEDAY = "someday"  # Deferred / low priority
+    TRASH = "trash"  # Discarded
 
 
 class GSDContext(str, Enum):
-    RAP      = "@rap"
-    CONTENT  = "@content"
-    SITE     = "@site"
-    CODE     = "@code"
+    RAP = "@rap"
+    CONTENT = "@content"
+    SITE = "@site"
+    CODE = "@code"
     RESEARCH = "@research"
-    REVENUE  = "@revenue"
-    DREAM    = "@dream"
-    MISC     = "@misc"
+    REVENUE = "@revenue"
+    DREAM = "@dream"
+    MISC = "@misc"
 
 
 @dataclass
@@ -78,7 +77,7 @@ class GSDTask:
     raw_input: str
     stage: GSDStage = GSDStage.INBOX
     context: Optional[GSDContext] = None
-    priority: int = 5          # 1=highest, 10=lowest
+    priority: int = 5  # 1=highest, 10=lowest
     actionable: bool = True
     result: dict = field(default_factory=dict)
     cost_usd: float = 0.0
@@ -92,38 +91,102 @@ class GSDTask:
 
 CONTEXT_KEYWORDS = {
     GSDContext.RAP: [
-        "rap", "beat", "lyrics", "bars", "trap", "drill", "boom bap",
-        "music video", "rap video", "hip hop", "verse", "freestyle",
+        "rap",
+        "beat",
+        "lyrics",
+        "bars",
+        "trap",
+        "drill",
+        "boom bap",
+        "music video",
+        "rap video",
+        "hip hop",
+        "verse",
+        "freestyle",
     ],
     GSDContext.CONTENT: [
-        "content", "blog", "article", "post", "tiktok", "instagram",
-        "youtube", "twitter", "thread", "caption", "newsletter", "email campaign",
-        "write", "script", "copy",
+        "content",
+        "blog",
+        "article",
+        "post",
+        "tiktok",
+        "instagram",
+        "youtube",
+        "twitter",
+        "thread",
+        "caption",
+        "newsletter",
+        "email campaign",
+        "write",
+        "script",
+        "copy",
     ],
     GSDContext.SITE: [
-        "website", "site", "landing page", "web page", "deploy",
-        "build a site", "homepage", "portfolio site", "saas page",
+        "website",
+        "site",
+        "landing page",
+        "web page",
+        "deploy",
+        "build a site",
+        "homepage",
+        "portfolio site",
+        "saas page",
     ],
     GSDContext.CODE: [
-        "code", "script", "function", "api", "bug", "fix", "implement",
-        "build", "develop", "debug", "refactor", "test", "opencode",
+        "code",
+        "script",
+        "function",
+        "api",
+        "bug",
+        "fix",
+        "implement",
+        "build",
+        "develop",
+        "debug",
+        "refactor",
+        "test",
+        "opencode",
     ],
     GSDContext.RESEARCH: [
-        "research", "find", "search", "analyze", "compare", "report",
-        "trends", "market", "data", "statistics", "investigate",
+        "research",
+        "find",
+        "search",
+        "analyze",
+        "compare",
+        "report",
+        "trends",
+        "market",
+        "data",
+        "statistics",
+        "investigate",
     ],
     GSDContext.REVENUE: [
-        "revenue", "money", "income", "profit", "sell", "price",
-        "stripe", "payment", "subscription", "monetize", "earnings",
+        "revenue",
+        "money",
+        "income",
+        "profit",
+        "sell",
+        "price",
+        "stripe",
+        "payment",
+        "subscription",
+        "monetize",
+        "earnings",
     ],
     GSDContext.DREAM: [
-        "memory", "consolidate", "dream", "reflect", "summarize past",
-        "knowledge graph", "remember",
+        "memory",
+        "consolidate",
+        "dream",
+        "reflect",
+        "summarize past",
+        "knowledge graph",
+        "remember",
     ],
 }
 
 
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
+
 
 class GSDDispatcher:
     """
@@ -164,16 +227,25 @@ class GSDDispatcher:
     def _save_task(self, task: GSDTask):
         task.updated_at = datetime.utcnow().isoformat()
         conn = sqlite3.connect(GSD_DB_PATH)
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO gsd_tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (
-            task.task_id, task.raw_input, task.stage.value,
-            task.context.value if task.context else None,
-            task.priority, task.actionable,
-            json.dumps(task.result), task.cost_usd,
-            task.created_at, task.updated_at, task.notes,
-            json.dumps(task.tags),
-        ))
+        """,
+            (
+                task.task_id,
+                task.raw_input,
+                task.stage.value,
+                task.context.value if task.context else None,
+                task.priority,
+                task.actionable,
+                json.dumps(task.result),
+                task.cost_usd,
+                task.created_at,
+                task.updated_at,
+                task.notes,
+                json.dumps(task.tags),
+            ),
+        )
         conn.commit()
         conn.close()
 
@@ -181,19 +253,24 @@ class GSDDispatcher:
         conn = sqlite3.connect(GSD_DB_PATH)
         rows = conn.execute(
             "SELECT * FROM gsd_tasks WHERE stage = ? ORDER BY priority ASC, created_at ASC",
-            (stage.value,)
+            (stage.value,),
         ).fetchall()
         conn.close()
         tasks = []
         for row in rows:
             t = GSDTask(
-                task_id=row[0], raw_input=row[1],
+                task_id=row[0],
+                raw_input=row[1],
                 stage=GSDStage(row[2]),
                 context=GSDContext(row[3]) if row[3] else None,
-                priority=row[4], actionable=bool(row[5]),
+                priority=row[4],
+                actionable=bool(row[5]),
                 result=json.loads(row[6]) if row[6] else {},
-                cost_usd=row[7], created_at=row[8], updated_at=row[9],
-                notes=row[10], tags=json.loads(row[11]) if row[11] else [],
+                cost_usd=row[7],
+                created_at=row[8],
+                updated_at=row[9],
+                notes=row[10],
+                tags=json.loads(row[11]) if row[11] else [],
             )
             tasks.append(t)
         return tasks
@@ -204,35 +281,43 @@ class GSDDispatcher:
         """Register all vertical engines as executors."""
         try:
             from rap_video_engine import generate_rap_video
-            self.register(GSDContext.RAP, lambda task: generate_rap_video(
-                theme=task.raw_input, style="trap"
-            ))
+
+            self.register(
+                GSDContext.RAP, lambda task: generate_rap_video(theme=task.raw_input, style="trap")
+            )
         except ImportError:
             pass
 
         try:
             from content_factory import create_content_package
-            self.register(GSDContext.CONTENT, lambda task: create_content_package(
-                topic=task.raw_input
-            ))
+
+            self.register(
+                GSDContext.CONTENT, lambda task: create_content_package(topic=task.raw_input)
+            )
         except ImportError:
             pass
 
         try:
             from site_builder import build_and_deploy_site
-            self.register(GSDContext.SITE, lambda task: build_and_deploy_site(
-                name=task.raw_input, niche=task.notes or "business"
-            ))
+
+            self.register(
+                GSDContext.SITE,
+                lambda task: build_and_deploy_site(
+                    name=task.raw_input, niche=task.notes or "business"
+                ),
+            )
         except ImportError:
             pass
 
         try:
-            from llm_gateway import llm, TaskType
+            from llm_gateway import TaskType, llm
+
             async def code_executor(task):
                 return await llm.complete(
                     messages=[{"role": "user", "content": task.raw_input}],
                     task_type=TaskType.CODING,
                 )
+
             self.register(GSDContext.CODE, code_executor)
         except ImportError:
             pass
@@ -254,7 +339,11 @@ class GSDDispatcher:
             tags=tags or [],
         )
         self._save_task(task)
-        logger.info(f"[GSD:CAPTURE] {task.task_id} → '{raw_input[:60]}...'" if len(raw_input) > 60 else f"[GSD:CAPTURE] {task.task_id} → '{raw_input}'")
+        logger.info(
+            f"[GSD:CAPTURE] {task.task_id} → '{raw_input[:60]}...'"
+            if len(raw_input) > 60
+            else f"[GSD:CAPTURE] {task.task_id} → '{raw_input}'"
+        )
         return task.task_id
 
     async def clarify(self, task: GSDTask) -> GSDTask:
@@ -271,7 +360,7 @@ class GSDDispatcher:
                 return task
 
         # Keyword matching
-        scores = {ctx: 0 for ctx in GSDContext}
+        scores = dict.fromkeys(GSDContext, 0)
         for ctx, keywords in CONTEXT_KEYWORDS.items():
             for kw in keywords:
                 if kw in text:
@@ -315,7 +404,9 @@ class GSDDispatcher:
         try:
             executor = self._executors[task.context]
             result = await executor(task)
-            task.result = result.__dict__ if hasattr(result, "__dict__") else {"output": str(result)}
+            task.result = (
+                result.__dict__ if hasattr(result, "__dict__") else {"output": str(result)}
+            )
             task.cost_usd = task.result.get("cost_usd", task.result.get("total_cost_usd", 0.0))
             task.stage = GSDStage.DONE
             logger.info(f"[GSD:ENGAGE] {task.task_id} DONE — cost=${task.cost_usd:.4f}")
@@ -342,8 +433,7 @@ class GSDDispatcher:
         # Process inbox → clarify → organize
         clarified = await asyncio.gather(*[self.clarify(t) for t in inbox], return_exceptions=True)
         organized = await asyncio.gather(
-            *[self.organize(t) for t in clarified if isinstance(t, GSDTask)],
-            return_exceptions=True
+            *[self.organize(t) for t in clarified if isinstance(t, GSDTask)], return_exceptions=True
         )
 
         # Engage all organized tasks (including pre-existing queue)
@@ -351,10 +441,7 @@ class GSDDispatcher:
             t for t in organized if isinstance(t, GSDTask) and t.stage == GSDStage.ORGANIZED
         ] + organized_queue
 
-        results = await asyncio.gather(
-            *[self.engage(t) for t in to_engage],
-            return_exceptions=True
-        )
+        results = await asyncio.gather(*[self.engage(t) for t in to_engage], return_exceptions=True)
 
         done = [t for t in results if isinstance(t, GSDTask) and t.stage == GSDStage.DONE]
         logger.info(f"[GSD] Cycle complete — {len(done)} tasks done")
@@ -363,7 +450,8 @@ class GSDDispatcher:
     async def _llm_classify(self, text: str) -> GSDContext:
         """Fallback: use LLM to classify task context."""
         try:
-            from llm_gateway import llm, TaskType
+            from llm_gateway import TaskType, llm
+
             contexts = ", ".join(f"{c.value}" for c in GSDContext)
             prompt = f"""Classify this task into one context: {contexts}
 Task: {text}
@@ -385,11 +473,14 @@ Respond with ONLY the context label (e.g. @content). No explanation."""
     async def reflect(self) -> dict:
         """Stage 4: Reflect — weekly summary of completed + pending tasks."""
         from datetime import datetime, timedelta
+
         conn = sqlite3.connect(GSD_DB_PATH)
         one_week_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
         done_rows = conn.execute(
-            "SELECT context, COUNT(*), SUM(cost_usd) FROM gsd_tasks WHERE stage='done' AND updated_at > ? GROUP BY context",
-            (one_week_ago,)
+            "SELECT context, COUNT(*), SUM(cost_usd)"
+            " FROM gsd_tasks WHERE stage='done'"
+            " AND updated_at > ? GROUP BY context",
+            (one_week_ago,),
         ).fetchall()
         pending = conn.execute(
             "SELECT COUNT(*) FROM gsd_tasks WHERE stage IN ('inbox','organized','active')"
@@ -398,18 +489,25 @@ Respond with ONLY the context label (e.g. @content). No explanation."""
 
         summary = {
             "period": "last_7_days",
-            "completed_by_context": {row[0]: {"count": row[1], "cost_usd": row[2]} for row in done_rows},
+            "completed_by_context": {
+                row[0]: {"count": row[1], "cost_usd": row[2]} for row in done_rows
+            },
             "pending_tasks": pending,
             "total_completed": sum(r[1] for r in done_rows),
             "total_cost_usd": sum(r[2] for r in done_rows),
         }
-        logger.info(f"[GSD:REFLECT] Weekly summary: {summary['total_completed']} done, ${summary['total_cost_usd']:.4f} spent")
+        logger.info(
+            f"[GSD:REFLECT] Weekly summary: "
+            f"{summary['total_completed']} done, "
+            f"${summary['total_cost_usd']:.4f} spent"
+        )
         return summary
 
 
 # ─── Module-level instance ────────────────────────────────────────────────────
 
 gsd = GSDDispatcher()
+
 
 async def capture(text: str, priority: int = 5) -> str:
     """Shortcut: capture a task directly from anywhere in Big Homie."""

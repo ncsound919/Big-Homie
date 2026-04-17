@@ -2,18 +2,21 @@
 Vector Memory System using ChromaDB
 Enables semantic search and retrieval of past conversations, skills, and knowledge
 """
-import chromadb
-from chromadb.config import Settings as ChromaSettings
-from sentence_transformers import SentenceTransformer
-from typing import List, Dict, Any, Optional
+
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Optional
+
+import chromadb
+from chromadb.config import Settings as ChromaSettings
 from loguru import logger
+from sentence_transformers import SentenceTransformer
+
 from config import settings
 
 
-def chunk_text(text: str, chunk_size: int = 512, overlap: int = 50) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 512, overlap: int = 50) -> list[str]:
     """
     Split long text into overlapping chunks for better retrieval precision.
 
@@ -44,14 +47,17 @@ def chunk_text(text: str, chunk_size: int = 512, overlap: int = 50) -> List[str]
         start = end - overlap
     return chunks
 
+
 @dataclass
 class MemoryEntry:
     """A single memory entry"""
+
     id: str
     content: str
-    metadata: Dict[str, Any]
-    embedding: Optional[List[float]] = None
+    metadata: dict[str, Any]
+    embedding: Optional[list[float]] = None
     timestamp: Optional[datetime] = None
+
 
 class VectorMemory:
     """
@@ -73,15 +79,12 @@ class VectorMemory:
         # Initialize ChromaDB client
         self.client = chromadb.PersistentClient(
             path=str(self.persist_dir),
-            settings=ChromaSettings(
-                anonymized_telemetry=False,
-                allow_reset=True
-            )
+            settings=ChromaSettings(anonymized_telemetry=False, allow_reset=True),
         )
 
         # Initialize embedding model (384-dimensional, fast)
         logger.info("Loading sentence transformer model...")
-        self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
+        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
         logger.info("Embedding model loaded")
 
         # Collections for different memory types
@@ -90,7 +93,7 @@ class VectorMemory:
         self.knowledge = self._get_or_create_collection("knowledge")
 
         # Thread-specific collections (created on demand)
-        self.threads: Dict[str, Any] = {}
+        self.threads: dict[str, Any] = {}
 
     def _get_or_create_collection(self, name: str):
         """Get or create a ChromaDB collection"""
@@ -99,7 +102,7 @@ class VectorMemory:
         except Exception:
             return self.client.create_collection(
                 name=name,
-                metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+                metadata={"hnsw:space": "cosine"},  # Use cosine similarity
             )
 
     def get_thread_collection(self, thread_name: str):
@@ -109,12 +112,7 @@ class VectorMemory:
             self.threads[thread_name] = self._get_or_create_collection(collection_name)
         return self.threads[thread_name]
 
-    def add_conversation(
-        self,
-        content: str,
-        role: str,
-        metadata: Optional[Dict] = None
-    ) -> str:
+    def add_conversation(self, content: str, role: str, metadata: Optional[dict] = None) -> str:
         """
         Add a conversation turn to memory
 
@@ -133,32 +131,27 @@ class VectorMemory:
 
         # Prepare metadata
         meta = metadata or {}
-        meta.update({
-            "role": role,
-            "timestamp": datetime.now().isoformat(),
-            "type": "conversation",
-            "importance_score": meta.get("importance_score", 0.5),
-            "access_count": meta.get("access_count", 0),
-            "last_accessed": meta.get("last_accessed", datetime.now().isoformat()),
-        })
+        meta.update(
+            {
+                "role": role,
+                "timestamp": datetime.now().isoformat(),
+                "type": "conversation",
+                "importance_score": meta.get("importance_score", 0.5),
+                "access_count": meta.get("access_count", 0),
+                "last_accessed": meta.get("last_accessed", datetime.now().isoformat()),
+            }
+        )
 
         # Store in ChromaDB
         self.conversations.add(
-            ids=[entry_id],
-            embeddings=[embedding],
-            documents=[content],
-            metadatas=[meta]
+            ids=[entry_id], embeddings=[embedding], documents=[content], metadatas=[meta]
         )
 
         logger.debug(f"Added conversation memory: {entry_id}")
         return entry_id
 
     def add_skill(
-        self,
-        name: str,
-        description: str,
-        workflow: List[Dict],
-        success_rate: float = 0.0
+        self, name: str, description: str, workflow: list[dict], success_rate: float = 0.0
     ) -> str:
         """
         Add a learned skill to memory
@@ -193,21 +186,13 @@ class VectorMemory:
         }
 
         self.skills.upsert(  # Upsert to update existing skills
-            ids=[entry_id],
-            embeddings=[embedding],
-            documents=[content],
-            metadatas=[meta]
+            ids=[entry_id], embeddings=[embedding], documents=[content], metadatas=[meta]
         )
 
         logger.info(f"Added/updated skill: {name}")
         return entry_id
 
-    def add_knowledge(
-        self,
-        content: str,
-        category: str,
-        source: Optional[str] = None
-    ) -> str:
+    def add_knowledge(self, content: str, category: str, source: Optional[str] = None) -> str:
         """
         Add knowledge/fact to memory
 
@@ -236,21 +221,13 @@ class VectorMemory:
         }
 
         self.knowledge.add(
-            ids=[entry_id],
-            embeddings=[embedding],
-            documents=[content],
-            metadatas=[meta]
+            ids=[entry_id], embeddings=[embedding], documents=[content], metadatas=[meta]
         )
 
         logger.debug(f"Added knowledge: {category}")
         return entry_id
 
-    def add_to_thread(
-        self,
-        thread_name: str,
-        content: str,
-        metadata: Optional[Dict] = None
-    ) -> str:
+    def add_to_thread(self, thread_name: str, content: str, metadata: Optional[dict] = None) -> str:
         """
         Add memory to a specific thread (e.g., "coding", "research", "logistics")
 
@@ -262,30 +239,26 @@ class VectorMemory:
         embedding = self.embedder.encode(content).tolist()
 
         meta = metadata or {}
-        meta.update({
-            "thread": thread_name,
-            "timestamp": datetime.now().isoformat(),
-            "importance_score": meta.get("importance_score", 0.5),
-            "access_count": meta.get("access_count", 0),
-            "last_accessed": meta.get("last_accessed", datetime.now().isoformat()),
-        })
+        meta.update(
+            {
+                "thread": thread_name,
+                "timestamp": datetime.now().isoformat(),
+                "importance_score": meta.get("importance_score", 0.5),
+                "access_count": meta.get("access_count", 0),
+                "last_accessed": meta.get("last_accessed", datetime.now().isoformat()),
+            }
+        )
 
         collection.add(
-            ids=[entry_id],
-            embeddings=[embedding],
-            documents=[content],
-            metadatas=[meta]
+            ids=[entry_id], embeddings=[embedding], documents=[content], metadatas=[meta]
         )
 
         logger.debug(f"Added to thread '{thread_name}': {entry_id}")
         return entry_id
 
     def search_conversations(
-        self,
-        query: str,
-        n_results: int = 5,
-        filter_metadata: Optional[Dict] = None
-    ) -> List[Dict]:
+        self, query: str, n_results: int = 5, filter_metadata: Optional[dict] = None
+    ) -> list[dict]:
         """
         Semantic search across conversation history
 
@@ -300,18 +273,12 @@ class VectorMemory:
         query_embedding = self.embedder.encode(query).tolist()
 
         results = self.conversations.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=filter_metadata
+            query_embeddings=[query_embedding], n_results=n_results, where=filter_metadata
         )
 
         return self._format_results(results, collection=self.conversations)
 
-    def search_skills(
-        self,
-        query: str,
-        n_results: int = 3
-    ) -> List[Dict]:
+    def search_skills(self, query: str, n_results: int = 3) -> list[dict]:
         """
         Find relevant skills for a task
 
@@ -324,19 +291,13 @@ class VectorMemory:
         """
         query_embedding = self.embedder.encode(query).tolist()
 
-        results = self.skills.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results
-        )
+        results = self.skills.query(query_embeddings=[query_embedding], n_results=n_results)
 
         return self._format_results(results, collection=self.skills)
 
     def search_knowledge(
-        self,
-        query: str,
-        category: Optional[str] = None,
-        n_results: int = 5
-    ) -> List[Dict]:
+        self, query: str, category: Optional[str] = None, n_results: int = 5
+    ) -> list[dict]:
         """
         Search knowledge base
 
@@ -353,19 +314,12 @@ class VectorMemory:
         where = {"category": category} if category else None
 
         results = self.knowledge.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=where
+            query_embeddings=[query_embedding], n_results=n_results, where=where
         )
 
         return self._format_results(results, collection=self.knowledge)
 
-    def search_thread(
-        self,
-        thread_name: str,
-        query: str,
-        n_results: int = 5
-    ) -> List[Dict]:
+    def search_thread(self, thread_name: str, query: str, n_results: int = 5) -> list[dict]:
         """
         Search within a specific thread
 
@@ -377,14 +331,11 @@ class VectorMemory:
         collection = self.get_thread_collection(thread_name)
         query_embedding = self.embedder.encode(query).tolist()
 
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results
-        )
+        results = collection.query(query_embeddings=[query_embedding], n_results=n_results)
 
         return self._format_results(results, collection=collection)
 
-    def _format_results(self, chroma_results: Dict, collection=None) -> List[Dict]:
+    def _format_results(self, chroma_results: dict, collection=None) -> list[dict]:
         """Format ChromaDB results into clean list, boosted by importance score"""
         if not chroma_results["ids"] or not chroma_results["ids"][0]:
             return []
@@ -395,7 +346,9 @@ class VectorMemory:
                 "id": chroma_results["ids"][0][i],
                 "content": chroma_results["documents"][0][i],
                 "metadata": chroma_results["metadatas"][0][i],
-                "distance": chroma_results["distances"][0][i] if "distances" in chroma_results else None,
+                "distance": chroma_results["distances"][0][i]
+                if "distances" in chroma_results
+                else None,
             }
             # Compute importance-boosted score (lower distance = better match)
             try:
@@ -419,7 +372,7 @@ class VectorMemory:
 
         return formatted
 
-    def _update_access_metadata(self, collection, results: List[Dict]):
+    def _update_access_metadata(self, collection, results: list[dict]):
         """Update access_count and last_accessed for retrieved results"""
         now = datetime.now().isoformat()
         ids = []
@@ -438,7 +391,7 @@ class VectorMemory:
             except Exception as e:
                 logger.warning(f"Failed to update access metadata: {e}")
 
-    def decay_memories(self, decay_rate: float = 0.01, archive_threshold: float = 0.1) -> List[str]:
+    def decay_memories(self, decay_rate: float = 0.01, archive_threshold: float = 0.1) -> list[str]:
         """
         Reduce importance_score over time for all memories.
 
@@ -453,17 +406,16 @@ class VectorMemory:
         Returns:
             List of memory IDs flagged for archival
         """
-        flagged: List[str] = []
+        flagged: list[str] = []
         now = datetime.now()
 
-        for collection in [self.conversations, self.skills, self.knowledge,
-                           *self.threads.values()]:
+        for collection in [self.conversations, self.skills, self.knowledge, *self.threads.values()]:
             all_items = collection.get(include=["metadatas"])
             if not all_items["ids"]:
                 continue
 
-            ids_to_update: List[str] = []
-            metas_to_update: List[Dict] = []
+            ids_to_update: list[str] = []
+            metas_to_update: list[dict] = []
 
             for idx, entry_id in enumerate(all_items["ids"]):
                 meta = dict(all_items["metadatas"][idx])
@@ -508,10 +460,10 @@ class VectorMemory:
         self,
         content: str,
         collection_name: str = "knowledge",
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
         chunk_size: int = 512,
         overlap: int = 50,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Automatically chunk long text and store each chunk as a separate memory.
 
@@ -543,16 +495,18 @@ class VectorMemory:
             embedding = self.embedder.encode(chunk).tolist()
 
             meta = dict(metadata) if metadata else {}
-            meta.update({
-                "timestamp": datetime.now().isoformat(),
-                "type": collection_name,
-                "importance_score": meta.get("importance_score", 0.5),
-                "access_count": 0,
-                "last_accessed": datetime.now().isoformat(),
-                "chunk_index": i,
-                "total_chunks": len(chunks),
-                "is_chunked": True,
-            })
+            meta.update(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "type": collection_name,
+                    "importance_score": meta.get("importance_score", 0.5),
+                    "access_count": 0,
+                    "last_accessed": datetime.now().isoformat(),
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
+                    "is_chunked": True,
+                }
+            )
 
             collection.add(
                 ids=[entry_id],
@@ -570,8 +524,8 @@ class VectorMemory:
         query: str,
         collection_name: str = "knowledge",
         n_results: int = 5,
-        filter_metadata: Optional[Dict] = None,
-    ) -> List[Dict]:
+        filter_metadata: Optional[dict] = None,
+    ) -> list[dict]:
         """
         Unified search across a named collection with importance boosting
         and automatic access tracking.
@@ -602,11 +556,7 @@ class VectorMemory:
 
         return self._format_results(results, collection=collection)
 
-    def get_recent_context(
-        self,
-        limit: int = 10,
-        thread: Optional[str] = None
-    ) -> List[Dict]:
+    def get_recent_context(self, limit: int = 10, thread: Optional[str] = None) -> list[dict]:
         """
         Get recent conversation context
 
@@ -622,9 +572,7 @@ class VectorMemory:
         # Fetch all items so we can sort by timestamp and return the truly most-recent ones.
         # ChromaDB's get() has no ordering guarantee, so fetching only `limit` items can
         # silently omit newer entries.
-        all_results = collection.get(
-            include=["documents", "metadatas"]
-        )
+        all_results = collection.get(include=["documents", "metadatas"])
 
         if not all_results["ids"]:
             return []
@@ -634,47 +582,43 @@ class VectorMemory:
             {
                 "id": all_results["ids"][i],
                 "content": all_results["documents"][i],
-                "metadata": all_results["metadatas"][i]
+                "metadata": all_results["metadatas"][i],
             }
             for i in range(len(all_results["ids"]))
         ]
 
         # Sort by timestamp (most recent first) then return top `limit`
-        entries.sort(
-            key=lambda x: x["metadata"].get("timestamp", ""),
-            reverse=True
-        )
+        entries.sort(key=lambda x: x["metadata"].get("timestamp", ""), reverse=True)
 
         return entries[:limit]
 
     def clear_thread(self, thread_name: str):
         """Clear all memories from a specific thread"""
         if thread_name in self.threads:
-            collection = self.get_thread_collection(thread_name)
+            self.get_thread_collection(thread_name)
             self.client.delete_collection(f"thread_{thread_name}")
             del self.threads[thread_name]
             logger.info(f"Cleared thread: {thread_name}")
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get memory statistics"""
         return {
             "conversations": self.conversations.count(),
             "skills": self.skills.count(),
             "knowledge": self.knowledge.count(),
-            "threads": {
-                name: collection.count()
-                for name, collection in self.threads.items()
-            },
+            "threads": {name: collection.count() for name, collection in self.threads.items()},
             "total_entries": (
-                self.conversations.count() +
-                self.skills.count() +
-                self.knowledge.count() +
-                sum(c.count() for c in self.threads.values())
-            )
+                self.conversations.count()
+                + self.skills.count()
+                + self.knowledge.count()
+                + sum(c.count() for c in self.threads.values())
+            ),
         }
+
 
 # Global vector memory instance (lazily initialized to avoid heavy import-time work)
 _vector_memory_instance: Optional[VectorMemory] = None
+
 
 def get_vector_memory() -> VectorMemory:
     """Get the shared VectorMemory instance, creating it on first use."""
@@ -683,10 +627,12 @@ def get_vector_memory() -> VectorMemory:
         _vector_memory_instance = VectorMemory()
     return _vector_memory_instance
 
+
 class _LazyVectorMemoryProxy:
     """Proxy that defers VectorMemory initialization until first attribute access."""
 
     def __getattr__(self, name: str):
         return getattr(get_vector_memory(), name)
+
 
 vector_memory = _LazyVectorMemoryProxy()

@@ -4,18 +4,18 @@ A categorized, password-masked settings panel for financial integrations.
 Reads from and writes to the .env file. Sensitive values are masked in the UI
 but are stored in the .env file without encryption.
 """
+
 from __future__ import annotations
 
-import os
-import re
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
 
+from loguru import logger
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QDialog,
+    QComboBox,
+    QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -25,28 +25,26 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    QDoubleSpinBox,
-    QComboBox,
-    QSpinBox,
 )
-from loguru import logger
 
 # ─── Field descriptor ────────────────────────────────────────────────────────
 
 
 class FieldDef:
     """Describes one settings field"""
+
     def __init__(
         self,
         env_key: str,
         label: str,
         sensitive: bool = False,
         placeholder: str = "",
-        widget_type: str = "text",   # text | bool | float | int | combo
-        choices: Optional[List[str]] = None,
+        widget_type: str = "text",  # text | bool | float | int | combo
+        choices: list[str] | None = None,
         min_val: float = 0.0,
         max_val: float = 1_000_000.0,
         decimals: int = 2,
@@ -68,201 +66,368 @@ class FieldDef:
 
 # ─── Section definitions ─────────────────────────────────────────────────────
 
-SECTIONS: Dict[str, List[Tuple[str, List[FieldDef]]]] = {
+SECTIONS: dict[str, list[tuple[str, list[FieldDef]]]] = {
     "🏦 Banking": [
-        ("Plaid (Bank Account Linking)", [
-            FieldDef("PLAID_CLIENT_ID",  "Client ID",       sensitive=True,  placeholder="Plaid client_id"),
-            FieldDef("PLAID_SECRET",     "Secret",          sensitive=True,  placeholder="Plaid secret"),
-            FieldDef("PLAID_ENV",        "Environment",     widget_type="combo",
-                     choices=["sandbox", "development", "production"]),
-            FieldDef("PLAID_ENABLED",    "Enabled",         widget_type="bool"),
-        ]),
+        (
+            "Plaid (Bank Account Linking)",
+            [
+                FieldDef(
+                    "PLAID_CLIENT_ID", "Client ID", sensitive=True, placeholder="Plaid client_id"
+                ),
+                FieldDef("PLAID_SECRET", "Secret", sensitive=True, placeholder="Plaid secret"),
+                FieldDef(
+                    "PLAID_ENV",
+                    "Environment",
+                    widget_type="combo",
+                    choices=["sandbox", "development", "production"],
+                ),
+                FieldDef("PLAID_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
     ],
-
     "📈 Trading": [
-        ("Alpaca (Stocks / ETFs)", [
-            FieldDef("ALPACA_API_KEY",    "API Key",        sensitive=True,  placeholder="pk_..."),
-            FieldDef("ALPACA_SECRET_KEY", "Secret Key",     sensitive=True,  placeholder="alpaca secret"),
-            FieldDef("ALPACA_BASE_URL",   "Base URL",       placeholder="https://paper-api.alpaca.markets"),
-        ]),
-        ("Interactive Brokers (IBKR)", [
-            FieldDef("IBKR_HOST",      "TWS/Gateway Host", placeholder="127.0.0.1"),
-            FieldDef("IBKR_PORT",      "Port",             widget_type="int", min_val=1, max_val=65535, step=1,
-                     tooltip="7497=paper, 7496=live"),
-            FieldDef("IBKR_CLIENT_ID", "Client ID",        widget_type="int", min_val=0, max_val=999, step=1),
-            FieldDef("IBKR_ENABLED",   "Enabled",          widget_type="bool"),
-        ]),
-        ("Schwab (Options / Stocks)", [
-            FieldDef("SCHWAB_CLIENT_ID",     "Client ID",       sensitive=True),
-            FieldDef("SCHWAB_CLIENT_SECRET", "Client Secret",   sensitive=True),
-            FieldDef("SCHWAB_REDIRECT_URI",  "Redirect URI",    placeholder="https://127.0.0.1"),
-            FieldDef("SCHWAB_ENABLED",       "Enabled",         widget_type="bool"),
-        ]),
+        (
+            "Alpaca (Stocks / ETFs)",
+            [
+                FieldDef("ALPACA_API_KEY", "API Key", sensitive=True, placeholder="pk_..."),
+                FieldDef(
+                    "ALPACA_SECRET_KEY", "Secret Key", sensitive=True, placeholder="alpaca secret"
+                ),
+                FieldDef(
+                    "ALPACA_BASE_URL", "Base URL", placeholder="https://paper-api.alpaca.markets"
+                ),
+            ],
+        ),
+        (
+            "Interactive Brokers (IBKR)",
+            [
+                FieldDef("IBKR_HOST", "TWS/Gateway Host", placeholder="127.0.0.1"),
+                FieldDef(
+                    "IBKR_PORT",
+                    "Port",
+                    widget_type="int",
+                    min_val=1,
+                    max_val=65535,
+                    step=1,
+                    tooltip="7497=paper, 7496=live",
+                ),
+                FieldDef(
+                    "IBKR_CLIENT_ID", "Client ID", widget_type="int", min_val=0, max_val=999, step=1
+                ),
+                FieldDef("IBKR_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Schwab (Options / Stocks)",
+            [
+                FieldDef("SCHWAB_CLIENT_ID", "Client ID", sensitive=True),
+                FieldDef("SCHWAB_CLIENT_SECRET", "Client Secret", sensitive=True),
+                FieldDef("SCHWAB_REDIRECT_URI", "Redirect URI", placeholder="https://127.0.0.1"),
+                FieldDef("SCHWAB_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
     ],
-
     "₿ Crypto": [
-        ("Binance", [
-            FieldDef("BINANCE_API_KEY",    "API Key",        sensitive=True),
-            FieldDef("BINANCE_SECRET_KEY", "Secret Key",     sensitive=True),
-            FieldDef("BINANCE_TESTNET",    "Use Testnet",    widget_type="bool"),
-            FieldDef("BINANCE_ENABLED",    "Enabled",        widget_type="bool"),
-        ]),
-        ("Kraken", [
-            FieldDef("KRAKEN_API_KEY",     "API Key",        sensitive=True),
-            FieldDef("KRAKEN_PRIVATE_KEY", "Private Key",    sensitive=True),
-            FieldDef("KRAKEN_ENABLED",     "Enabled",        widget_type="bool"),
-        ]),
-        ("Coinbase Advanced Trade", [
-            FieldDef("COINBASE_ADV_API_KEY", "API Key",      sensitive=True),
-            FieldDef("COINBASE_ADV_SECRET",  "Secret",       sensitive=True),
-            FieldDef("COINBASE_ADV_ENABLED", "Enabled",      widget_type="bool"),
-        ]),
-        ("Base L2 (Ethereum)", [
-            FieldDef("BASE_RPC_URL",            "RPC URL",         placeholder="https://mainnet.base.org"),
-            FieldDef("BASE_WALLET_ADDRESS",     "Wallet Address",  sensitive=True),
-            FieldDef("BASE_WALLET_PRIVATE_KEY", "Private Key",     sensitive=True,
-                     tooltip="⚠ Never share your private key"),
-            FieldDef("BASE_ENABLED",            "Enabled",         widget_type="bool"),
-        ]),
-        ("Coinbase Commerce (Payments)", [
-            FieldDef("COINBASE_COMMERCE_API_KEY",        "API Key",        sensitive=True),
-            FieldDef("COINBASE_COMMERCE_WEBHOOK_SECRET", "Webhook Secret", sensitive=True),
-            FieldDef("COINBASE_COMMERCE_ENABLED",        "Enabled",        widget_type="bool"),
-        ]),
+        (
+            "Binance",
+            [
+                FieldDef("BINANCE_API_KEY", "API Key", sensitive=True),
+                FieldDef("BINANCE_SECRET_KEY", "Secret Key", sensitive=True),
+                FieldDef("BINANCE_TESTNET", "Use Testnet", widget_type="bool"),
+                FieldDef("BINANCE_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Kraken",
+            [
+                FieldDef("KRAKEN_API_KEY", "API Key", sensitive=True),
+                FieldDef("KRAKEN_PRIVATE_KEY", "Private Key", sensitive=True),
+                FieldDef("KRAKEN_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Coinbase Advanced Trade",
+            [
+                FieldDef("COINBASE_ADV_API_KEY", "API Key", sensitive=True),
+                FieldDef("COINBASE_ADV_SECRET", "Secret", sensitive=True),
+                FieldDef("COINBASE_ADV_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Base L2 (Ethereum)",
+            [
+                FieldDef("BASE_RPC_URL", "RPC URL", placeholder="https://mainnet.base.org"),
+                FieldDef("BASE_WALLET_ADDRESS", "Wallet Address", sensitive=True),
+                FieldDef(
+                    "BASE_WALLET_PRIVATE_KEY",
+                    "Private Key",
+                    sensitive=True,
+                    tooltip="⚠ Never share your private key",
+                ),
+                FieldDef("BASE_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Coinbase Commerce (Payments)",
+            [
+                FieldDef("COINBASE_COMMERCE_API_KEY", "API Key", sensitive=True),
+                FieldDef("COINBASE_COMMERCE_WEBHOOK_SECRET", "Webhook Secret", sensitive=True),
+                FieldDef("COINBASE_COMMERCE_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
     ],
-
     "🎰 Betting": [
-        ("DraftKings", [
-            FieldDef("DRAFTKINGS_API_KEY", "API Key",  sensitive=True),
-            FieldDef("DRAFTKINGS_ENABLED", "Enabled",  widget_type="bool"),
-        ]),
-        ("PrizePicks", [
-            FieldDef("PRIZEPICKS_API_KEY", "API Key",  sensitive=True),
-            FieldDef("PRIZEPICKS_ENABLED", "Enabled",  widget_type="bool"),
-        ]),
-        ("FanDuel", [
-            FieldDef("FANDUEL_API_KEY", "API Key",     sensitive=True),
-            FieldDef("FANDUEL_ENABLED", "Enabled",     widget_type="bool"),
-        ]),
-        ("The Odds API (Lines Aggregator)", [
-            FieldDef("ODDS_API_KEY",     "API Key",    sensitive=True,  placeholder="odds-api.com key"),
-            FieldDef("ODDS_API_ENABLED", "Enabled",    widget_type="bool"),
-        ]),
+        (
+            "DraftKings",
+            [
+                FieldDef("DRAFTKINGS_API_KEY", "API Key", sensitive=True),
+                FieldDef("DRAFTKINGS_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "PrizePicks",
+            [
+                FieldDef("PRIZEPICKS_API_KEY", "API Key", sensitive=True),
+                FieldDef("PRIZEPICKS_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "FanDuel",
+            [
+                FieldDef("FANDUEL_API_KEY", "API Key", sensitive=True),
+                FieldDef("FANDUEL_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "The Odds API (Lines Aggregator)",
+            [
+                FieldDef("ODDS_API_KEY", "API Key", sensitive=True, placeholder="odds-api.com key"),
+                FieldDef("ODDS_API_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
     ],
-
     "💼 Job / Task Platforms": [
-        ("Upwork", [
-            FieldDef("UPWORK_CLIENT_ID",     "Client ID",     sensitive=True),
-            FieldDef("UPWORK_CLIENT_SECRET", "Client Secret", sensitive=True),
-            FieldDef("UPWORK_ENABLED",       "Enabled",       widget_type="bool"),
-        ]),
-        ("Fiverr", [
-            FieldDef("FIVERR_API_KEY", "API Key",  sensitive=True),
-            FieldDef("FIVERR_ENABLED", "Enabled",  widget_type="bool"),
-        ]),
-        ("Amazon Mechanical Turk", [
-            FieldDef("MTURK_ACCESS_KEY", "Access Key", sensitive=True),
-            FieldDef("MTURK_SECRET_KEY", "Secret Key", sensitive=True),
-            FieldDef("MTURK_SANDBOX",    "Sandbox",    widget_type="bool"),
-            FieldDef("MTURK_ENABLED",    "Enabled",    widget_type="bool"),
-        ]),
+        (
+            "Upwork",
+            [
+                FieldDef("UPWORK_CLIENT_ID", "Client ID", sensitive=True),
+                FieldDef("UPWORK_CLIENT_SECRET", "Client Secret", sensitive=True),
+                FieldDef("UPWORK_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Fiverr",
+            [
+                FieldDef("FIVERR_API_KEY", "API Key", sensitive=True),
+                FieldDef("FIVERR_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Amazon Mechanical Turk",
+            [
+                FieldDef("MTURK_ACCESS_KEY", "Access Key", sensitive=True),
+                FieldDef("MTURK_SECRET_KEY", "Secret Key", sensitive=True),
+                FieldDef("MTURK_SANDBOX", "Sandbox", widget_type="bool"),
+                FieldDef("MTURK_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
     ],
-
     "🛒 Ecommerce / SaaS": [
-        ("Shopify", [
-            FieldDef("SHOPIFY_SHOP_DOMAIN",   "Shop Domain",    placeholder="my-store.myshopify.com"),
-            FieldDef("SHOPIFY_ACCESS_TOKEN",  "Access Token",   sensitive=True),
-            FieldDef("SHOPIFY_ENABLED",       "Enabled",        widget_type="bool"),
-        ]),
-        ("WooCommerce", [
-            FieldDef("WOOCOMMERCE_URL",              "Store URL",       placeholder="https://myshop.com"),
-            FieldDef("WOOCOMMERCE_CONSUMER_KEY",     "Consumer Key",    sensitive=True),
-            FieldDef("WOOCOMMERCE_CONSUMER_SECRET",  "Consumer Secret", sensitive=True),
-            FieldDef("WOOCOMMERCE_ENABLED",          "Enabled",         widget_type="bool"),
-        ]),
-        ("Amazon Seller (SP-API)", [
-            FieldDef("AMAZON_SELLER_ID",         "Seller ID",        sensitive=True),
-            FieldDef("AMAZON_SP_CLIENT_ID",      "Client ID",        sensitive=True),
-            FieldDef("AMAZON_SP_CLIENT_SECRET",  "Client Secret",    sensitive=True),
-            FieldDef("AMAZON_SP_REFRESH_TOKEN",  "Refresh Token",    sensitive=True),
-            FieldDef("AMAZON_SP_ENABLED",        "Enabled",          widget_type="bool"),
-        ]),
-        ("Stripe (Payments / SaaS)", [
-            FieldDef("STRIPE_API_KEY",        "API Key",        sensitive=True, placeholder="sk_live_..."),
-            FieldDef("STRIPE_WEBHOOK_SECRET", "Webhook Secret", sensitive=True, placeholder="whsec_..."),
-            FieldDef("STRIPE_ENABLED",        "Enabled",        widget_type="bool"),
-        ]),
-        ("SaaS / MaaS Config", [
-            FieldDef("SAAS_DEPLOY_ENABLED",  "SaaS Deploy Enabled",  widget_type="bool"),
-            FieldDef("SAAS_STRIPE_PRICE_ID", "Default Price ID",     placeholder="price_..."),
-            FieldDef("SAAS_TRIAL_DAYS",      "Trial Days",            widget_type="int", min_val=0, max_val=365, step=1),
-            FieldDef("MAAS_MODEL_ENDPOINT",  "MaaS Endpoint URL",    placeholder="https://..."),
-            FieldDef("MAAS_API_KEY_HEADER",  "Auth Header Name",     placeholder="X-API-Key"),
-        ]),
+        (
+            "Shopify",
+            [
+                FieldDef(
+                    "SHOPIFY_SHOP_DOMAIN", "Shop Domain", placeholder="my-store.myshopify.com"
+                ),
+                FieldDef("SHOPIFY_ACCESS_TOKEN", "Access Token", sensitive=True),
+                FieldDef("SHOPIFY_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "WooCommerce",
+            [
+                FieldDef("WOOCOMMERCE_URL", "Store URL", placeholder="https://myshop.com"),
+                FieldDef("WOOCOMMERCE_CONSUMER_KEY", "Consumer Key", sensitive=True),
+                FieldDef("WOOCOMMERCE_CONSUMER_SECRET", "Consumer Secret", sensitive=True),
+                FieldDef("WOOCOMMERCE_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Amazon Seller (SP-API)",
+            [
+                FieldDef("AMAZON_SELLER_ID", "Seller ID", sensitive=True),
+                FieldDef("AMAZON_SP_CLIENT_ID", "Client ID", sensitive=True),
+                FieldDef("AMAZON_SP_CLIENT_SECRET", "Client Secret", sensitive=True),
+                FieldDef("AMAZON_SP_REFRESH_TOKEN", "Refresh Token", sensitive=True),
+                FieldDef("AMAZON_SP_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "Stripe (Payments / SaaS)",
+            [
+                FieldDef("STRIPE_API_KEY", "API Key", sensitive=True, placeholder="sk_live_..."),
+                FieldDef(
+                    "STRIPE_WEBHOOK_SECRET",
+                    "Webhook Secret",
+                    sensitive=True,
+                    placeholder="whsec_...",
+                ),
+                FieldDef("STRIPE_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "SaaS / MaaS Config",
+            [
+                FieldDef("SAAS_DEPLOY_ENABLED", "SaaS Deploy Enabled", widget_type="bool"),
+                FieldDef("SAAS_STRIPE_PRICE_ID", "Default Price ID", placeholder="price_..."),
+                FieldDef(
+                    "SAAS_TRIAL_DAYS",
+                    "Trial Days",
+                    widget_type="int",
+                    min_val=0,
+                    max_val=365,
+                    step=1,
+                ),
+                FieldDef("MAAS_MODEL_ENDPOINT", "MaaS Endpoint URL", placeholder="https://..."),
+                FieldDef("MAAS_API_KEY_HEADER", "Auth Header Name", placeholder="X-API-Key"),
+            ],
+        ),
     ],
-
     "🚚 Supply Chain": [
-        ("ShipStation", [
-            FieldDef("SHIPSTATION_API_KEY",    "API Key",    sensitive=True),
-            FieldDef("SHIPSTATION_API_SECRET", "API Secret", sensitive=True),
-            FieldDef("SHIPSTATION_ENABLED",    "Enabled",    widget_type="bool"),
-        ]),
-        ("EasyPost (Shipping)", [
-            FieldDef("EASYPOST_API_KEY", "API Key",  sensitive=True),
-            FieldDef("EASYPOST_ENABLED", "Enabled",  widget_type="bool"),
-        ]),
+        (
+            "ShipStation",
+            [
+                FieldDef("SHIPSTATION_API_KEY", "API Key", sensitive=True),
+                FieldDef("SHIPSTATION_API_SECRET", "API Secret", sensitive=True),
+                FieldDef("SHIPSTATION_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "EasyPost (Shipping)",
+            [
+                FieldDef("EASYPOST_API_KEY", "API Key", sensitive=True),
+                FieldDef("EASYPOST_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
     ],
-
     "📞 Call Center": [
-        ("Twilio (Voice / SMS)", [
-            FieldDef("TWILIO_ACCOUNT_SID",  "Account SID",   sensitive=True,  placeholder="ACxxxxxxxx"),
-            FieldDef("TWILIO_AUTH_TOKEN",   "Auth Token",    sensitive=True),
-            FieldDef("TWILIO_PHONE_NUMBER", "Phone Number",  placeholder="+15551234567"),
-            FieldDef("TWILIO_ENABLED",      "Enabled",       widget_type="bool"),
-        ]),
+        (
+            "Twilio (Voice / SMS)",
+            [
+                FieldDef(
+                    "TWILIO_ACCOUNT_SID", "Account SID", sensitive=True, placeholder="ACxxxxxxxx"
+                ),
+                FieldDef("TWILIO_AUTH_TOKEN", "Auth Token", sensitive=True),
+                FieldDef("TWILIO_PHONE_NUMBER", "Phone Number", placeholder="+15551234567"),
+                FieldDef("TWILIO_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
     ],
-
     "🔌 API / MCP": [
-        ("MCP (Model Context Protocol)", [
-            FieldDef("MCP_SERVER_URLS",  "Server URLs",   placeholder="http://host1:port,http://host2:port"),
-            FieldDef("MCP_AUTH_TOKENS",  "Auth Tokens",   sensitive=True, placeholder="token1,token2"),
-            FieldDef("MCP_ENABLED",      "Enabled",       widget_type="bool"),
-        ]),
-        ("SerpAPI (Web Search)", [
-            FieldDef("SERP_API_KEY", "API Key", sensitive=True),
-        ]),
-        ("Perplexity AI", [
-            FieldDef("PERPLEXITY_API_KEY", "API Key",  sensitive=True),
-            FieldDef("PERPLEXITY_ENABLED", "Enabled",  widget_type="bool"),
-        ]),
-        ("HuggingFace", [
-            FieldDef("HUGGINGFACE_API_KEY", "API Key",  sensitive=True),
-            FieldDef("HUGGINGFACE_ENABLED", "Enabled",  widget_type="bool"),
-        ]),
+        (
+            "MCP (Model Context Protocol)",
+            [
+                FieldDef(
+                    "MCP_SERVER_URLS",
+                    "Server URLs",
+                    placeholder="http://host1:port,http://host2:port",
+                ),
+                FieldDef(
+                    "MCP_AUTH_TOKENS", "Auth Tokens", sensitive=True, placeholder="token1,token2"
+                ),
+                FieldDef("MCP_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "SerpAPI (Web Search)",
+            [
+                FieldDef("SERP_API_KEY", "API Key", sensitive=True),
+            ],
+        ),
+        (
+            "Perplexity AI",
+            [
+                FieldDef("PERPLEXITY_API_KEY", "API Key", sensitive=True),
+                FieldDef("PERPLEXITY_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
+        (
+            "HuggingFace",
+            [
+                FieldDef("HUGGINGFACE_API_KEY", "API Key", sensitive=True),
+                FieldDef("HUGGINGFACE_ENABLED", "Enabled", widget_type="bool"),
+            ],
+        ),
     ],
-
     "🚀 Revenue Engine": [
-        ("Goals & Risk", [
-            FieldDef("REVENUE_ENGINE_ENABLED",       "Engine Enabled",          widget_type="bool"),
-            FieldDef("REVENUE_GOAL_DAILY_USD",       "Daily Goal ($)",          widget_type="float",
-                     min_val=0, max_val=100_000, decimals=2, step=10.0),
-            FieldDef("REVENUE_GOAL_MONTHLY_USD",     "Monthly Goal ($)",        widget_type="float",
-                     min_val=0, max_val=1_000_000, decimals=2, step=100.0),
-            FieldDef("REVENUE_MAX_SINGLE_TRADE_USD", "Max Single Trade ($)",    widget_type="float",
-                     min_val=0, max_val=100_000, decimals=2, step=10.0,
-                     tooltip="Hard cap per automated trade or bet"),
-            FieldDef("REVENUE_RISK_LEVEL",           "Risk Level",              widget_type="combo",
-                     choices=["low", "medium", "high"]),
-            FieldDef("REVENUE_AUTO_REINVEST_PCT",    "Auto-Reinvest (%)",       widget_type="float",
-                     min_val=0, max_val=100, decimals=1, step=5.0),
-            FieldDef("REVENUE_REPORT_INTERVAL_HOURS","Report Interval (hrs)",   widget_type="int",
-                     min_val=1, max_val=168, step=1),
-        ]),
-        ("Active Streams", [
-            FieldDef("REVENUE_ACTIVE_STREAMS", "Active Streams",
-                     placeholder="trading,crypto,betting,ecommerce,saas,call_center",
-                     tooltip="Comma-separated list of enabled revenue streams"),
-        ]),
+        (
+            "Goals & Risk",
+            [
+                FieldDef("REVENUE_ENGINE_ENABLED", "Engine Enabled", widget_type="bool"),
+                FieldDef(
+                    "REVENUE_GOAL_DAILY_USD",
+                    "Daily Goal ($)",
+                    widget_type="float",
+                    min_val=0,
+                    max_val=100_000,
+                    decimals=2,
+                    step=10.0,
+                ),
+                FieldDef(
+                    "REVENUE_GOAL_MONTHLY_USD",
+                    "Monthly Goal ($)",
+                    widget_type="float",
+                    min_val=0,
+                    max_val=1_000_000,
+                    decimals=2,
+                    step=100.0,
+                ),
+                FieldDef(
+                    "REVENUE_MAX_SINGLE_TRADE_USD",
+                    "Max Single Trade ($)",
+                    widget_type="float",
+                    min_val=0,
+                    max_val=100_000,
+                    decimals=2,
+                    step=10.0,
+                    tooltip="Hard cap per automated trade or bet",
+                ),
+                FieldDef(
+                    "REVENUE_RISK_LEVEL",
+                    "Risk Level",
+                    widget_type="combo",
+                    choices=["low", "medium", "high"],
+                ),
+                FieldDef(
+                    "REVENUE_AUTO_REINVEST_PCT",
+                    "Auto-Reinvest (%)",
+                    widget_type="float",
+                    min_val=0,
+                    max_val=100,
+                    decimals=1,
+                    step=5.0,
+                ),
+                FieldDef(
+                    "REVENUE_REPORT_INTERVAL_HOURS",
+                    "Report Interval (hrs)",
+                    widget_type="int",
+                    min_val=1,
+                    max_val=168,
+                    step=1,
+                ),
+            ],
+        ),
+        (
+            "Active Streams",
+            [
+                FieldDef(
+                    "REVENUE_ACTIVE_STREAMS",
+                    "Active Streams",
+                    placeholder="trading,crypto,betting,ecommerce,saas,call_center",
+                    tooltip="Comma-separated list of enabled revenue streams",
+                ),
+            ],
+        ),
     ],
 }
 
@@ -281,11 +446,11 @@ class SecureFinancialSettings(QWidget):
 
     settings_saved = pyqtSignal()
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._env_path = Path(__file__).parent / ".env"
-        self._widgets: Dict[str, QWidget] = {}   # env_key -> input widget
-        self._env_data: Dict[str, str] = {}       # full .env contents as dict
+        self._widgets: dict[str, QWidget] = {}  # env_key -> input widget
+        self._env_data: dict[str, str] = {}  # full .env contents as dict
         self._build_ui()
         self._load_env()
 
@@ -309,7 +474,9 @@ class SecureFinancialSettings(QWidget):
 
         save_btn = QPushButton("💾  Save All")
         save_btn.clicked.connect(self._save_settings)
-        save_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 6px 16px;")
+        save_btn.setStyleSheet(
+            "background-color: #4CAF50; color: white; font-weight: bold; padding: 6px 16px;"
+        )
         hdr.addWidget(save_btn)
 
         root.addLayout(hdr)
@@ -333,7 +500,7 @@ class SecureFinancialSettings(QWidget):
 
         root.addWidget(self._tabs, 1)
 
-    def _build_tab(self, groups: List[Tuple[str, List[FieldDef]]]) -> QWidget:
+    def _build_tab(self, groups: list[tuple[str, list[FieldDef]]]) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         inner = QWidget()
@@ -407,9 +574,7 @@ class SecureFinancialSettings(QWidget):
     # ── Reveal / Hide ─────────────────────────────────────────────────────────
 
     def _set_echo(self, widget: QLineEdit, show: bool):
-        widget.setEchoMode(
-            QLineEdit.EchoMode.Normal if show else QLineEdit.EchoMode.Password
-        )
+        widget.setEchoMode(QLineEdit.EchoMode.Normal if show else QLineEdit.EchoMode.Password)
 
     def _toggle_reveal(self, show: bool):
         self._reveal_btn.setText("🙈  Hide Secrets" if show else "👁  Show Secrets")
@@ -420,7 +585,7 @@ class SecureFinancialSettings(QWidget):
                 if fdef and fdef.sensitive:
                     self._set_echo(widget, show)
 
-    def _find_fdef(self, env_key: str) -> Optional[FieldDef]:
+    def _find_fdef(self, env_key: str) -> FieldDef | None:
         for groups in SECTIONS.values():
             for _, fields in groups:
                 for fdef in fields:
@@ -434,7 +599,7 @@ class SecureFinancialSettings(QWidget):
         """Load current .env file into widget values"""
         self._env_data = {}
         if self._env_path.exists():
-            with open(self._env_path, "r", encoding="utf-8") as f:
+            with open(self._env_path, encoding="utf-8") as f:
                 for line in f:
                     line = line.rstrip("\n")
                     if line.startswith("#") or "=" not in line:
@@ -482,16 +647,16 @@ class SecureFinancialSettings(QWidget):
     def _save_settings(self):
         """Persist all widget values back to .env"""
         # Read existing .env preserving comments and order
-        existing_lines: List[str] = []
+        existing_lines: list[str] = []
         if self._env_path.exists():
-            with open(self._env_path, "r", encoding="utf-8") as f:
+            with open(self._env_path, encoding="utf-8") as f:
                 existing_lines = f.readlines()
 
         # Build a map of key -> line-index for existing lines.
         # We only match lines that set a key (not comment lines) and we keep
         # track of any inline comment so we can restore it after updating.
-        key_line: Dict[str, int] = {}
-        key_comment: Dict[str, str] = {}   # optional inline comment per key
+        key_line: dict[str, int] = {}
+        key_comment: dict[str, str] = {}  # optional inline comment per key
         for i, line in enumerate(existing_lines):
             stripped = line.rstrip("\n")
             if not stripped or stripped.lstrip().startswith("#"):
@@ -503,11 +668,10 @@ class SecureFinancialSettings(QWidget):
             # Detect an inline comment: unquoted `#` after the value
             # Simple heuristic: if the value is not quoted and contains ` #`
             inline_comment = ""
-            val_part = rest
             if not (rest.startswith('"') or rest.startswith("'")):
                 comment_idx = rest.find(" #")
                 if comment_idx != -1:
-                    val_part = rest[:comment_idx]
+                    rest[:comment_idx]
                     inline_comment = rest[comment_idx:]
             key_line[k] = i
             key_comment[k] = inline_comment
@@ -517,7 +681,7 @@ class SecureFinancialSettings(QWidget):
             # Quote if value contains: spaces, #, $, quotes, backslashes
             if not v:
                 return v
-            needs_quoting = any(c in v for c in ' #$"\'\\')
+            needs_quoting = any(c in v for c in " #$\"'\\")
             if needs_quoting:
                 # Double-quote, escaping inner double-quotes and backslashes
                 escaped = v.replace("\\", "\\\\").replace('"', '\\"')
@@ -556,15 +720,16 @@ class SecureFinancialSettings(QWidget):
 
     # ── Status Summary ────────────────────────────────────────────────────────
 
-    def get_integration_status(self) -> Dict[str, bool]:
+    def get_integration_status(self) -> dict[str, bool]:
         """Return dict of integration_name -> is_enabled (from current widget state)"""
-        status: Dict[str, bool] = {}
+        status: dict[str, bool] = {}
         enabled_keys = [k for k in self._widgets if k.endswith("_ENABLED")]
         for k in enabled_keys:
             w = self._widgets[k]
             name = k.replace("_ENABLED", "").lower()
             status[name] = (
-                w.isChecked() if isinstance(w, QCheckBox) else
-                self._get_widget_value(w).lower() == "true"
+                w.isChecked()
+                if isinstance(w, QCheckBox)
+                else self._get_widget_value(w).lower() == "true"
             )
         return status

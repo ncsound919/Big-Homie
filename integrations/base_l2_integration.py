@@ -2,25 +2,32 @@
 Base Layer 2 (Ethereum) Integration
 Provides blockchain interaction capabilities on Base L2
 """
+
 import asyncio
-from typing import Dict, Optional, Any
 from dataclasses import dataclass
+from typing import Any, Optional
+
 from loguru import logger
+
 from config import settings
 
 try:
     from web3 import Web3
+
     WEB3_AVAILABLE = True
 except ImportError:
     WEB3_AVAILABLE = False
     logger.warning("web3 not installed. Base L2 integration disabled.")
 
+
 @dataclass
 class BaseL2Result:
     """Result of a Base L2 operation"""
+
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
+
 
 class BaseL2Integration:
     """
@@ -76,15 +83,15 @@ class BaseL2Integration:
                 return BaseL2Result(success=False, error="No address provided")
 
             balance_wei = await asyncio.to_thread(self.w3.eth.get_balance, addr)
-            balance_eth = self.w3.from_wei(balance_wei, 'ether')
+            balance_eth = self.w3.from_wei(balance_wei, "ether")
 
             return BaseL2Result(
                 success=True,
                 data={
                     "address": addr,
                     "balance_wei": str(balance_wei),
-                    "balance_eth": str(balance_eth)
-                }
+                    "balance_eth": str(balance_eth),
+                },
             )
         except Exception as e:
             logger.error(f"Get balance failed: {e}")
@@ -97,24 +104,18 @@ class BaseL2Integration:
 
         try:
             gas_price_wei = await asyncio.to_thread(lambda: self.w3.eth.gas_price)
-            gas_price_gwei = self.w3.from_wei(gas_price_wei, 'gwei')
+            gas_price_gwei = self.w3.from_wei(gas_price_wei, "gwei")
 
             return BaseL2Result(
                 success=True,
-                data={
-                    "gas_price_wei": str(gas_price_wei),
-                    "gas_price_gwei": str(gas_price_gwei)
-                }
+                data={"gas_price_wei": str(gas_price_wei), "gas_price_gwei": str(gas_price_gwei)},
             )
         except Exception as e:
             logger.error(f"Get gas price failed: {e}")
             return BaseL2Result(success=False, error=str(e))
 
     async def send_transaction(
-        self,
-        to_address: str,
-        amount_eth: float,
-        gas_limit: int = 21000
+        self, to_address: str, amount_eth: float, gas_limit: int = 21000
     ) -> BaseL2Result:
         """
         Send ETH transaction (requires confirmation)
@@ -136,19 +137,21 @@ class BaseL2Integration:
             gas_price = await asyncio.to_thread(lambda: self.w3.eth.gas_price)
 
             tx = {
-                'nonce': nonce,
-                'to': to_address,
-                'value': self.w3.to_wei(amount_eth, 'ether'),
-                'gas': gas_limit,
-                'gasPrice': gas_price,
-                'chainId': await asyncio.to_thread(lambda: self.w3.eth.chain_id)
+                "nonce": nonce,
+                "to": to_address,
+                "value": self.w3.to_wei(amount_eth, "ether"),
+                "gas": gas_limit,
+                "gasPrice": gas_price,
+                "chainId": await asyncio.to_thread(lambda: self.w3.eth.chain_id),
             }
 
             # Sign transaction
             signed_tx = self.account.sign_transaction(tx)
 
             # Send transaction
-            tx_hash = await asyncio.to_thread(self.w3.eth.send_raw_transaction, signed_tx.rawTransaction)
+            tx_hash = await asyncio.to_thread(
+                self.w3.eth.send_raw_transaction, signed_tx.rawTransaction
+            )
 
             logger.info(f"Transaction sent: {tx_hash.hex()}")
 
@@ -159,8 +162,8 @@ class BaseL2Integration:
                     "from": self.account.address,
                     "to": to_address,
                     "amount_eth": amount_eth,
-                    "gas_price_gwei": str(self.w3.from_wei(gas_price, 'gwei'))
-                }
+                    "gas_price_gwei": str(self.w3.from_wei(gas_price, "gwei")),
+                },
             )
         except Exception as e:
             logger.error(f"Send transaction failed: {e}")
@@ -182,54 +185,46 @@ class BaseL2Integration:
 
             return BaseL2Result(
                 success=True,
-                data={
-                    "transaction": dict(tx),
-                    "receipt": dict(tx_receipt) if tx_receipt else None
-                }
+                data={"transaction": dict(tx), "receipt": dict(tx_receipt) if tx_receipt else None},
             )
         except Exception as e:
             logger.error(f"Get transaction failed: {e}")
             return BaseL2Result(success=False, error=str(e))
 
     async def estimate_gas(
-        self,
-        to_address: str,
-        amount_eth: float,
-        data: Optional[str] = None
+        self, to_address: str, amount_eth: float, data: Optional[str] = None
     ) -> BaseL2Result:
         """Estimate gas for a transaction"""
         if not settings.base_enabled or not self.w3:
             return BaseL2Result(success=False, error="Base L2 integration not enabled")
 
         try:
-            tx = {
-                'to': to_address,
-                'value': self.w3.to_wei(amount_eth, 'ether')
-            }
+            tx = {"to": to_address, "value": self.w3.to_wei(amount_eth, "ether")}
 
             if data:
-                tx['data'] = data
+                tx["data"] = data
 
             if self.account:
-                tx['from'] = self.account.address
+                tx["from"] = self.account.address
 
             gas_estimate = await asyncio.to_thread(self.w3.eth.estimate_gas, tx)
             gas_price = await asyncio.to_thread(lambda: self.w3.eth.gas_price)
 
             total_cost_wei = gas_estimate * gas_price
-            total_cost_eth = self.w3.from_wei(total_cost_wei, 'ether')
+            total_cost_eth = self.w3.from_wei(total_cost_wei, "ether")
 
             return BaseL2Result(
                 success=True,
                 data={
                     "gas_estimate": gas_estimate,
-                    "gas_price_gwei": str(self.w3.from_wei(gas_price, 'gwei')),
-                    "total_cost_eth": str(total_cost_eth)
-                }
+                    "gas_price_gwei": str(self.w3.from_wei(gas_price, "gwei")),
+                    "total_cost_eth": str(total_cost_eth),
+                },
             )
         except Exception as e:
             logger.error(f"Estimate gas failed: {e}")
             return BaseL2Result(success=False, error=str(e))
+
 
 # Global instance
 base_l2 = BaseL2Integration()

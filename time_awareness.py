@@ -2,10 +2,12 @@
 Time Awareness Module for Big Homie
 Contextual understanding of dates, times, and temporal references
 """
-from datetime import datetime, timedelta, time as time_type
-from typing import Optional, Dict
+
 import re
-from loguru import logger
+from datetime import datetime, timedelta
+from datetime import time as time_type
+from typing import Optional
+
 
 class TimeAwareness:
     """Provides contextual time understanding and formatting"""
@@ -13,7 +15,7 @@ class TimeAwareness:
     def __init__(self):
         self.startup_time = datetime.now()
 
-    def get_current_context(self) -> Dict:
+    def get_current_context(self) -> dict:
         """Get current time context"""
         now = datetime.now()
         return {
@@ -28,18 +30,18 @@ class TimeAwareness:
             "is_weekend": now.weekday() >= 5,
             "is_business_hours": self._is_business_hours(now),
             "season": self._get_season(now),
-            "timezone": datetime.now().astimezone().tzname() or "UTC"  # Actual local timezone
+            "timezone": datetime.now().astimezone().tzname() or "UTC",  # Actual local timezone
         }
 
     def format_context_string(self) -> str:
         """Format time context as a string for LLM"""
         ctx = self.get_current_context()
         return f"""Current Time Context:
-- Date: {ctx['day_of_week']}, {ctx['date']}
-- Time: {ctx['time']} ({ctx['time_of_day']})
-- Season: {ctx['season']}
-- Business Hours: {'Yes' if ctx['is_business_hours'] else 'No'}
-- Weekend: {'Yes' if ctx['is_weekend'] else 'No'}
+- Date: {ctx["day_of_week"]}, {ctx["date"]}
+- Time: {ctx["time"]} ({ctx["time_of_day"]})
+- Season: {ctx["season"]}
+- Business Hours: {"Yes" if ctx["is_business_hours"] else "No"}
+- Weekend: {"Yes" if ctx["is_weekend"] else "No"}
 """
 
     def parse_temporal_reference(self, text: str) -> Optional[datetime]:
@@ -73,8 +75,13 @@ class TimeAwareness:
 
         # Day of week references
         weekdays = {
-            "monday": 0, "tuesday": 1, "wednesday": 2,
-            "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6
+            "monday": 0,
+            "tuesday": 1,
+            "wednesday": 2,
+            "thursday": 3,
+            "friday": 4,
+            "saturday": 5,
+            "sunday": 6,
         }
 
         for day_name, day_num in weekdays.items():
@@ -87,12 +94,12 @@ class TimeAwareness:
                     return self._get_this_weekday(now, day_num)
 
         # Relative day references
-        match = re.search(r'(\d+)\s+days?\s+ago', text_lower)
+        match = re.search(r"(\d+)\s+days?\s+ago", text_lower)
         if match:
             days = int(match.group(1))
             return now - timedelta(days=days)
 
-        match = re.search(r'in\s+(\d+)\s+days?', text_lower)
+        match = re.search(r"in\s+(\d+)\s+days?", text_lower)
         if match:
             days = int(match.group(1))
             return now + timedelta(days=days)
@@ -136,7 +143,7 @@ class TimeAwareness:
 
     def get_session_duration(self) -> str:
         """Get how long the current session has been running"""
-        duration = datetime.now() - self.startup_time
+        datetime.now() - self.startup_time
         return self.format_relative_time(self.startup_time)
 
     def _get_time_of_day(self, dt: datetime) -> str:
@@ -214,6 +221,7 @@ class TimeAwareness:
         else:
             # Crosses midnight (e.g., 23:00 - 06:00)
             return current_time >= start or current_time <= end
+
 
 # Global time awareness instance
 time_awareness = TimeAwareness()

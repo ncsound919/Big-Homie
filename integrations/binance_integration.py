@@ -2,19 +2,23 @@
 Binance Crypto Exchange Integration
 Spot trading, account info, market data, and order management
 """
+
 import hashlib
 import hmac
 import time
-import httpx
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from typing import Any, Optional
+
+import httpx
 from loguru import logger
+
 from config import settings
 
 
 @dataclass
 class BinanceResult:
     """Result of a Binance operation"""
+
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
@@ -42,7 +46,7 @@ class BinanceIntegration:
         self.secret = settings.binance_secret_key
         self.base_url = self.TEST_BASE if settings.binance_testnet else self.LIVE_BASE
 
-    def _sign(self, params: Dict) -> str:
+    def _sign(self, params: dict) -> str:
         query = "&".join(f"{k}={v}" for k, v in params.items())
         return hmac.new(
             self.secret.encode("utf-8"),
@@ -50,7 +54,7 @@ class BinanceIntegration:
             hashlib.sha256,
         ).hexdigest()
 
-    def _headers(self) -> Dict:
+    def _headers(self) -> dict:
         return {"X-MBX-APIKEY": self.api_key}
 
     async def health_check(self) -> bool:
@@ -110,9 +114,7 @@ class BinanceIntegration:
             return BinanceResult(success=False, error="Binance integration not enabled")
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/v3/ticker/price", timeout=15.0
-                )
+                resp = await client.get(f"{self.base_url}/api/v3/ticker/price", timeout=15.0)
             if resp.status_code == 200:
                 return BinanceResult(success=True, data=resp.json())
             return BinanceResult(success=False, error=resp.text)
@@ -180,7 +182,7 @@ class BinanceIntegration:
                 return s + "0" if s.endswith(".") else s
 
             qty_str = _fmt(quantity)
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "symbol": symbol.upper(),
                 "side": side.upper(),
                 "type": order_type.upper(),
@@ -202,7 +204,9 @@ class BinanceIntegration:
                 )
             data = resp.json()
             if resp.status_code in (200, 201):
-                logger.info(f"Binance order placed: {data.get('orderId')} {side} {quantity} {symbol}")
+                logger.info(
+                    f"Binance order placed: {data.get('orderId')} {side} {quantity} {symbol}"
+                )
                 return BinanceResult(success=True, data=data)
             return BinanceResult(success=False, error=str(data))
         except Exception as e:
@@ -239,7 +243,7 @@ class BinanceIntegration:
         if not settings.binance_enabled:
             return BinanceResult(success=False, error="Binance integration not enabled")
         try:
-            params: Dict[str, Any] = {"timestamp": int(time.time() * 1000)}
+            params: dict[str, Any] = {"timestamp": int(time.time() * 1000)}
             if symbol:
                 params["symbol"] = symbol.upper()
             params["signature"] = self._sign(params)

@@ -3,16 +3,17 @@ Unit tests for governance.py - Claw Protect
 
 Covers: AuditTrail, HumanInTheLoop, SandboxedExecution, RiskLevel
 """
+
 from __future__ import annotations
 
-import hashlib
 import json
-import pytest
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # AuditTrail tests
 # ---------------------------------------------------------------------------
+
 
 class TestAuditTrail:
     """AuditTrail should record, chain, and verify log integrity."""
@@ -64,42 +65,42 @@ class TestAuditTrail:
 # HumanInTheLoop tests
 # ---------------------------------------------------------------------------
 
+
 class TestHumanInTheLoop:
     """HumanInTheLoop should correctly classify risk tiers."""
 
     def test_low_risk_classification(self, human_gate):
         from governance import RiskLevel
+
         risk = human_gate.classify_risk(action="read_file", context={})
         assert risk in (RiskLevel.LOW, RiskLevel.MEDIUM)
 
     def test_high_risk_financial(self, human_gate):
         from governance import RiskLevel
+
         risk = human_gate.classify_risk(
-            action="transfer_funds",
-            context={"amount": 10000, "target": "external_account"}
+            action="transfer_funds", context={"amount": 10000, "target": "external_account"}
         )
         assert risk in (RiskLevel.HIGH, RiskLevel.CRITICAL)
 
     def test_critical_risk_delete_all(self, human_gate):
         from governance import RiskLevel
-        risk = human_gate.classify_risk(
-            action="delete_all_data",
-            context={"scope": "production"}
-        )
+
+        risk = human_gate.classify_risk(action="delete_all_data", context={"scope": "production"})
         assert risk == RiskLevel.CRITICAL
 
     def test_auto_approve_low_risk(self, human_gate):
         """Low-risk actions should be auto-approved when flag is set."""
         from governance import RiskLevel
+
         approved = human_gate.request_approval(
-            action="read_config",
-            context={},
-            risk_level=RiskLevel.LOW
+            action="read_config", context={}, risk_level=RiskLevel.LOW
         )
         assert approved is True
 
     def test_four_risk_tiers_exist(self):
         from governance import RiskLevel
+
         levels = list(RiskLevel)
         assert len(levels) == 4
 
@@ -107,6 +108,7 @@ class TestHumanInTheLoop:
 # ---------------------------------------------------------------------------
 # SandboxedExecution tests
 # ---------------------------------------------------------------------------
+
 
 class TestSandboxedExecution:
     """SandboxedExecution should block dangerous commands and env variables."""
@@ -133,5 +135,7 @@ class TestSandboxedExecution:
             sandbox.execute_code(code=dangerous_code)
 
     def test_sandbox_config_has_allowlist(self, sandbox):
-        assert hasattr(sandbox, 'config')
-        assert hasattr(sandbox.config, 'allowed_commands') or hasattr(sandbox.config, 'blocked_commands')
+        assert hasattr(sandbox, "config")
+        assert hasattr(sandbox.config, "allowed_commands") or hasattr(
+            sandbox.config, "blocked_commands"
+        )

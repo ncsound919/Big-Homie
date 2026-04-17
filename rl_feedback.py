@@ -2,19 +2,23 @@
 Reinforcement Learning Feedback Traces - Tier 6 Self-Improvement
 Learn from outcomes of decisions through reinforcement signals
 """
+
 import json
 import sqlite3
-from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Optional
+
 from loguru import logger
+
 from config import settings
 
 
 @dataclass
 class FeedbackSignal:
     """A reinforcement signal from a decision outcome"""
+
     signal_id: str
     decision_context: str
     action_taken: str
@@ -22,12 +26,13 @@ class FeedbackSignal:
     reward: float  # -1.0 to 1.0
     reasoning: str = ""
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class DecisionPattern:
     """A learned pattern from accumulated feedback"""
+
     pattern_id: str
     context_pattern: str
     recommended_action: str
@@ -56,13 +61,14 @@ class ReinforcementFeedback:
         self.db_path = Path(settings.data_dir) / "rl_feedback.db"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
-        self.session_signals: List[FeedbackSignal] = []
+        self.session_signals: list[FeedbackSignal] = []
         self._correction_ledger = None
 
     def _get_correction_ledger(self):
         """Lazy-load the correction ledger to avoid circular imports"""
         if self._correction_ledger is None:
             from correction_ledger import correction_ledger
+
             self._correction_ledger = correction_ledger
         return self._correction_ledger
 
@@ -118,7 +124,7 @@ class ReinforcementFeedback:
         outcome: str,
         reward: float,
         reasoning: str = "",
-        metadata: Optional[Dict] = None
+        metadata: Optional[dict] = None,
     ) -> FeedbackSignal:
         """
         Record a feedback signal for a decision.
@@ -135,6 +141,7 @@ class ReinforcementFeedback:
             The recorded FeedbackSignal
         """
         import uuid
+
         signal = FeedbackSignal(
             signal_id=str(uuid.uuid4()),
             decision_context=decision_context,
@@ -142,7 +149,7 @@ class ReinforcementFeedback:
             outcome=outcome,
             reward=max(-1.0, min(1.0, reward)),
             reasoning=reasoning,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         # Store in session
@@ -154,9 +161,16 @@ class ReinforcementFeedback:
                 """INSERT INTO feedback_signals
                    (signal_id, decision_context, action_taken, outcome, reward, reasoning, timestamp, metadata)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (signal.signal_id, signal.decision_context, signal.action_taken,
-                 signal.outcome, signal.reward, signal.reasoning,
-                 signal.timestamp, json.dumps(signal.metadata))
+                (
+                    signal.signal_id,
+                    signal.decision_context,
+                    signal.action_taken,
+                    signal.outcome,
+                    signal.reward,
+                    signal.reasoning,
+                    signal.timestamp,
+                    json.dumps(signal.metadata),
+                ),
             )
             db.commit()
 
@@ -171,14 +185,12 @@ class ReinforcementFeedback:
                     mistake=signal.decision_context,
                     correction=signal.reasoning or "Negative outcome detected",
                     category=self._derive_category(signal.action_taken),
-                    context=f"Action: {signal.action_taken} | Reward: {signal.reward:+.2f}"
+                    context=f"Action: {signal.action_taken} | Reward: {signal.reward:+.2f}",
                 )
             except Exception as e:
                 logger.warning(f"Failed to log correction for negative feedback: {e}")
 
-        logger.debug(
-            f"RL feedback recorded: {action_taken} → {outcome} (reward: {reward:+.2f})"
-        )
+        logger.debug(f"RL feedback recorded: {action_taken} → {outcome} (reward: {reward:+.2f})")
 
         return signal
 
@@ -189,7 +201,7 @@ class ReinforcementFeedback:
         success: bool,
         cost: float = 0.0,
         duration: float = 0.0,
-        user_satisfaction: Optional[float] = None
+        user_satisfaction: Optional[float] = None,
     ):
         """
         Convenience method to record a task outcome.
@@ -222,8 +234,8 @@ class ReinforcementFeedback:
                 "success": success,
                 "cost": cost,
                 "duration": duration,
-                "user_satisfaction": user_satisfaction
-            }
+                "user_satisfaction": user_satisfaction,
+            },
         )
 
         # Update strategy scores
@@ -244,7 +256,7 @@ class ReinforcementFeedback:
             # Check if pattern exists
             row = db.execute(
                 "SELECT average_reward, sample_count FROM decision_patterns WHERE context_pattern = ?",
-                (pattern_key,)
+                (pattern_key,),
             ).fetchone()
 
             if row:
@@ -260,19 +272,31 @@ class ReinforcementFeedback:
                            recommended_action = CASE WHEN ? > average_reward THEN ? ELSE recommended_action END,
                            last_updated = ?
                        WHERE context_pattern = ?""",
-                    (new_avg, count, confidence,
-                     signal.reward, signal.action_taken,
-                     datetime.now().isoformat(), pattern_key)
+                    (
+                        new_avg,
+                        count,
+                        confidence,
+                        signal.reward,
+                        signal.action_taken,
+                        datetime.now().isoformat(),
+                        pattern_key,
+                    ),
                 )
             else:
                 import uuid
+
                 db.execute(
                     """INSERT INTO decision_patterns
                        (pattern_id, context_pattern, recommended_action, average_reward,
                         sample_count, confidence, last_updated)
                        VALUES (?, ?, ?, ?, 1, 0.1, ?)""",
-                    (str(uuid.uuid4()), pattern_key, signal.action_taken,
-                     signal.reward, datetime.now().isoformat())
+                    (
+                        str(uuid.uuid4()),
+                        pattern_key,
+                        signal.action_taken,
+                        signal.reward,
+                        datetime.now().isoformat(),
+                    ),
                 )
 
             db.commit()
@@ -282,7 +306,7 @@ class ReinforcementFeedback:
         with self._conn() as db:
             row = db.execute(
                 "SELECT total_reward, usage_count FROM strategy_scores WHERE strategy = ?",
-                (strategy,)
+                (strategy,),
             ).fetchone()
 
             if row:
@@ -294,35 +318,73 @@ class ReinforcementFeedback:
                     """UPDATE strategy_scores
                        SET total_reward = ?, usage_count = ?, average_reward = ?, last_used = ?
                        WHERE strategy = ?""",
-                    (total, count, avg, datetime.now().isoformat(), strategy)
+                    (total, count, avg, datetime.now().isoformat(), strategy),
                 )
             else:
                 db.execute(
                     """INSERT INTO strategy_scores
                        (strategy, total_reward, usage_count, average_reward, last_used)
                        VALUES (?, ?, 1, ?, ?)""",
-                    (strategy, reward, reward, datetime.now().isoformat())
+                    (strategy, reward, reward, datetime.now().isoformat()),
                 )
 
             db.commit()
 
-    def _extract_keywords(self, text: str) -> List[str]:
+    def _extract_keywords(self, text: str) -> list[str]:
         """Extract meaningful keywords from text"""
         import re
+
         # Remove common stop words and extract meaningful tokens
         stop_words = {
-            "the", "a", "an", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "can", "to",
-            "of", "in", "for", "on", "with", "at", "by", "from", "it",
-            "this", "that", "these", "those", "and", "or", "but", "not"
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "it",
+            "this",
+            "that",
+            "these",
+            "those",
+            "and",
+            "or",
+            "but",
+            "not",
         }
 
-        words = re.findall(r'\b[a-z]+\b', text.lower())
+        words = re.findall(r"\b[a-z]+\b", text.lower())
         keywords = [w for w in words if w not in stop_words and len(w) > 2]
 
         # Return most frequent keywords
         from collections import Counter
+
         counts = Counter(keywords)
         return [word for word, _ in counts.most_common(10)]
 
@@ -373,20 +435,18 @@ class ReinforcementFeedback:
                         average_reward=row[3],
                         sample_count=row[4],
                         confidence=row[5],
-                        last_updated=row[6]
+                        last_updated=row[6],
                     )
 
         # Enrich recommendation with correction ledger "avoid" patterns
         if best_pattern is not None:
             avoid_patterns = self._get_avoid_patterns(context)
             if avoid_patterns:
-                best_pattern.recommended_action += (
-                    " | AVOID: " + "; ".join(avoid_patterns)
-                )
+                best_pattern.recommended_action += " | AVOID: " + "; ".join(avoid_patterns)
 
         return best_pattern
 
-    def _get_avoid_patterns(self, context: str) -> List[str]:
+    def _get_avoid_patterns(self, context: str) -> list[str]:
         """Check correction ledger for past mistakes relevant to this context"""
         try:
             ledger = self._get_correction_ledger()
@@ -423,7 +483,7 @@ class ReinforcementFeedback:
                 return category
         return "general"
 
-    def get_strategy_rankings(self) -> List[Dict[str, Any]]:
+    def get_strategy_rankings(self) -> list[dict[str, Any]]:
         """Get strategy rankings by average reward"""
         with self._conn() as db:
             rows = db.execute(
@@ -438,36 +498,38 @@ class ReinforcementFeedback:
                 "total_reward": r[1],
                 "usage_count": r[2],
                 "average_reward": r[3],
-                "last_used": r[4]
+                "last_used": r[4],
             }
             for r in rows
         ]
 
-    def get_feedback_summary(self, days: int = 7) -> Dict[str, Any]:
+    def get_feedback_summary(self, days: int = 7) -> dict[str, Any]:
         """Get summary of recent feedback signals"""
         from datetime import timedelta
+
         since = (datetime.now() - timedelta(days=days)).isoformat()
 
         with self._conn() as db:
             total = db.execute(
-                "SELECT COUNT(*) FROM feedback_signals WHERE timestamp > ?",
-                (since,)
+                "SELECT COUNT(*) FROM feedback_signals WHERE timestamp > ?", (since,)
             ).fetchone()[0]
 
             positive = db.execute(
                 "SELECT COUNT(*) FROM feedback_signals WHERE timestamp > ? AND outcome = 'positive'",
-                (since,)
+                (since,),
             ).fetchone()[0]
 
             negative = db.execute(
                 "SELECT COUNT(*) FROM feedback_signals WHERE timestamp > ? AND outcome = 'negative'",
-                (since,)
+                (since,),
             ).fetchone()[0]
 
-            avg_reward = db.execute(
-                "SELECT AVG(reward) FROM feedback_signals WHERE timestamp > ?",
-                (since,)
-            ).fetchone()[0] or 0.0
+            avg_reward = (
+                db.execute(
+                    "SELECT AVG(reward) FROM feedback_signals WHERE timestamp > ?", (since,)
+                ).fetchone()[0]
+                or 0.0
+            )
 
         return {
             "period_days": days,
@@ -477,7 +539,7 @@ class ReinforcementFeedback:
             "neutral": total - positive - negative,
             "average_reward": round(avg_reward, 4),
             "positive_rate": round(positive / max(total, 1) * 100, 1),
-            "strategy_rankings": self.get_strategy_rankings()[:5]
+            "strategy_rankings": self.get_strategy_rankings()[:5],
         }
 
     # ===== Closed-Loop Learning =====
@@ -489,7 +551,7 @@ class ReinforcementFeedback:
         success: bool,
         cost: float = 0.0,
         duration: float = 0.0,
-        user_satisfaction: Optional[float] = None
+        user_satisfaction: Optional[float] = None,
     ) -> float:
         """
         End-to-end closed-loop learning from a task result.
@@ -543,25 +605,18 @@ class ReinforcementFeedback:
                 "cost": cost,
                 "duration": duration,
                 "user_satisfaction": user_satisfaction,
-                "closed_loop": True
-            }
+                "closed_loop": True,
+            },
         )
 
         # Update strategy scores
         self._update_strategy_score(strategy, reward)
 
-        logger.info(
-            f"Feedback loop closed: {strategy} → {outcome} "
-            f"(reward: {reward:+.2f})"
-        )
+        logger.info(f"Feedback loop closed: {strategy} → {outcome} (reward: {reward:+.2f})")
 
         return reward
 
-    def score_task_outcome(
-        self,
-        task_type: str,
-        result: Dict[str, Any]
-    ) -> FeedbackSignal:
+    def score_task_outcome(self, task_type: str, result: dict[str, Any]) -> FeedbackSignal:
         """
         Score a task outcome and return a FeedbackSignal with computed reward.
 
@@ -619,7 +674,7 @@ class ReinforcementFeedback:
             outcome=outcome,
             reward=reward,
             reasoning=" | ".join(reasoning_parts),
-            metadata=result
+            metadata=result,
         )
 
 

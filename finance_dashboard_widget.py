@@ -2,11 +2,12 @@
 Finance Dashboard Widget
 Revenue summary, integration status, active stream controls, and quick actions.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
+from loguru import logger
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -24,33 +25,32 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from loguru import logger
-
 
 # Integration name → (enabled env key, description)
 INTEGRATION_MAP = {
-    "Alpaca (Stocks)":        ("ALPACA_API_KEY",          "Stock / ETF trading"),
-    "IBKR":                   ("IBKR_ENABLED",             "Interactive Brokers TWS"),
-    "Schwab (Options)":       ("SCHWAB_CLIENT_ID",         "Options & equities"),
-    "Binance":                ("BINANCE_API_KEY",          "Crypto spot trading"),
-    "Kraken":                 ("KRAKEN_API_KEY",           "Crypto exchange"),
-    "Coinbase Adv.":          ("COINBASE_ADV_API_KEY",     "Coinbase Advanced Trade"),
-    "Base L2":                ("BASE_WALLET_ADDRESS",      "Ethereum L2 wallet"),
-    "Stripe":                 ("STRIPE_API_KEY",           "Payment / SaaS billing"),
-    "Shopify":                ("SHOPIFY_ACCESS_TOKEN",     "E-commerce store"),
-    "Amazon SP-API":          ("AMAZON_SELLER_ID",         "Amazon seller"),
-    "Plaid":                  ("PLAID_CLIENT_ID",          "Bank account linking"),
-    "Twilio":                 ("TWILIO_ACCOUNT_SID",       "Voice / SMS"),
-    "ShipStation":            ("SHIPSTATION_API_KEY",      "Order fulfillment"),
-    "DraftKings":             ("DRAFTKINGS_API_KEY",       "Sports betting"),
-    "PrizePicks":             ("PRIZEPICKS_API_KEY",       "Fantasy sports"),
-    "Perplexity AI":          ("PERPLEXITY_API_KEY",       "AI research"),
+    "Alpaca (Stocks)": ("ALPACA_API_KEY", "Stock / ETF trading"),
+    "IBKR": ("IBKR_ENABLED", "Interactive Brokers TWS"),
+    "Schwab (Options)": ("SCHWAB_CLIENT_ID", "Options & equities"),
+    "Binance": ("BINANCE_API_KEY", "Crypto spot trading"),
+    "Kraken": ("KRAKEN_API_KEY", "Crypto exchange"),
+    "Coinbase Adv.": ("COINBASE_ADV_API_KEY", "Coinbase Advanced Trade"),
+    "Base L2": ("BASE_WALLET_ADDRESS", "Ethereum L2 wallet"),
+    "Stripe": ("STRIPE_API_KEY", "Payment / SaaS billing"),
+    "Shopify": ("SHOPIFY_ACCESS_TOKEN", "E-commerce store"),
+    "Amazon SP-API": ("AMAZON_SELLER_ID", "Amazon seller"),
+    "Plaid": ("PLAID_CLIENT_ID", "Bank account linking"),
+    "Twilio": ("TWILIO_ACCOUNT_SID", "Voice / SMS"),
+    "ShipStation": ("SHIPSTATION_API_KEY", "Order fulfillment"),
+    "DraftKings": ("DRAFTKINGS_API_KEY", "Sports betting"),
+    "PrizePicks": ("PRIZEPICKS_API_KEY", "Fantasy sports"),
+    "Perplexity AI": ("PERPLEXITY_API_KEY", "AI research"),
 }
 
 
 def _env_key_configured(env_key: str) -> bool:
     """Return True if the env key is set to a non-empty, non-placeholder value."""
     import os
+
     val = os.environ.get(env_key, "").strip()
     return bool(val) and val not in ("your_key_here", "changeme", "")
 
@@ -58,7 +58,7 @@ def _env_key_configured(env_key: str) -> bool:
 class IntegrationStatusGrid(QWidget):
     """Compact grid of integration status pills."""
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._build_ui()
 
@@ -90,11 +90,14 @@ class IntegrationStatusGrid(QWidget):
 
             configured = _env_key_configured(env_key)
             pill = QLabel(f"{'✅' if configured else '⬜'} {name}")
-            pill.setToolTip(f"{desc}\nEnv key: {env_key}\nStatus: {'configured' if configured else 'not set'}")
+            pill.setToolTip(
+                f"{desc}\nEnv key: {env_key}\nStatus: {'configured' if configured else 'not set'}"
+            )
             pill.setStyleSheet(
                 "background-color: #1B5E20; border-radius: 4px; padding: 4px 8px; color: #C8E6C9;"
-                if configured else
-                "background-color: #37474F; border-radius: 4px; padding: 4px 8px; color: #90A4AE;"
+                if configured
+                else "background-color: #37474F; border-radius:"
+                " 4px; padding: 4px 8px; color: #90A4AE;"
             )
             if row_layout:
                 row_layout.addWidget(pill)
@@ -124,7 +127,7 @@ class FinanceDashboardWidget(QWidget):
     - Quick Actions
     """
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._revenue_engine = None
         self._build_ui()
@@ -137,6 +140,7 @@ class FinanceDashboardWidget(QWidget):
         if self._revenue_engine is None:
             try:
                 from revenue_engine import RevenueEngine
+
                 self._revenue_engine = RevenueEngine()
             except Exception as e:
                 logger.warning(f"Could not load revenue engine: {e}")
@@ -248,6 +252,7 @@ class FinanceDashboardWidget(QWidget):
 
         try:
             from config import settings
+
             daily_goal = engine.get_daily_goal()
             today_rev = engine.get_today_revenue()
             today_profit = engine.get_today_profit()
@@ -256,7 +261,9 @@ class FinanceDashboardWidget(QWidget):
             self._today_revenue_label.setText(f"${today_rev:,.2f}")
 
             profit_color = "#4CAF50" if today_profit >= 0 else "#F44336"
-            self._today_profit_label.setText(f"<span style='color:{profit_color}'>${today_profit:,.2f}</span>")
+            self._today_profit_label.setText(
+                f"<span style='color:{profit_color}'>${today_profit:,.2f}</span>"
+            )
 
             pct = int((today_rev / max(daily_goal, 0.01)) * 100)
             self._goal_progress.setValue(min(pct, 100))
@@ -301,8 +308,10 @@ class FinanceDashboardWidget(QWidget):
 
         self._log_msg("Starting revenue session…")
 
-        from PyQt6.QtCore import QThread, pyqtSignal as Signal
         import asyncio
+
+        from PyQt6.QtCore import QThread
+        from PyQt6.QtCore import pyqtSignal as Signal
 
         class _Worker(QThread):
             done = Signal(object)
@@ -345,9 +354,10 @@ class FinanceDashboardWidget(QWidget):
 
     def _toggle_engine(self):
         try:
-            from config import settings
-            from pathlib import Path
             import re
+            from pathlib import Path
+
+            from config import settings
 
             new_enabled = not settings.revenue_engine_enabled
 
@@ -388,7 +398,9 @@ class FinanceDashboardWidget(QWidget):
                         parent.tabs.setCurrentIndex(i)
                         return
             parent = parent.parent()
-        QMessageBox.information(self, "Settings", "Open the ⚙️ Settings tab to configure integrations.")
+        QMessageBox.information(
+            self, "Settings", "Open the ⚙️ Settings tab to configure integrations."
+        )
 
     def _log_msg(self, msg: str):
         ts = datetime.now().strftime("%H:%M:%S")

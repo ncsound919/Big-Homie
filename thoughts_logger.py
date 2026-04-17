@@ -2,26 +2,32 @@
 Thoughts Logger Module
 Reasoning trace logging for transparent AI decision-making
 """
+
 import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Dict, Any, Optional, List
-from pathlib import Path
-from dataclasses import dataclass, asdict
 from enum import Enum
+from pathlib import Path
+from typing import Any, Optional
+
 from loguru import logger
+
 from config import settings
 
 try:
     from rich.console import Console
     from rich.panel import Panel
     from rich.syntax import Syntax
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
     logger.warning("rich not available - thought logs will use plain text")
 
+
 class ThoughtType(str, Enum):
     """Types of thoughts to log"""
+
     REASONING = "reasoning"
     DECISION = "decision"
     OBSERVATION = "observation"
@@ -30,18 +36,21 @@ class ThoughtType(str, Enum):
     COST_ANALYSIS = "cost_analysis"
     MODEL_SELECTION = "model_selection"
 
+
 @dataclass
 class Thought:
     """A single thought/reasoning step"""
+
     timestamp: str
     type: ThoughtType
     content: str
-    context: Optional[Dict[str, Any]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    context: Optional[dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return asdict(self)
+
 
 class ThoughtsLogger:
     """
@@ -56,13 +65,13 @@ class ThoughtsLogger:
     """
 
     def __init__(self):
-        self.enabled = getattr(settings, 'enable_thought_logging', True)
+        self.enabled = getattr(settings, "enable_thought_logging", True)
         self.log_file = self._get_log_file_path()
-        self.thoughts: List[Thought] = []
+        self.thoughts: list[Thought] = []
         self.console = Console() if RICH_AVAILABLE else None
 
         # Detail level: 0 = off, 1 = minimal, 2 = normal, 3 = verbose
-        self.detail_level = getattr(settings, 'thought_log_detail_level', 2)
+        self.detail_level = getattr(settings, "thought_log_detail_level", 2)
 
     def _get_log_file_path(self) -> Path:
         """Get path to THOUGHTS.log file"""
@@ -77,9 +86,9 @@ class ThoughtsLogger:
         self,
         thought_type: ThoughtType,
         content: str,
-        context: Optional[Dict] = None,
-        metadata: Optional[Dict] = None,
-        display: bool = True
+        context: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+        display: bool = True,
     ):
         """
         Log a thought/reasoning step
@@ -99,7 +108,7 @@ class ThoughtsLogger:
             type=thought_type,
             content=content,
             context=context,
-            metadata=metadata
+            metadata=metadata,
         )
 
         # Add to memory
@@ -115,7 +124,7 @@ class ThoughtsLogger:
     def _write_to_file(self, thought: Thought):
         """Write thought to log file"""
         try:
-            with open(self.log_file, 'a') as f:
+            with open(self.log_file, "a") as f:
                 f.write(json.dumps(thought.to_dict(), default=str) + "\n")
         except Exception as e:
             logger.error(f"Failed to write thought to log: {e}")
@@ -137,7 +146,7 @@ class ThoughtsLogger:
             ThoughtType.PLANNING: "magenta",
             ThoughtType.REFLECTION: "yellow",
             ThoughtType.COST_ANALYSIS: "red",
-            ThoughtType.MODEL_SELECTION: "green"
+            ThoughtType.MODEL_SELECTION: "green",
         }
 
         color = color_map.get(thought.type, "white")
@@ -147,9 +156,7 @@ class ThoughtsLogger:
 
         if thought.context and self.detail_level >= 3:
             content_lines.append("\n[dim]Context:[/dim]")
-            content_lines.append(
-                f"[dim]{json.dumps(thought.context, indent=2, default=str)}[/dim]"
-            )
+            content_lines.append(f"[dim]{json.dumps(thought.context, indent=2, default=str)}[/dim]")
 
         if thought.metadata:
             content_lines.append("\n[dim]Metadata:[/dim]")
@@ -160,16 +167,18 @@ class ThoughtsLogger:
             "\n".join(content_lines),
             title=f"[bold {color}]{thought.type.value.upper()}[/bold {color}]",
             border_style=color,
-            expand=False
+            expand=False,
         )
 
         self.console.print(panel)
 
-    def log_reasoning(self, reasoning: str, context: Optional[Dict] = None):
+    def log_reasoning(self, reasoning: str, context: Optional[dict] = None):
         """Log a reasoning step"""
         self.log_thought(ThoughtType.REASONING, reasoning, context=context)
 
-    def log_decision(self, decision: str, rationale: Optional[str] = None, metadata: Optional[Dict] = None):
+    def log_decision(
+        self, decision: str, rationale: Optional[str] = None, metadata: Optional[dict] = None
+    ):
         """Log a decision with rationale"""
         content = decision
         if rationale:
@@ -181,8 +190,8 @@ class ThoughtsLogger:
         self,
         model: str,
         reason: str,
-        alternatives: Optional[List[str]] = None,
-        cost_estimate: Optional[float] = None
+        alternatives: Optional[list[str]] = None,
+        cost_estimate: Optional[float] = None,
     ):
         """Log model selection decision"""
         content = f"Selected: {model}\n\nReason: {reason}"
@@ -197,10 +206,7 @@ class ThoughtsLogger:
         self.log_thought(ThoughtType.MODEL_SELECTION, content, metadata=metadata)
 
     def log_cost_analysis(
-        self,
-        operation: str,
-        estimated_cost: float,
-        budget_impact: Optional[str] = None
+        self, operation: str, estimated_cost: float, budget_impact: Optional[str] = None
     ):
         """Log cost analysis"""
         content = f"Operation: {operation}\nEstimated Cost: ${estimated_cost:.4f}"
@@ -210,16 +216,18 @@ class ThoughtsLogger:
 
         self.log_thought(ThoughtType.COST_ANALYSIS, content)
 
-    def log_planning(self, plan: str, steps: Optional[List[str]] = None):
+    def log_planning(self, plan: str, steps: Optional[list[str]] = None):
         """Log planning thoughts"""
         content = plan
 
         if steps:
-            content += "\n\nSteps:\n" + "\n".join([f"{i+1}. {step}" for i, step in enumerate(steps)])
+            content += "\n\nSteps:\n" + "\n".join(
+                [f"{i + 1}. {step}" for i, step in enumerate(steps)]
+            )
 
         self.log_thought(ThoughtType.PLANNING, content)
 
-    def log_reflection(self, reflection: str, lessons: Optional[List[str]] = None):
+    def log_reflection(self, reflection: str, lessons: Optional[list[str]] = None):
         """Log self-reflection"""
         content = reflection
 
@@ -243,12 +251,8 @@ class ThoughtsLogger:
             output_path = str(settings.data_dir / "logs" / f"thought_trace_{timestamp}.json")
 
         try:
-            with open(output_path, 'w') as f:
-                json.dump(
-                    [thought.to_dict() for thought in self.thoughts],
-                    f,
-                    indent=2
-                )
+            with open(output_path, "w") as f:
+                json.dump([thought.to_dict() for thought in self.thoughts], f, indent=2)
 
             logger.info(f"Thought trace exported to: {output_path}")
             return output_path
@@ -257,7 +261,9 @@ class ThoughtsLogger:
             logger.error(f"Failed to export thought trace: {e}")
             raise
 
-    def get_recent_thoughts(self, n: int = 10, thought_type: Optional[ThoughtType] = None) -> List[Thought]:
+    def get_recent_thoughts(
+        self, n: int = 10, thought_type: Optional[ThoughtType] = None
+    ) -> list[Thought]:
         """Get recent thoughts, optionally filtered by type"""
         thoughts = self.thoughts
 
@@ -293,7 +299,7 @@ class ThoughtsLogger:
         status = "enabled" if self.enabled else "disabled"
         logger.info(f"Thought logging {status}")
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """Get summary of logged thoughts"""
         type_counts = {}
         for thought in self.thoughts:
@@ -304,8 +310,9 @@ class ThoughtsLogger:
             "by_type": type_counts,
             "log_file": str(self.log_file),
             "enabled": self.enabled,
-            "detail_level": self.detail_level
+            "detail_level": self.detail_level,
         }
+
 
 # Global thoughts logger instance
 thoughts_logger = ThoughtsLogger()

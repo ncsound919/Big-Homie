@@ -12,7 +12,7 @@ __author__ = "ncsound919"
 __description__ = "Autonomous AI agent with heartbeat, sub-agents, and MCP server"
 
 # Package-level convenience imports
-from big_homie.core import CognitiveCore, AutonomousLoop, Heartbeat  # noqa: F401
+from big_homie.core import AutonomousLoop, CognitiveCore, Heartbeat  # noqa: F401
 from big_homie.security import governance  # noqa: F401
 
 __all__ = [

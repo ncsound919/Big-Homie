@@ -2,18 +2,18 @@
 Big Homie Configuration
 Centralized configuration management with environment variable support
 """
+
 import os
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     """Application settings with validation"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="allow"
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="allow"
     )
 
     # Application Info
@@ -138,18 +138,18 @@ class Settings(BaseSettings):
 
     # Temperature Calibration
     karpathy_temperature_calibration: bool = True  # Auto-tune temperature per task
-    karpathy_temp_factual: float = 0.0             # Deterministic (math, facts)
-    karpathy_temp_analytical: float = 0.2          # Structured (code, logic)
-    karpathy_temp_balanced: float = 0.5            # Mixed (Q&A, summarization)
-    karpathy_temp_creative: float = 0.9            # Open-ended (brainstorm)
-    karpathy_temp_exploratory: float = 1.0         # Maximum diversity
+    karpathy_temp_factual: float = 0.0  # Deterministic (math, facts)
+    karpathy_temp_analytical: float = 0.2  # Structured (code, logic)
+    karpathy_temp_balanced: float = 0.5  # Mixed (Q&A, summarization)
+    karpathy_temp_creative: float = 0.9  # Open-ended (brainstorm)
+    karpathy_temp_exploratory: float = 1.0  # Maximum diversity
 
     # Scratchpad Reasoning
-    karpathy_scratchpad_enabled: bool = True        # Private thinking before answering
+    karpathy_scratchpad_enabled: bool = True  # Private thinking before answering
     karpathy_scratchpad_show_to_user: bool = False  # Whether to expose scratchpad
 
     # Best-of-N Sampling
-    karpathy_best_of_n: int = 3           # Number of drafts to generate
+    karpathy_best_of_n: int = 3  # Number of drafts to generate
     karpathy_bon_temperature: float = 0.7  # Temperature for draft generation
     karpathy_bon_enabled: bool = True
 
@@ -241,7 +241,7 @@ class Settings(BaseSettings):
     postgres_url: str = ""
     supabase_url: str = ""
     supabase_key: str = ""
-    supabase_anon_key: str = ""   # Draymond publishable anon key
+    supabase_anon_key: str = ""  # Draymond publishable anon key
     draymond_project_id: str = ""  # Draymond Supabase project ID
 
     # Media Generation
@@ -344,7 +344,7 @@ class Settings(BaseSettings):
     # ---- Options / Stock Brokers ----
     # Interactive Brokers (IBKR)
     ibkr_host: str = "127.0.0.1"
-    ibkr_port: int = 7497          # 7497=paper, 7496=live
+    ibkr_port: int = 7497  # 7497=paper, 7496=live
     ibkr_client_id: int = 1
     ibkr_enabled: bool = False
 
@@ -381,7 +381,7 @@ class Settings(BaseSettings):
 
     # ---- Ecommerce / SaaS ----
     # Shopify
-    shopify_shop_domain: str = ""   # e.g. my-store.myshopify.com
+    shopify_shop_domain: str = ""  # e.g. my-store.myshopify.com
     shopify_access_token: str = ""
     shopify_enabled: bool = False
 
@@ -416,26 +416,26 @@ class Settings(BaseSettings):
     twilio_enabled: bool = False
 
     # ---- MCP (Model Context Protocol) Servers ----
-    mcp_server_urls: str = ""      # Comma-separated list of MCP server endpoints
-    mcp_auth_tokens: str = ""      # Matching comma-separated auth tokens
+    mcp_server_urls: str = ""  # Comma-separated list of MCP server endpoints
+    mcp_auth_tokens: str = ""  # Matching comma-separated auth tokens
     mcp_enabled: bool = False
 
     # ---- Revenue Engine Settings ----
     revenue_engine_enabled: bool = False
-    revenue_goal_daily_usd: float = 0.0        # Target daily revenue (0 = no goal)
-    revenue_goal_monthly_usd: float = 0.0      # Target monthly revenue
-    revenue_auto_reinvest_pct: float = 0.0     # Auto-reinvest % of profits (0–100)
+    revenue_goal_daily_usd: float = 0.0  # Target daily revenue (0 = no goal)
+    revenue_goal_monthly_usd: float = 0.0  # Target monthly revenue
+    revenue_auto_reinvest_pct: float = 0.0  # Auto-reinvest % of profits (0–100)
     revenue_max_single_trade_usd: float = 100.0  # Cap per automated trade / bet
-    revenue_risk_level: str = "low"            # low | medium | high
-    revenue_active_streams: str = ""           # Comma-sep: trading,betting,freelance,ecommerce
-    revenue_report_interval_hours: int = 24    # How often to emit a revenue report
+    revenue_risk_level: str = "low"  # low | medium | high
+    revenue_active_streams: str = ""  # Comma-sep: trading,betting,freelance,ecommerce
+    revenue_report_interval_hours: int = 24  # How often to emit a revenue report
 
     # ---- SaaS / MaaS Deployment ----
     saas_deploy_enabled: bool = False
-    saas_stripe_price_id: str = ""             # Default Stripe price for SaaS subscriptions
+    saas_stripe_price_id: str = ""  # Default Stripe price for SaaS subscriptions
     saas_trial_days: int = 14
-    maas_model_endpoint: str = ""             # URL of deployed model/API
-    maas_api_key_header: str = "X-API-Key"   # Auth header name for MaaS endpoint
+    maas_model_endpoint: str = ""  # URL of deployed model/API
+    maas_api_key_header: str = "X-API-Key"  # Auth header name for MaaS endpoint
 
     def _normalize_path(self, path_value: str) -> Path:
         """Normalize configured filesystem paths."""
@@ -454,6 +454,7 @@ class Settings(BaseSettings):
         self._normalize_path(self.vector_db_dir).mkdir(parents=True, exist_ok=True)
         (data_dir / "screenshots").mkdir(exist_ok=True)
         self._normalize_path(self.media_output_dir).mkdir(parents=True, exist_ok=True)
+
 
 # Global settings instance
 settings = Settings()

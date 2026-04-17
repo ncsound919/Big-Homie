@@ -2,9 +2,8 @@
 supabase_client.py — Draymond backend connection
 Singleton client for the Draymond Supabase project at gkxmehoarrxzwrhjsezt.supabase.co
 """
-from __future__ import annotations
 
-from typing import Optional
+from __future__ import annotations
 
 from supabase import Client, create_client
 
@@ -31,7 +30,7 @@ def _resolve_url() -> str:
     return "https://gkxmehoarrxzwrhjsezt.supabase.co"
 
 
-_client: Optional[Client] = None
+_client: Client | None = None
 
 
 def get_supabase() -> Client:

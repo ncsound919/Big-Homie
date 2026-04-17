@@ -2,19 +2,25 @@
 Cloudflare Integration
 Provides tools for managing Cloudflare services: Workers, KV, R2, DNS, and more
 """
+
 import json
-import httpx
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from typing import Any, Optional
+
+import httpx
 from loguru import logger
+
 from config import settings
+
 
 @dataclass
 class CloudflareResult:
     """Result of a Cloudflare operation"""
+
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
+
 
 class CloudflareIntegration:
     """
@@ -35,7 +41,7 @@ class CloudflareIntegration:
         if settings.cloudflare_api_token:
             self.headers = {
                 "Authorization": f"Bearer {settings.cloudflare_api_token}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
     async def health_check(self) -> bool:
@@ -46,16 +52,14 @@ class CloudflareIntegration:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"{self.base_url}/user/tokens/verify",
-                    headers=self.headers,
-                    timeout=10.0
+                    f"{self.base_url}/user/tokens/verify", headers=self.headers, timeout=10.0
                 )
                 return response.status_code == 200
         except Exception as e:
             logger.error(f"Cloudflare health check failed: {e}")
             return False
 
-    def _auth_headers(self) -> Dict[str, str]:
+    def _auth_headers(self) -> dict[str, str]:
         """Return headers with only the Authorization token (no Content-Type)."""
         if settings.cloudflare_api_token:
             return {"Authorization": f"Bearer {settings.cloudflare_api_token}"}
@@ -82,10 +86,7 @@ class CloudflareIntegration:
 
     # Workers Management
     async def deploy_worker(
-        self,
-        script_name: str,
-        script_content: str,
-        bindings: Optional[List[Dict]] = None
+        self, script_name: str, script_content: str, bindings: Optional[list[dict]] = None
     ) -> CloudflareResult:
         """Deploy a Cloudflare Worker"""
         err = self._validate_account()
@@ -96,10 +97,7 @@ class CloudflareIntegration:
             url = f"{self.base_url}/accounts/{settings.cloudflare_account_id}/workers/scripts/{script_name}"
 
             # Prepare metadata for the multipart upload
-            metadata = {
-                "body_part": "script",
-                "bindings": bindings or []
-            }
+            metadata = {"body_part": "script", "bindings": bindings or []}
 
             # Use auth-only headers so httpx can set the correct multipart boundary
             async with httpx.AsyncClient() as client:
@@ -108,17 +106,16 @@ class CloudflareIntegration:
                     headers=self._auth_headers(),
                     files={
                         "metadata": ("metadata.json", json.dumps(metadata), "application/json"),
-                        "script": (script_name, script_content, "application/javascript")
+                        "script": (script_name, script_content, "application/javascript"),
                     },
-                    timeout=30.0
+                    timeout=30.0,
                 )
 
                 if response.status_code in [200, 201]:
                     return CloudflareResult(success=True, data=response.json())
                 else:
                     return CloudflareResult(
-                        success=False,
-                        error=f"Deployment failed: {response.text}"
+                        success=False, error=f"Deployment failed: {response.text}"
                     )
         except Exception as e:
             logger.error(f"Worker deployment failed: {e}")
@@ -141,8 +138,7 @@ class CloudflareIntegration:
                     return CloudflareResult(success=True, data=data.get("result", []))
                 else:
                     return CloudflareResult(
-                        success=False,
-                        error=f"Failed to list workers: {response.text}"
+                        success=False, error=f"Failed to list workers: {response.text}"
                     )
         except Exception as e:
             logger.error(f"List workers failed: {e}")
@@ -164,8 +160,7 @@ class CloudflareIntegration:
                     return CloudflareResult(success=True, data={"deleted": script_name})
                 else:
                     return CloudflareResult(
-                        success=False,
-                        error=f"Deletion failed: {response.text}"
+                        success=False, error=f"Deletion failed: {response.text}"
                     )
         except Exception as e:
             logger.error(f"Worker deletion failed: {e}")
@@ -182,19 +177,13 @@ class CloudflareIntegration:
             url = f"{self.base_url}/accounts/{settings.cloudflare_account_id}/storage/kv/namespaces/{namespace_id}/values/{key}"
 
             async with httpx.AsyncClient() as client:
-                response = await client.put(
-                    url,
-                    headers=self.headers,
-                    content=value,
-                    timeout=10.0
-                )
+                response = await client.put(url, headers=self.headers, content=value, timeout=10.0)
 
                 if response.status_code == 200:
                     return CloudflareResult(success=True, data={"key": key})
                 else:
                     return CloudflareResult(
-                        success=False,
-                        error=f"KV write failed: {response.text}"
+                        success=False, error=f"KV write failed: {response.text}"
                     )
         except Exception as e:
             logger.error(f"KV write failed: {e}")
@@ -217,10 +206,7 @@ class CloudflareIntegration:
                 elif response.status_code == 404:
                     return CloudflareResult(success=False, error="Key not found")
                 else:
-                    return CloudflareResult(
-                        success=False,
-                        error=f"KV read failed: {response.text}"
-                    )
+                    return CloudflareResult(success=False, error=f"KV read failed: {response.text}")
         except Exception as e:
             logger.error(f"KV read failed: {e}")
             return CloudflareResult(success=False, error=str(e))
@@ -241,8 +227,7 @@ class CloudflareIntegration:
                     return CloudflareResult(success=True, data={"deleted": key})
                 else:
                     return CloudflareResult(
-                        success=False,
-                        error=f"KV delete failed: {response.text}"
+                        success=False, error=f"KV delete failed: {response.text}"
                     )
         except Exception as e:
             logger.error(f"KV delete failed: {e}")
@@ -250,12 +235,7 @@ class CloudflareIntegration:
 
     # DNS Management
     async def create_dns_record(
-        self,
-        record_type: str,
-        name: str,
-        content: str,
-        ttl: int = 1,
-        proxied: bool = False
+        self, record_type: str, name: str, content: str, ttl: int = 1, proxied: bool = False
     ) -> CloudflareResult:
         """Create a DNS record"""
         err = self._validate_zone()
@@ -270,23 +250,17 @@ class CloudflareIntegration:
                 "name": name,
                 "content": content,
                 "ttl": ttl,
-                "proxied": proxied
+                "proxied": proxied,
             }
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url,
-                    headers=self.headers,
-                    json=payload,
-                    timeout=10.0
-                )
+                response = await client.post(url, headers=self.headers, json=payload, timeout=10.0)
 
                 if response.status_code == 200:
                     return CloudflareResult(success=True, data=response.json().get("result"))
                 else:
                     return CloudflareResult(
-                        success=False,
-                        error=f"DNS record creation failed: {response.text}"
+                        success=False, error=f"DNS record creation failed: {response.text}"
                     )
         except Exception as e:
             logger.error(f"DNS record creation failed: {e}")
@@ -305,26 +279,22 @@ class CloudflareIntegration:
                 params["type"] = record_type
 
             async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    url,
-                    headers=self.headers,
-                    params=params,
-                    timeout=10.0
-                )
+                response = await client.get(url, headers=self.headers, params=params, timeout=10.0)
 
                 if response.status_code == 200:
                     data = response.json()
                     return CloudflareResult(success=True, data=data.get("result", []))
                 else:
                     return CloudflareResult(
-                        success=False,
-                        error=f"Failed to list DNS records: {response.text}"
+                        success=False, error=f"Failed to list DNS records: {response.text}"
                     )
         except Exception as e:
             logger.error(f"List DNS records failed: {e}")
             return CloudflareResult(success=False, error=str(e))
 
-    async def purge_cache(self, purge_everything: bool = False, files: Optional[List[str]] = None) -> CloudflareResult:
+    async def purge_cache(
+        self, purge_everything: bool = False, files: Optional[list[str]] = None
+    ) -> CloudflareResult:
         """Purge cache"""
         err = self._validate_zone()
         if err:
@@ -338,26 +308,23 @@ class CloudflareIntegration:
             elif files:
                 payload = {"files": files}
             else:
-                return CloudflareResult(success=False, error="Must specify purge_everything or files")
+                return CloudflareResult(
+                    success=False, error="Must specify purge_everything or files"
+                )
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url,
-                    headers=self.headers,
-                    json=payload,
-                    timeout=10.0
-                )
+                response = await client.post(url, headers=self.headers, json=payload, timeout=10.0)
 
                 if response.status_code == 200:
                     return CloudflareResult(success=True, data=response.json().get("result"))
                 else:
                     return CloudflareResult(
-                        success=False,
-                        error=f"Cache purge failed: {response.text}"
+                        success=False, error=f"Cache purge failed: {response.text}"
                     )
         except Exception as e:
             logger.error(f"Cache purge failed: {e}")
             return CloudflareResult(success=False, error=str(e))
+
 
 # Global instance
 cloudflare = CloudflareIntegration()

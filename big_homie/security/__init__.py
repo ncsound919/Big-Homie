@@ -3,10 +3,10 @@
 from governance import (  # noqa: F401
     AuditTrail,
     HumanInTheLoop,
-    SandboxedExecution,
     KillSwitch,
-    SandboxConfig,
     RiskLevel,
+    SandboxConfig,
+    SandboxedExecution,
 )
 
 __all__ = [

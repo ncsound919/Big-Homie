@@ -2,13 +2,17 @@
 Big Homie Memory System
 Three-layer architecture: Session, Long-term, Skills
 """
-import sqlite3
+
 import json
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Optional
+
 from loguru import logger
+
 from config import settings
+
 
 class MemorySystem:
     """Unified memory management for Big Homie"""
@@ -94,30 +98,33 @@ class MemorySystem:
 
     # ===== Session Memory =====
 
-    def add_message(self, session_id: str, role: str, content: str, metadata: Optional[Dict] = None):
+    def add_message(
+        self, session_id: str, role: str, content: str, metadata: Optional[dict] = None
+    ):
         """Add message to session memory"""
         with self._conn() as db:
             db.execute(
                 "INSERT INTO sessions (session_id, timestamp, role, content, metadata) VALUES (?, ?, ?, ?, ?)",
-                (session_id, datetime.utcnow().isoformat(), role, content, json.dumps(metadata or {}))
+                (
+                    session_id,
+                    datetime.utcnow().isoformat(),
+                    role,
+                    content,
+                    json.dumps(metadata or {}),
+                ),
             )
             db.commit()
 
-    def get_session_messages(self, session_id: str, limit: int = 50) -> List[Dict]:
+    def get_session_messages(self, session_id: str, limit: int = 50) -> list[dict]:
         """Get recent messages from session"""
         with self._conn() as db:
             rows = db.execute(
                 "SELECT role, content, metadata, timestamp FROM sessions WHERE session_id = ? ORDER BY id DESC LIMIT ?",
-                (session_id, limit)
+                (session_id, limit),
             ).fetchall()
 
         return [
-            {
-                "role": r[0],
-                "content": r[1],
-                "metadata": json.loads(r[2]),
-                "timestamp": r[3]
-            }
+            {"role": r[0], "content": r[1], "metadata": json.loads(r[2]), "timestamp": r[3]}
             for r in reversed(rows)
         ]
 
@@ -140,7 +147,7 @@ class MemorySystem:
                            COALESCE((SELECT access_count FROM long_term_memory WHERE key = ?), 0),
                            COALESCE((SELECT created_at FROM long_term_memory WHERE key = ?), ?),
                            ?)""",
-                (key, json.dumps(value), category, importance, key, key, now, now)
+                (key, json.dumps(value), category, importance, key, key, now, now),
             )
             db.commit()
 
@@ -148,24 +155,26 @@ class MemorySystem:
         """Retrieve from long-term memory"""
         with self._conn() as db:
             # Increment access count
-            db.execute("UPDATE long_term_memory SET access_count = access_count + 1 WHERE key = ?", (key,))
+            db.execute(
+                "UPDATE long_term_memory SET access_count = access_count + 1 WHERE key = ?", (key,)
+            )
             db.commit()
 
             row = db.execute("SELECT value FROM long_term_memory WHERE key = ?", (key,)).fetchone()
             return json.loads(row[0]) if row else None
 
-    def search_memory(self, category: Optional[str] = None, limit: int = 20) -> List[Dict]:
+    def search_memory(self, category: Optional[str] = None, limit: int = 20) -> list[dict]:
         """Search long-term memory"""
         with self._conn() as db:
             if category:
                 rows = db.execute(
                     "SELECT key, value, category, importance, access_count FROM long_term_memory WHERE category = ? ORDER BY importance DESC, access_count DESC LIMIT ?",
-                    (category, limit)
+                    (category, limit),
                 ).fetchall()
             else:
                 rows = db.execute(
                     "SELECT key, value, category, importance, access_count FROM long_term_memory ORDER BY importance DESC, access_count DESC LIMIT ?",
-                    (limit,)
+                    (limit,),
                 ).fetchall()
 
         return [
@@ -174,14 +183,14 @@ class MemorySystem:
                 "value": json.loads(r[1]),
                 "category": r[2],
                 "importance": r[3],
-                "access_count": r[4]
+                "access_count": r[4],
             }
             for r in rows
         ]
 
     # ===== Skills =====
 
-    def save_skill(self, name: str, description: str, workflow: List[Dict]):
+    def save_skill(self, name: str, description: str, workflow: list[dict]):
         """Save a learned skill"""
         with self._conn() as db:
             now = datetime.utcnow().isoformat()
@@ -192,20 +201,22 @@ class MemorySystem:
                            COALESCE((SELECT success_count FROM skills WHERE name = ?), 0),
                            COALESCE((SELECT created_at FROM skills WHERE name = ?), ?),
                            ?)""",
-                (name, description, json.dumps(workflow), name, name, now, now)
+                (name, description, json.dumps(workflow), name, name, now, now),
             )
             db.commit()
             logger.info(f"Skill saved: {name}")
 
-    def get_skill(self, name: str) -> Optional[Dict]:
+    def get_skill(self, name: str) -> Optional[dict]:
         """Retrieve a skill"""
         with self._conn() as db:
-            db.execute("UPDATE skills SET last_used = ? WHERE name = ?", (datetime.utcnow().isoformat(), name))
+            db.execute(
+                "UPDATE skills SET last_used = ? WHERE name = ?",
+                (datetime.utcnow().isoformat(), name),
+            )
             db.commit()
 
             row = db.execute(
-                "SELECT description, workflow, success_count FROM skills WHERE name = ?",
-                (name,)
+                "SELECT description, workflow, success_count FROM skills WHERE name = ?", (name,)
             ).fetchone()
 
             if row:
@@ -213,11 +224,11 @@ class MemorySystem:
                     "name": name,
                     "description": row[0],
                     "workflow": json.loads(row[1]),
-                    "success_count": row[2]
+                    "success_count": row[2],
                 }
             return None
 
-    def list_skills(self) -> List[Dict]:
+    def list_skills(self) -> list[dict]:
         """List all skills"""
         with self._conn() as db:
             rows = db.execute(
@@ -225,12 +236,7 @@ class MemorySystem:
             ).fetchall()
 
         return [
-            {
-                "name": r[0],
-                "description": r[1],
-                "success_count": r[2],
-                "last_used": r[3]
-            }
+            {"name": r[0], "description": r[1], "success_count": r[2], "last_used": r[3]}
             for r in rows
         ]
 
@@ -240,32 +246,47 @@ class MemorySystem:
             if success:
                 db.execute(
                     "UPDATE skills SET success_count = success_count + 1, last_used = ? WHERE name = ?",
-                    (datetime.utcnow().isoformat(), name)
+                    (datetime.utcnow().isoformat(), name),
                 )
             else:
                 db.execute(
-                    "UPDATE skills SET failure_count = failure_count + 1 WHERE name = ?",
-                    (name,)
+                    "UPDATE skills SET failure_count = failure_count + 1 WHERE name = ?", (name,)
                 )
             db.commit()
 
     # ===== Task History =====
 
-    def log_task(self, task: str, domain: str, status: str, result: Any, cost: float = 0.0, duration: float = 0.0):
+    def log_task(
+        self,
+        task: str,
+        domain: str,
+        status: str,
+        result: Any,
+        cost: float = 0.0,
+        duration: float = 0.0,
+    ):
         """Log task execution"""
         with self._conn() as db:
             db.execute(
                 "INSERT INTO task_history (task, domain, status, result, cost, duration, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (task, domain, status, json.dumps(result), cost, duration, datetime.utcnow().isoformat())
+                (
+                    task,
+                    domain,
+                    status,
+                    json.dumps(result),
+                    cost,
+                    duration,
+                    datetime.utcnow().isoformat(),
+                ),
             )
             db.commit()
 
-    def get_task_history(self, limit: int = 50) -> List[Dict]:
+    def get_task_history(self, limit: int = 50) -> list[dict]:
         """Get recent task history"""
         with self._conn() as db:
             rows = db.execute(
                 "SELECT task, domain, status, result, cost, duration, timestamp FROM task_history ORDER BY id DESC LIMIT ?",
-                (limit,)
+                (limit,),
             ).fetchall()
 
         return [
@@ -276,7 +297,7 @@ class MemorySystem:
                 "result": json.loads(r[3]),
                 "cost": r[4],
                 "duration": r[5],
-                "timestamp": r[6]
+                "timestamp": r[6],
             }
             for r in rows
         ]
@@ -288,7 +309,7 @@ class MemorySystem:
         with self._conn() as db:
             db.execute(
                 "INSERT OR REPLACE INTO preferences (key, value, updated_at) VALUES (?, ?, ?)",
-                (key, json.dumps(value), datetime.utcnow().isoformat())
+                (key, json.dumps(value), datetime.utcnow().isoformat()),
             )
             db.commit()
 
@@ -297,6 +318,7 @@ class MemorySystem:
         with self._conn() as db:
             row = db.execute("SELECT value FROM preferences WHERE key = ?", (key,)).fetchone()
             return json.loads(row[0]) if row else default
+
 
 # Global memory instance
 memory = MemorySystem()

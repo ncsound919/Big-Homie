@@ -3,18 +3,19 @@ Context Window Manager - Tier 2 Memory System
 Intelligent context trimming, summarization, and compression
 with sliding-window summarization and working memory tier.
 """
-import json
+
 import re
-from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any, Optional
+
 from loguru import logger
-from config import settings
 
 
 @dataclass
 class ContextBlock:
     """A block of context with metadata for importance scoring"""
+
     content: str
     role: str
     token_count: int
@@ -27,7 +28,8 @@ class ContextBlock:
 @dataclass
 class ContextState:
     """Current state of the managed context window"""
-    blocks: List[ContextBlock]
+
+    blocks: list[ContextBlock]
     total_tokens: int
     max_tokens: int
     compression_ratio: float
@@ -37,6 +39,7 @@ class ContextState:
 @dataclass
 class WorkingMemoryItem:
     """A single item in working memory with importance and TTL metadata."""
+
     key: str
     value: Any
     importance: float  # 0.0-1.0
@@ -54,7 +57,7 @@ class WorkingMemory:
     """
 
     def __init__(self, max_items: int = 50):
-        self.items: Dict[str, WorkingMemoryItem] = {}
+        self.items: dict[str, WorkingMemoryItem] = {}
         self.max_items = max_items
 
     def store(
@@ -173,6 +176,7 @@ class ContextWindowManager:
         """Lazy-load cost guard for token counting"""
         if self._cost_guard is None:
             from cost_guards import cost_guard
+
             self._cost_guard = cost_guard
         return self._cost_guard
 
@@ -186,7 +190,7 @@ class ContextWindowManager:
 
     async def _summarize_window(
         self,
-        messages: List[Dict],
+        messages: list[dict],
         llm=None,
     ) -> str:
         """
@@ -198,7 +202,7 @@ class ContextWindowManager:
         """
 
         # ---- build raw text from the messages ----
-        raw_parts: List[str] = []
+        raw_parts: list[str] = []
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
@@ -210,6 +214,7 @@ class ContextWindowManager:
         if gateway is None:
             try:
                 from llm_gateway import LLMGateway
+
                 gateway = LLMGateway()
             except Exception:
                 gateway = None
@@ -237,15 +242,27 @@ class ContextWindowManager:
     @staticmethod
     def _extractive_summary(text: str, max_sentences: int = 5) -> str:
         """Pick the most informative sentences from *text*."""
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
         if not sentences:
             return "Previous conversation context"
 
-        scored: List[Tuple[str, float]] = []
+        scored: list[tuple[str, float]] = []
         importance_words = {
-            "important", "critical", "must", "error", "decision",
-            "conclusion", "result", "answer", "plan", "goal",
-            "code", "fix", "deploy", "build", "issue",
+            "important",
+            "critical",
+            "must",
+            "error",
+            "decision",
+            "conclusion",
+            "result",
+            "answer",
+            "plan",
+            "goal",
+            "code",
+            "fix",
+            "deploy",
+            "build",
+            "issue",
         }
         for sent in sentences:
             if len(sent.strip()) < 10:
@@ -266,10 +283,8 @@ class ContextWindowManager:
         return " | ".join(picked) if picked else "Previous conversation context"
 
     def manage_context(
-        self,
-        messages: List[Dict[str, str]],
-        max_tokens: Optional[int] = None
-    ) -> List[Dict[str, str]]:
+        self, messages: list[dict[str, str]], max_tokens: Optional[int] = None
+    ) -> list[dict[str, str]]:
         """
         Main entry point: manage a conversation's context window.
 
@@ -291,9 +306,7 @@ class ContextWindowManager:
         if total_tokens <= limit:
             return messages  # No management needed
 
-        logger.info(
-            f"Context management triggered: {total_tokens} tokens > {limit} limit"
-        )
+        logger.info(f"Context management triggered: {total_tokens} tokens > {limit} limit")
 
         # Strategy 1: Separate messages by role importance
         system_messages = [m for m in messages if m.get("role") == "system"]
@@ -312,7 +325,9 @@ class ContextWindowManager:
             # Keep system messages but cap them; preserve at least some conversation
             MIN_CONVERSATION_BUDGET_RATIO = 0.1  # Reserve 10% of limit for conversation
             MIN_CONVERSATION_TOKENS = 512  # Absolute minimum conversation budget
-            remaining_budget = max(int(limit * MIN_CONVERSATION_BUDGET_RATIO), MIN_CONVERSATION_TOKENS)
+            remaining_budget = max(
+                int(limit * MIN_CONVERSATION_BUDGET_RATIO), MIN_CONVERSATION_TOKENS
+            )
             # Trim system messages to leave room
             system_budget = limit - remaining_budget
             trimmed_system = []
@@ -325,7 +340,9 @@ class ContextWindowManager:
                 else:
                     # Summarize remaining system content
                     content = m.get("content", "")
-                    available_chars = max(100, int((system_budget - used) * 3))  # ~3 chars/token estimate
+                    available_chars = max(
+                        100, int((system_budget - used) * 3)
+                    )  # ~3 chars/token estimate
                     trimmed = {**m, "content": content[:available_chars] + "... [truncated]"}
                     trimmed_system.append(trimmed)
                     break
@@ -339,19 +356,15 @@ class ContextWindowManager:
 
         # Include working-memory context if available
         wm_block = self.working_memory.get_context_block()
-        wm_messages: List[Dict[str, str]] = []
+        wm_messages: list[dict[str, str]] = []
         if wm_block:
             wm_tokens = self.count_tokens(wm_block)
-            total_optimized = sum(
-                self.count_tokens(m.get("content", "")) for m in optimized
-            )
+            total_optimized = sum(self.count_tokens(m.get("content", "")) for m in optimized)
             budget_remaining = remaining_budget - total_optimized
             if budget_remaining >= wm_tokens:
                 wm_messages = [{"role": "system", "content": wm_block}]
             else:
-                logger.debug(
-                    "Working-memory block skipped: would exceed token budget"
-                )
+                logger.debug("Working-memory block skipped: would exceed token budget")
 
         # Rebuild message list
         result = system_messages + wm_messages + optimized
@@ -364,7 +377,7 @@ class ContextWindowManager:
 
         return result
 
-    def _score_messages(self, messages: List[Dict]) -> List[Tuple[Dict, float]]:
+    def _score_messages(self, messages: list[dict]) -> list[tuple[dict, float]]:
         """Score messages by importance for retention priority"""
         scored = []
         total = len(messages)
@@ -389,8 +402,16 @@ class ContextWindowManager:
 
             # Important content indicators
             important_indicators = [
-                "important", "critical", "must", "required", "error",
-                "decision", "conclusion", "summary", "result", "answer"
+                "important",
+                "critical",
+                "must",
+                "required",
+                "error",
+                "decision",
+                "conclusion",
+                "summary",
+                "result",
+                "answer",
             ]
             for indicator in important_indicators:
                 if indicator in content_lower:
@@ -414,10 +435,8 @@ class ContextWindowManager:
         return scored
 
     def _compress_context(
-        self,
-        scored_messages: List[Tuple[Dict, float]],
-        token_budget: int
-    ) -> List[Dict]:
+        self, scored_messages: list[tuple[dict, float]], token_budget: int
+    ) -> list[dict]:
         """Compress context to fit within token budget"""
         if not scored_messages:
             return []
@@ -454,10 +473,7 @@ class ContextWindowManager:
             summary_tokens = self.count_tokens(summary)
 
             if summary_tokens < chunk_tokens and summary_tokens <= remaining_budget:
-                summaries.append({
-                    "role": "system",
-                    "content": f"[Context Summary] {summary}"
-                })
+                summaries.append({"role": "system", "content": f"[Context Summary] {summary}"})
                 remaining_budget -= summary_tokens
                 self.summaries_created += 1
             elif remaining_budget >= chunk_tokens:
@@ -468,11 +484,11 @@ class ContextWindowManager:
 
         return summaries + preserved
 
-    def _create_local_summary(self, messages: List[Tuple[Dict, float]]) -> str:
+    def _create_local_summary(self, messages: list[tuple[dict, float]]) -> str:
         """Create a concise summary of a group of messages"""
         key_points = []
 
-        for msg, score in messages:
+        for msg, _score in messages:
             content = msg.get("content", "")
             role = msg.get("role", "user")
 
@@ -496,18 +512,12 @@ class ContextWindowManager:
         return summary if summary else "Previous conversation context"
 
     def _chunk_messages(
-        self,
-        messages: List[Tuple[Dict, float]],
-        chunk_size: int = 8
-    ) -> List[List[Tuple[Dict, float]]]:
+        self, messages: list[tuple[dict, float]], chunk_size: int = 8
+    ) -> list[list[tuple[dict, float]]]:
         """Split messages into chunks for batch processing"""
-        return [messages[i:i + chunk_size] for i in range(0, len(messages), chunk_size)]
+        return [messages[i : i + chunk_size] for i in range(0, len(messages), chunk_size)]
 
-    def _truncate_messages(
-        self,
-        messages: List[Dict],
-        token_budget: int
-    ) -> List[Dict]:
+    def _truncate_messages(self, messages: list[dict], token_budget: int) -> list[dict]:
         """Truncate messages to fit within budget, keeping newest"""
         result = []
         tokens_used = 0
@@ -523,16 +533,16 @@ class ContextWindowManager:
                 if remaining > 100:  # Only include if meaningful
                     content = msg.get("content", "")
                     # Rough truncation (4 chars per token approximation)
-                    truncated = content[:remaining * 4]
-                    result.insert(0, {
-                        "role": msg.get("role", "user"),
-                        "content": truncated + "... [truncated]"
-                    })
+                    truncated = content[: remaining * 4]
+                    result.insert(
+                        0,
+                        {"role": msg.get("role", "user"), "content": truncated + "... [truncated]"},
+                    )
                 break
 
         return result
 
-    def get_state(self, messages: List[Dict]) -> ContextState:
+    def get_state(self, messages: list[dict]) -> ContextState:
         """Get current context window state"""
         blocks = []
         total_tokens = 0
@@ -542,20 +552,24 @@ class ContextWindowManager:
             tokens = self.count_tokens(content)
             total_tokens += tokens
 
-            blocks.append(ContextBlock(
-                content=content[:200] + "..." if len(content) > 200 else content,
-                role=msg.get("role", "unknown"),
-                token_count=tokens,
-                timestamp=datetime.now().isoformat(),
-                is_summary="[Context Summary]" in content
-            ))
+            blocks.append(
+                ContextBlock(
+                    content=content[:200] + "..." if len(content) > 200 else content,
+                    role=msg.get("role", "unknown"),
+                    token_count=tokens,
+                    timestamp=datetime.now().isoformat(),
+                    is_summary="[Context Summary]" in content,
+                )
+            )
 
         return ContextState(
             blocks=blocks,
             total_tokens=total_tokens,
             max_tokens=self.effective_limit,
-            compression_ratio=total_tokens / self.effective_limit if self.effective_limit > 0 else 0,
-            summaries_created=self.summaries_created
+            compression_ratio=total_tokens / self.effective_limit
+            if self.effective_limit > 0
+            else 0,
+            summaries_created=self.summaries_created,
         )
 
 

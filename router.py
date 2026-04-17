@@ -3,28 +3,36 @@ Advanced LLM Router - Multi-model orchestration with role-based delegation
 Architect (reasoning) / Worker (volume) / Coder (development) specialization
 With thought logging, transparent routing decisions, and Karpathy temperature calibration
 """
-from enum import Enum
-from typing import Dict, Any, List, Optional, Tuple
+
 from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Optional
+
 from loguru import logger
-from llm_gateway import LLMGateway, Provider, TaskType
+
 from config import settings
+from llm_gateway import LLMGateway, Provider, TaskType
+
 
 class AgentRole(str, Enum):
     """Specialized agent roles for different task types"""
+
     ARCHITECT = "architect"  # High-level reasoning, planning, strategy
-    WORKER = "worker"        # High-volume, cheap tasks
-    CODER = "coder"          # Software development, debugging
-    RESEARCHER = "researcher" # Deep analysis, fact-checking
+    WORKER = "worker"  # High-volume, cheap tasks
+    CODER = "coder"  # Software development, debugging
+    RESEARCHER = "researcher"  # Deep analysis, fact-checking
+
 
 @dataclass
 class RoutingDecision:
     """Result of routing decision"""
+
     role: AgentRole
     provider: Provider
     model: str
     reasoning: str
     estimated_cost: float
+
 
 class SmartRouter:
     """
@@ -39,6 +47,7 @@ class SmartRouter:
         # Initialize thoughts logger if enabled
         if settings.enable_thought_logging:
             from thoughts_logger import thoughts_logger
+
             self.thoughts_logger = thoughts_logger
         else:
             self.thoughts_logger = None
@@ -71,33 +80,71 @@ class SmartRouter:
         # Task patterns for automatic role detection
         self.task_patterns = {
             AgentRole.ARCHITECT: [
-                "plan", "strategy", "design", "architecture", "approach",
-                "should i", "how would you", "what's the best way",
-                "analyze", "evaluate", "compare", "recommend"
+                "plan",
+                "strategy",
+                "design",
+                "architecture",
+                "approach",
+                "should i",
+                "how would you",
+                "what's the best way",
+                "analyze",
+                "evaluate",
+                "compare",
+                "recommend",
             ],
             AgentRole.WORKER: [
-                "summarize", "list", "extract", "convert", "format",
-                "translate", "clean", "organize", "sort", "filter",
-                "count", "aggregate", "simple", "quick"
+                "summarize",
+                "list",
+                "extract",
+                "convert",
+                "format",
+                "translate",
+                "clean",
+                "organize",
+                "sort",
+                "filter",
+                "count",
+                "aggregate",
+                "simple",
+                "quick",
             ],
             AgentRole.CODER: [
-                "code", "function", "class", "debug", "fix bug",
-                "implement", "write program", "script", "api",
-                "refactor", "optimize code", "test", "algorithm"
+                "code",
+                "function",
+                "class",
+                "debug",
+                "fix bug",
+                "implement",
+                "write program",
+                "script",
+                "api",
+                "refactor",
+                "optimize code",
+                "test",
+                "algorithm",
             ],
             AgentRole.RESEARCHER: [
-                "research", "find information", "what is", "explain",
-                "investigate", "fact check", "learn about", "understand",
-                "deep dive", "comprehensive", "detailed analysis"
+                "research",
+                "find information",
+                "what is",
+                "explain",
+                "investigate",
+                "fact check",
+                "learn about",
+                "understand",
+                "deep dive",
+                "comprehensive",
+                "detailed analysis",
             ],
         }
 
     def route_task(
         self,
         task: str,
-        context: Optional[Dict] = None,
+        context: Optional[dict] = None,
         prefer_cost: bool = False,
-        prefer_quality: bool = False
+        prefer_quality: bool = False,
     ) -> RoutingDecision:
         """
         Analyze task and route to appropriate model
@@ -133,7 +180,9 @@ class SmartRouter:
             elif complexity < 0.3:
                 provider, model, base_cost = available_models[-1]  # Cheap
             else:
-                provider, model, base_cost = available_models[min(1, len(available_models)-1)]  # Medium
+                provider, model, base_cost = available_models[
+                    min(1, len(available_models) - 1)
+                ]  # Medium
 
         # Estimate actual cost based on task length
         estimated_tokens = len(task.split()) * 1.3  # Rough estimate
@@ -141,7 +190,9 @@ class SmartRouter:
 
         reasoning = self._explain_routing(role, provider, model, task, context)
 
-        logger.info(f"Routed to {role.value}: {provider.value}/{model} (est. ${estimated_cost:.4f})")
+        logger.info(
+            f"Routed to {role.value}: {provider.value}/{model} (est. ${estimated_cost:.4f})"
+        )
 
         # Log routing decision as thought
         if self.thoughts_logger:
@@ -150,8 +201,8 @@ class SmartRouter:
                 rationale=reasoning,
                 metadata={
                     "estimated_cost": f"${estimated_cost:.4f}",
-                    "complexity": f"{self._estimate_complexity(task):.2f}"
-                }
+                    "complexity": f"{self._estimate_complexity(task):.2f}",
+                },
             )
 
         return RoutingDecision(
@@ -159,15 +210,15 @@ class SmartRouter:
             provider=provider,
             model=model,
             reasoning=reasoning,
-            estimated_cost=estimated_cost
+            estimated_cost=estimated_cost,
         )
 
-    def _detect_role(self, task: str, context: Optional[Dict]) -> AgentRole:
+    def _detect_role(self, task: str, context: Optional[dict]) -> AgentRole:
         """Detect appropriate role based on task content"""
         task_lower = task.lower()
 
         # Score each role based on keyword matches
-        scores = {role: 0 for role in AgentRole}
+        scores = dict.fromkeys(AgentRole, 0)
 
         for role, keywords in self.task_patterns.items():
             for keyword in keywords:
@@ -205,8 +256,16 @@ class SmartRouter:
             complexity_score -= 0.2
 
         # Complexity indicators
-        complex_words = ["analyze", "comprehensive", "detailed", "complex",
-                        "multiple", "integrate", "architecture", "system"]
+        complex_words = [
+            "analyze",
+            "comprehensive",
+            "detailed",
+            "complex",
+            "multiple",
+            "integrate",
+            "architecture",
+            "system",
+        ]
         simple_words = ["simple", "quick", "basic", "just", "only", "list"]
 
         task_lower = task.lower()
@@ -222,19 +281,14 @@ class SmartRouter:
         return max(0.0, min(1.0, complexity_score))
 
     def _explain_routing(
-        self,
-        role: AgentRole,
-        provider: Provider,
-        model: str,
-        task: str,
-        context: Optional[Dict]
+        self, role: AgentRole, provider: Provider, model: str, task: str, context: Optional[dict]
     ) -> str:
         """Generate human-readable explanation of routing decision"""
         role_descriptions = {
             AgentRole.ARCHITECT: "high-level reasoning and strategic planning",
             AgentRole.WORKER: "efficient processing of straightforward tasks",
             AgentRole.CODER: "software development and technical implementation",
-            AgentRole.RESEARCHER: "deep analysis and information synthesis"
+            AgentRole.RESEARCHER: "deep analysis and information synthesis",
         }
 
         return (
@@ -247,6 +301,7 @@ class SmartRouter:
         if self._temperature_calibrator is None:
             try:
                 from karpathy_methods import TemperatureCalibrator
+
                 self._temperature_calibrator = TemperatureCalibrator()
             except ImportError:
                 self._temperature_calibrator = None
@@ -273,11 +328,8 @@ class SmartRouter:
         return role_temp
 
     async def execute_with_routing(
-        self,
-        task: str,
-        context: Optional[Dict] = None,
-        **kwargs
-    ) -> Tuple[RoutingDecision, Dict[str, Any]]:
+        self, task: str, context: Optional[dict] = None, **kwargs
+    ) -> tuple[RoutingDecision, dict[str, Any]]:
         """
         Route task and execute with selected model.
         Applies Karpathy temperature calibration unless temperature is explicitly provided.
@@ -287,9 +339,7 @@ class SmartRouter:
         """
         # Get routing decision using only routing-specific kwargs.
         routing_kwargs = {
-            key: kwargs[key]
-            for key in ("prefer_cost", "prefer_quality")
-            if key in kwargs
+            key: kwargs[key] for key in ("prefer_cost", "prefer_quality") if key in kwargs
         }
         decision = self.route_task(task, context, **routing_kwargs)
 
@@ -316,7 +366,7 @@ class SmartRouter:
         # Prepare messages
         messages = [
             {"role": "system", "content": system_content},
-            {"role": "user", "content": task}
+            {"role": "user", "content": task},
         ]
 
         # Execute with the routed provider/model while keeping the existing
@@ -332,9 +382,7 @@ class SmartRouter:
         completion_kwargs.setdefault("model", decision.model)
 
         result = await self.llm.complete(
-            messages,
-            task_type=task_type_map[decision.role],
-            **completion_kwargs
+            messages, task_type=task_type_map[decision.role], **completion_kwargs
         )
 
         return decision, result
@@ -355,7 +403,6 @@ Approach:
 2. Consider multiple approaches
 3. Recommend the optimal strategy
 4. Provide clear reasoning for your decisions""",
-
             AgentRole.WORKER: """You are the Worker - responsible for efficient execution of straightforward, high-volume tasks.
 
 Your strengths:
@@ -369,7 +416,6 @@ Approach:
 2. Focus on accuracy and completeness
 3. Minimize unnecessary elaboration
 4. Deliver results quickly""",
-
             AgentRole.CODER: """You are the Coder - responsible for software development, debugging, and technical implementation.
 
 Your strengths:
@@ -383,7 +429,6 @@ Approach:
 2. Include proper error handling
 3. Add clear comments for complex logic
 4. Consider edge cases and security""",
-
             AgentRole.RESEARCHER: """You are the Researcher - responsible for deep analysis, fact-checking, and information synthesis.
 
 Your strengths:
@@ -396,10 +441,11 @@ Approach:
 1. Investigate thoroughly and systematically
 2. Verify facts and cite sources when possible
 3. Provide balanced, nuanced analysis
-4. Identify knowledge gaps and uncertainties"""
+4. Identify knowledge gaps and uncertainties""",
         }
 
         return prompts.get(role, prompts[AgentRole.RESEARCHER])
+
 
 # Global router instance
 router = SmartRouter()

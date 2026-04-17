@@ -2,19 +2,23 @@
 Twilio Integration – Agentic Call Center & SMS
 Enables Big Homie to make/receive calls, send SMS, and run IVR flows
 """
+
 import base64
 import xml.sax.saxutils as _xml
-from urllib.parse import urlparse as _urlparse
-import httpx
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from typing import Any, Optional
+from urllib.parse import urlparse as _urlparse
+
+import httpx
 from loguru import logger
+
 from config import settings
 
 
 @dataclass
 class TwilioResult:
     """Result of a Twilio operation"""
+
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
@@ -46,7 +50,7 @@ class TwilioIntegration:
         creds = f"{self.account_sid}:{self.auth_token}"
         return base64.b64encode(creds.encode()).decode()
 
-    def _headers(self) -> Dict:
+    def _headers(self) -> dict:
         return {
             "Authorization": f"Basic {self._auth()}",
             "Content-Type": "application/x-www-form-urlencoded",
@@ -128,7 +132,7 @@ class TwilioIntegration:
         if not settings.twilio_enabled:
             return TwilioResult(success=False, error="Twilio integration not enabled")
         try:
-            data: Dict[str, Any] = {
+            data: dict[str, Any] = {
                 "To": to,
                 "From": from_number or self.from_number,
                 "Url": twiml_url,
@@ -167,7 +171,7 @@ class TwilioIntegration:
         if not settings.twilio_enabled:
             return TwilioResult(success=False, error="Twilio integration not enabled")
         try:
-            data: Dict[str, Any] = {
+            data: dict[str, Any] = {
                 "To": to,
                 "From": from_number or self.from_number,
                 "Twiml": twiml,
@@ -229,7 +233,7 @@ class TwilioIntegration:
     def build_ivr_twiml(
         self,
         greeting: str,
-        menu_options: Dict[str, str],
+        menu_options: dict[str, str],
         gather_action_url: str,
     ) -> str:
         """
@@ -245,12 +249,16 @@ class TwilioIntegration:
         # Validate the action URL using proper URL parsing to prevent SSRF / injection.
         # Only allow http/https, a non-empty hostname, and no embedded credentials.
         _parsed = _urlparse(gather_action_url)
-        if _parsed.scheme not in ("http", "https") or not _parsed.hostname or _parsed.username or _parsed.password:
+        if (
+            _parsed.scheme not in ("http", "https")
+            or not _parsed.hostname
+            or _parsed.username
+            or _parsed.password
+        ):
             raise ValueError(f"Invalid gather_action_url: {gather_action_url!r}")
 
         menu_text = ". ".join(
-            f"Press {_xml.escape(k)} for {_xml.escape(v)}"
-            for k, v in menu_options.items()
+            f"Press {_xml.escape(k)} for {_xml.escape(v)}" for k, v in menu_options.items()
         )
         escaped_greeting = _xml.escape(greeting)
         # gather_action_url goes into an XML attribute – use quoteattr for safety

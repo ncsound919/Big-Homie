@@ -2,35 +2,38 @@
 Document Intelligence - Tier 3 Perception
 Parse and extract structured information from PDFs, spreadsheets, code repos, and more
 """
-import json
-import os
-import re
+
 import csv
 import io
-from typing import Dict, List, Any, Optional
+import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Optional
+
 from loguru import logger
 
 
 @dataclass
 class DocumentChunk:
     """A chunk of extracted document content"""
+
     content: str
     page_number: Optional[int] = None
     section: Optional[str] = None
     chunk_type: str = "text"  # text, table, code, heading, metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class DocumentAnalysis:
     """Complete analysis of a document"""
+
     source: str
     doc_type: str
     total_pages: Optional[int] = None
-    chunks: List[DocumentChunk] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    chunks: list[DocumentChunk] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
     summary: Optional[str] = None
     error: Optional[str] = None
 
@@ -51,30 +54,34 @@ class DocumentIntelligence:
     def __init__(self):
         self._capabilities = self._detect_capabilities()
 
-    def _detect_capabilities(self) -> Dict[str, bool]:
+    def _detect_capabilities(self) -> dict[str, bool]:
         """Detect available parsing libraries"""
         caps = {}
 
         try:
             import PyPDF2  # noqa: F401
+
             caps["pdf_pypdf2"] = True
         except ImportError:
             caps["pdf_pypdf2"] = False
 
         try:
             import pdfplumber  # noqa: F401
+
             caps["pdf_plumber"] = True
         except ImportError:
             caps["pdf_plumber"] = False
 
         try:
             from bs4 import BeautifulSoup  # noqa: F401
+
             caps["html"] = True
         except ImportError:
             caps["html"] = False
 
         try:
             import pytesseract  # noqa: F401
+
             caps["ocr"] = True
         except ImportError:
             caps["ocr"] = False
@@ -115,11 +122,7 @@ class DocumentIntelligence:
 
         except Exception as e:
             logger.error(f"Document analysis failed for {source}: {e}")
-            return DocumentAnalysis(
-                source=source,
-                doc_type=doc_type,
-                error=str(e)
-            )
+            return DocumentAnalysis(source=source, doc_type=doc_type, error=str(e))
 
     def _detect_type(self, source: str) -> str:
         """Detect document type from file extension"""
@@ -197,23 +200,23 @@ class DocumentIntelligence:
                 # Extract text
                 text = page.extract_text() or ""
                 if text.strip():
-                    analysis.chunks.append(DocumentChunk(
-                        content=text,
-                        page_number=i + 1,
-                        chunk_type="text"
-                    ))
+                    analysis.chunks.append(
+                        DocumentChunk(content=text, page_number=i + 1, chunk_type="text")
+                    )
 
                 # Extract tables
                 tables = page.extract_tables()
                 for j, table in enumerate(tables):
                     if table:
                         table_text = self._format_table(table)
-                        analysis.chunks.append(DocumentChunk(
-                            content=table_text,
-                            page_number=i + 1,
-                            chunk_type="table",
-                            metadata={"table_index": j}
-                        ))
+                        analysis.chunks.append(
+                            DocumentChunk(
+                                content=table_text,
+                                page_number=i + 1,
+                                chunk_type="table",
+                                metadata={"table_index": j},
+                            )
+                        )
 
         return analysis
 
@@ -229,19 +232,19 @@ class DocumentIntelligence:
         for i, page in enumerate(reader.pages):
             text = page.extract_text() or ""
             if text.strip():
-                analysis.chunks.append(DocumentChunk(
-                    content=text,
-                    page_number=i + 1,
-                    chunk_type="text"
-                ))
+                analysis.chunks.append(
+                    DocumentChunk(content=text, page_number=i + 1, chunk_type="text")
+                )
 
         # Extract metadata
         if reader.metadata:
-            analysis.metadata.update({
-                "title": reader.metadata.get("/Title", ""),
-                "author": reader.metadata.get("/Author", ""),
-                "subject": reader.metadata.get("/Subject", ""),
-            })
+            analysis.metadata.update(
+                {
+                    "title": reader.metadata.get("/Title", ""),
+                    "author": reader.metadata.get("/Author", ""),
+                    "subject": reader.metadata.get("/Subject", ""),
+                }
+            )
 
         return analysis
 
@@ -269,35 +272,41 @@ class DocumentIntelligence:
         analysis.metadata["column_count"] = len(headers)
 
         # Extract header info
-        analysis.chunks.append(DocumentChunk(
-            content=f"Columns: {', '.join(headers)}",
-            chunk_type="metadata",
-            metadata={"headers": headers}
-        ))
+        analysis.chunks.append(
+            DocumentChunk(
+                content=f"Columns: {', '.join(headers)}",
+                chunk_type="metadata",
+                metadata={"headers": headers},
+            )
+        )
 
         # Sample data (first 20 rows)
         sample_size = min(20, len(data_rows))
         sample = data_rows[:sample_size]
 
         table_data = [headers] + sample
-        analysis.chunks.append(DocumentChunk(
-            content=self._format_table(table_data),
-            chunk_type="table",
-            metadata={"sample_size": sample_size, "total_rows": len(data_rows)}
-        ))
+        analysis.chunks.append(
+            DocumentChunk(
+                content=self._format_table(table_data),
+                chunk_type="table",
+                metadata={"sample_size": sample_size, "total_rows": len(data_rows)},
+            )
+        )
 
         # Basic statistics for numeric columns
         stats = self._compute_csv_stats(headers, data_rows)
         if stats:
-            analysis.chunks.append(DocumentChunk(
-                content=f"Statistics:\n{json.dumps(stats, indent=2)}",
-                chunk_type="metadata",
-                metadata={"stats": stats}
-            ))
+            analysis.chunks.append(
+                DocumentChunk(
+                    content=f"Statistics:\n{json.dumps(stats, indent=2)}",
+                    chunk_type="metadata",
+                    metadata={"stats": stats},
+                )
+            )
 
         return analysis
 
-    def _compute_csv_stats(self, headers: List[str], rows: List[List[str]]) -> Dict:
+    def _compute_csv_stats(self, headers: list[str], rows: list[list[str]]) -> dict:
         """Compute basic statistics for numeric columns"""
         stats = {}
         for col_idx, header in enumerate(headers):
@@ -314,7 +323,7 @@ class DocumentIntelligence:
                     "count": len(values),
                     "min": min(values),
                     "max": max(values),
-                    "mean": sum(values) / len(values)
+                    "mean": sum(values) / len(values),
                 }
 
         return stats
@@ -342,18 +351,22 @@ class DocumentIntelligence:
             if records:
                 # Analyze structure from first record
                 first = records[0]
-                analysis.chunks.append(DocumentChunk(
-                    content=f"Schema: {json.dumps(self._infer_schema(first), indent=2)}",
-                    chunk_type="metadata"
-                ))
+                analysis.chunks.append(
+                    DocumentChunk(
+                        content=f"Schema: {json.dumps(self._infer_schema(first), indent=2)}",
+                        chunk_type="metadata",
+                    )
+                )
 
                 # Sample records
                 sample = records[:5]
-                analysis.chunks.append(DocumentChunk(
-                    content=json.dumps(sample, indent=2),
-                    chunk_type="text",
-                    metadata={"sample_size": len(sample)}
-                ))
+                analysis.chunks.append(
+                    DocumentChunk(
+                        content=json.dumps(sample, indent=2),
+                        chunk_type="text",
+                        metadata={"sample_size": len(sample)},
+                    )
+                )
         else:
             # Parse JSON
             data = json.loads(text)
@@ -361,34 +374,33 @@ class DocumentIntelligence:
 
             if isinstance(data, list):
                 analysis.metadata["record_count"] = len(data)
-                analysis.chunks.append(DocumentChunk(
-                    content=f"Array with {len(data)} elements",
-                    chunk_type="metadata"
-                ))
+                analysis.chunks.append(
+                    DocumentChunk(content=f"Array with {len(data)} elements", chunk_type="metadata")
+                )
                 if data:
-                    analysis.chunks.append(DocumentChunk(
-                        content=f"Schema: {json.dumps(self._infer_schema(data[0]), indent=2)}",
-                        chunk_type="metadata"
-                    ))
+                    analysis.chunks.append(
+                        DocumentChunk(
+                            content=f"Schema: {json.dumps(self._infer_schema(data[0]), indent=2)}",
+                            chunk_type="metadata",
+                        )
+                    )
             elif isinstance(data, dict):
                 analysis.metadata["keys"] = list(data.keys())
-                analysis.chunks.append(DocumentChunk(
-                    content=f"Object with keys: {', '.join(data.keys())}",
-                    chunk_type="metadata"
-                ))
+                analysis.chunks.append(
+                    DocumentChunk(
+                        content=f"Object with keys: {', '.join(data.keys())}", chunk_type="metadata"
+                    )
+                )
 
             # Full content (truncated if large)
             content_str = json.dumps(data, indent=2)
             if len(content_str) > 10000:
                 content_str = content_str[:10000] + "\n... [truncated]"
-            analysis.chunks.append(DocumentChunk(
-                content=content_str,
-                chunk_type="text"
-            ))
+            analysis.chunks.append(DocumentChunk(content=content_str, chunk_type="text"))
 
         return analysis
 
-    def _infer_schema(self, obj: Any) -> Dict:
+    def _infer_schema(self, obj: Any) -> dict:
         """Infer a simple schema from a JSON object"""
         if isinstance(obj, dict):
             return {k: type(v).__name__ for k, v in obj.items()}
@@ -400,44 +412,46 @@ class DocumentIntelligence:
 
     # ===== Markdown Analysis =====
 
-    async def _analyze_markdown(self, source: str, content: Optional[bytes] = None) -> DocumentAnalysis:
+    async def _analyze_markdown(
+        self, source: str, content: Optional[bytes] = None
+    ) -> DocumentAnalysis:
         """Analyze Markdown document"""
         analysis = DocumentAnalysis(source=source, doc_type="markdown")
         text = self._read_text_content(source, content)
 
         # Extract headings
-        headings = re.findall(r'^(#{1,6})\s+(.+)$', text, re.MULTILINE)
-        analysis.metadata["headings"] = [
-            {"level": len(h[0]), "text": h[1]} for h in headings
-        ]
+        headings = re.findall(r"^(#{1,6})\s+(.+)$", text, re.MULTILINE)
+        analysis.metadata["headings"] = [{"level": len(h[0]), "text": h[1]} for h in headings]
 
         # Split by sections
-        sections = re.split(r'^(#{1,6}\s+.+)$', text, flags=re.MULTILINE)
+        sections = re.split(r"^(#{1,6}\s+.+)$", text, flags=re.MULTILINE)
 
         current_heading = "Introduction"
-        for i, section in enumerate(sections):
-            if re.match(r'^#{1,6}\s+', section):
+        for _i, section in enumerate(sections):
+            if re.match(r"^#{1,6}\s+", section):
                 current_heading = section.strip().lstrip("#").strip()
             elif section.strip():
                 # Check for code blocks
-                code_blocks = re.findall(r'```(\w*)\n(.*?)```', section, re.DOTALL)
+                code_blocks = re.findall(r"```(\w*)\n(.*?)```", section, re.DOTALL)
                 if code_blocks:
                     for lang, code in code_blocks:
-                        analysis.chunks.append(DocumentChunk(
-                            content=code.strip(),
-                            section=current_heading,
-                            chunk_type="code",
-                            metadata={"language": lang or "unknown"}
-                        ))
+                        analysis.chunks.append(
+                            DocumentChunk(
+                                content=code.strip(),
+                                section=current_heading,
+                                chunk_type="code",
+                                metadata={"language": lang or "unknown"},
+                            )
+                        )
 
                 # Add text content
-                clean_text = re.sub(r'```\w*\n.*?```', '', section, flags=re.DOTALL).strip()
+                clean_text = re.sub(r"```\w*\n.*?```", "", section, flags=re.DOTALL).strip()
                 if clean_text:
-                    analysis.chunks.append(DocumentChunk(
-                        content=clean_text,
-                        section=current_heading,
-                        chunk_type="text"
-                    ))
+                    analysis.chunks.append(
+                        DocumentChunk(
+                            content=clean_text, section=current_heading, chunk_type="text"
+                        )
+                    )
 
         return analysis
 
@@ -450,6 +464,7 @@ class DocumentIntelligence:
 
         if self._capabilities.get("html"):
             from bs4 import BeautifulSoup
+
             soup = BeautifulSoup(text, "html.parser")
 
             # Extract title
@@ -460,20 +475,19 @@ class DocumentIntelligence:
             # Extract headings
             for level in range(1, 7):
                 for heading in soup.find_all(f"h{level}"):
-                    analysis.chunks.append(DocumentChunk(
-                        content=heading.get_text(),
-                        chunk_type="heading",
-                        metadata={"level": level}
-                    ))
+                    analysis.chunks.append(
+                        DocumentChunk(
+                            content=heading.get_text(),
+                            chunk_type="heading",
+                            metadata={"level": level},
+                        )
+                    )
 
             # Extract main text content
             for tag in soup.find_all(["p", "li", "td", "th"]):
                 text_content = tag.get_text(strip=True)
                 if text_content and len(text_content) > 10:
-                    analysis.chunks.append(DocumentChunk(
-                        content=text_content,
-                        chunk_type="text"
-                    ))
+                    analysis.chunks.append(DocumentChunk(content=text_content, chunk_type="text"))
 
             # Extract tables
             for table in soup.find_all("table"):
@@ -483,10 +497,9 @@ class DocumentIntelligence:
                     if cells:
                         rows.append(cells)
                 if rows:
-                    analysis.chunks.append(DocumentChunk(
-                        content=self._format_table(rows),
-                        chunk_type="table"
-                    ))
+                    analysis.chunks.append(
+                        DocumentChunk(content=self._format_table(rows), chunk_type="table")
+                    )
 
             # Extract links
             links = []
@@ -497,12 +510,9 @@ class DocumentIntelligence:
 
         else:
             # Fallback: basic text extraction
-            clean = re.sub(r'<[^>]+>', ' ', text)
-            clean = re.sub(r'\s+', ' ', clean).strip()
-            analysis.chunks.append(DocumentChunk(
-                content=clean,
-                chunk_type="text"
-            ))
+            clean = re.sub(r"<[^>]+>", " ", text)
+            clean = re.sub(r"\s+", " ", clean).strip()
+            analysis.chunks.append(DocumentChunk(content=clean, chunk_type="text"))
 
         return analysis
 
@@ -515,9 +525,15 @@ class DocumentIntelligence:
 
         ext = Path(source).suffix.lower()
         language = {
-            ".py": "python", ".js": "javascript", ".ts": "typescript",
-            ".java": "java", ".go": "go", ".rs": "rust",
-            ".c": "c", ".cpp": "cpp", ".rb": "ruby"
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".java": "java",
+            ".go": "go",
+            ".rs": "rust",
+            ".c": "c",
+            ".cpp": "cpp",
+            ".rb": "ruby",
         }.get(ext, "unknown")
 
         analysis.metadata["language"] = language
@@ -527,35 +543,39 @@ class DocumentIntelligence:
         # Extract structure based on language
         if language == "python":
             # Extract classes and functions
-            classes = re.findall(r'^class\s+(\w+)', text, re.MULTILINE)
-            functions = re.findall(r'^def\s+(\w+)', text, re.MULTILINE)
-            imports = re.findall(r'^(?:from\s+\S+\s+)?import\s+(.+)$', text, re.MULTILINE)
+            classes = re.findall(r"^class\s+(\w+)", text, re.MULTILINE)
+            functions = re.findall(r"^def\s+(\w+)", text, re.MULTILINE)
+            imports = re.findall(r"^(?:from\s+\S+\s+)?import\s+(.+)$", text, re.MULTILINE)
 
             analysis.metadata["classes"] = classes
             analysis.metadata["functions"] = functions
             analysis.metadata["imports"] = [i.strip() for i in imports]
 
-            analysis.chunks.append(DocumentChunk(
-                content=f"Classes: {', '.join(classes)}\nFunctions: {', '.join(functions)}",
-                chunk_type="metadata"
-            ))
+            analysis.chunks.append(
+                DocumentChunk(
+                    content=f"Classes: {', '.join(classes)}\nFunctions: {', '.join(functions)}",
+                    chunk_type="metadata",
+                )
+            )
 
         elif language in ("javascript", "typescript"):
             # Extract exports, classes, functions
-            exports = re.findall(r'export\s+(?:default\s+)?(?:class|function|const|let|var)\s+(\w+)', text)
-            classes = re.findall(r'class\s+(\w+)', text)
-            functions = re.findall(r'(?:function|const|let|var)\s+(\w+)\s*(?:=\s*(?:async\s*)?\(|[\(])', text)
+            exports = re.findall(
+                r"export\s+(?:default\s+)?(?:class|function|const|let|var)\s+(\w+)", text
+            )
+            classes = re.findall(r"class\s+(\w+)", text)
+            functions = re.findall(
+                r"(?:function|const|let|var)\s+(\w+)\s*(?:=\s*(?:async\s*)?\(|[\(])", text
+            )
 
             analysis.metadata["exports"] = exports
             analysis.metadata["classes"] = classes
             analysis.metadata["functions"] = functions
 
         # Add full source as a code chunk
-        analysis.chunks.append(DocumentChunk(
-            content=text,
-            chunk_type="code",
-            metadata={"language": language}
-        ))
+        analysis.chunks.append(
+            DocumentChunk(content=text, chunk_type="code", metadata={"language": language})
+        )
 
         return analysis
 
@@ -574,17 +594,15 @@ class DocumentIntelligence:
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
 
         for i, para in enumerate(paragraphs):
-            analysis.chunks.append(DocumentChunk(
-                content=para,
-                chunk_type="text",
-                metadata={"paragraph_index": i}
-            ))
+            analysis.chunks.append(
+                DocumentChunk(content=para, chunk_type="text", metadata={"paragraph_index": i})
+            )
 
         return analysis
 
     # ===== Utility Methods =====
 
-    def _format_table(self, rows: List[List[str]]) -> str:
+    def _format_table(self, rows: list[list[str]]) -> str:
         """Format table rows into readable text"""
         if not rows:
             return ""
@@ -609,10 +627,10 @@ class DocumentIntelligence:
     async def analyze_directory(
         self,
         directory: str,
-        extensions: Optional[List[str]] = None,
+        extensions: Optional[list[str]] = None,
         recursive: bool = True,
-        max_files: int = 100
-    ) -> List[DocumentAnalysis]:
+        max_files: int = 100,
+    ) -> list[DocumentAnalysis]:
         """
         Analyze all documents in a directory.
 
@@ -630,8 +648,18 @@ class DocumentIntelligence:
             raise ValueError(f"Not a directory: {directory}")
 
         supported_extensions = extensions or [
-            ".pdf", ".csv", ".json", ".jsonl", ".md", ".html",
-            ".py", ".js", ".ts", ".txt", ".yaml", ".yml"
+            ".pdf",
+            ".csv",
+            ".json",
+            ".jsonl",
+            ".md",
+            ".html",
+            ".py",
+            ".js",
+            ".ts",
+            ".txt",
+            ".yaml",
+            ".yml",
         ]
 
         files = []

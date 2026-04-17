@@ -10,23 +10,25 @@ as a continuous background process that:
 - Consolidates memory during idle periods
 - Manages resource allocation for background operations
 """
+
 import asyncio
-import threading
-import time
 import signal
-import sys
-from datetime import datetime, time as time_of_day, timedelta
-from typing import Dict, List, Any, Optional, Callable, Set
+import threading
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from datetime import time as time_of_day
 from enum import Enum
-from pathlib import Path
+from typing import Any, Callable, Optional
+
 from loguru import logger
+
 from config import settings
 from memory import memory
 
 
 class DaemonState(str, Enum):
     """State of the KAIROS daemon"""
+
     INITIALIZING = "initializing"
     RUNNING = "running"
     IDLE = "idle"
@@ -39,16 +41,18 @@ class DaemonState(str, Enum):
 
 class TaskPriority(str, Enum):
     """Priority levels for daemon tasks"""
-    CRITICAL = "critical"      # Execute immediately
-    HIGH = "high"              # Execute as soon as possible
-    NORMAL = "normal"          # Standard scheduling
-    LOW = "low"                # Execute when idle
+
+    CRITICAL = "critical"  # Execute immediately
+    HIGH = "high"  # Execute as soon as possible
+    NORMAL = "normal"  # Standard scheduling
+    LOW = "low"  # Execute when idle
     BACKGROUND = "background"  # Execute only during consolidation periods
 
 
 @dataclass
 class DaemonTask:
     """A task to be executed by the daemon"""
+
     id: str
     name: str
     description: str
@@ -61,13 +65,14 @@ class DaemonTask:
     run_count: int = 0
     error_count: int = 0
     enabled: bool = True
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
 
 
 @dataclass
 class DaemonMetrics:
     """Metrics for daemon performance tracking"""
+
     uptime_seconds: float = 0.0
     tasks_executed: int = 0
     tasks_failed: int = 0
@@ -103,6 +108,7 @@ def _get_kairos_time_setting(name: str, default: time_of_day) -> time_of_day:
 @dataclass
 class KairosConfig:
     """Configuration for KAIROS daemon"""
+
     enabled: bool = field(default_factory=lambda: _get_kairos_setting("kairos_enabled", True))
     idle_threshold_seconds: int = field(
         default_factory=lambda: _get_kairos_setting("kairos_idle_threshold_seconds", 300)
@@ -120,10 +126,14 @@ class KairosConfig:
         default_factory=lambda: _get_kairos_setting("kairos_quiet_hours_enabled", True)
     )
     quiet_hours_start: time_of_day = field(
-        default_factory=lambda: _get_kairos_time_setting("kairos_quiet_hours_start", time_of_day(23, 0))
+        default_factory=lambda: _get_kairos_time_setting(
+            "kairos_quiet_hours_start", time_of_day(23, 0)
+        )
     )
     quiet_hours_end: time_of_day = field(
-        default_factory=lambda: _get_kairos_time_setting("kairos_quiet_hours_end", time_of_day(6, 0))
+        default_factory=lambda: _get_kairos_time_setting(
+            "kairos_quiet_hours_end", time_of_day(6, 0)
+        )
     )
     priority_task_timeout: int = field(
         default_factory=lambda: _get_kairos_setting("kairos_priority_task_timeout", 300)
@@ -158,9 +168,9 @@ class KairosDaemon:
         self.start_time: Optional[datetime] = None
 
         # Task management
-        self.scheduled_tasks: Dict[str, DaemonTask] = {}
+        self.scheduled_tasks: dict[str, DaemonTask] = {}
         self.task_queue: asyncio.Queue = asyncio.Queue()
-        self.running_tasks: Set[str] = set()
+        self.running_tasks: set[str] = set()
 
         # Threading
         self.daemon_thread: Optional[threading.Thread] = None
@@ -184,31 +194,37 @@ class KairosDaemon:
     def _register_builtin_tasks(self):
         """Register built-in daemon tasks"""
         # Memory consolidation task
-        self.register_task(DaemonTask(
-            id="memory_consolidation",
-            name="Memory Consolidation",
-            description="Consolidate and optimize memory storage",
-            priority=TaskPriority.BACKGROUND,
-            interval_seconds=3600,  # Every hour
-        ))
+        self.register_task(
+            DaemonTask(
+                id="memory_consolidation",
+                name="Memory Consolidation",
+                description="Consolidate and optimize memory storage",
+                priority=TaskPriority.BACKGROUND,
+                interval_seconds=3600,  # Every hour
+            )
+        )
 
         # System health check
-        self.register_task(DaemonTask(
-            id="system_health_check",
-            name="System Health Check",
-            description="Verify system health and resource availability",
-            priority=TaskPriority.NORMAL,
-            interval_seconds=300,  # Every 5 minutes
-        ))
+        self.register_task(
+            DaemonTask(
+                id="system_health_check",
+                name="System Health Check",
+                description="Verify system health and resource availability",
+                priority=TaskPriority.NORMAL,
+                interval_seconds=300,  # Every 5 minutes
+            )
+        )
 
         # Skill optimization
-        self.register_task(DaemonTask(
-            id="skill_optimization",
-            name="Skill Optimization",
-            description="Optimize learned skills based on usage patterns",
-            priority=TaskPriority.LOW,
-            interval_seconds=7200,  # Every 2 hours
-        ))
+        self.register_task(
+            DaemonTask(
+                id="skill_optimization",
+                name="Skill Optimization",
+                description="Optimize learned skills based on usage patterns",
+                priority=TaskPriority.LOW,
+                interval_seconds=7200,  # Every 2 hours
+            )
+        )
 
     def register_task(self, task: DaemonTask):
         """Register a task with the daemon"""
@@ -238,9 +254,7 @@ class KairosDaemon:
 
         # Start daemon thread
         self.daemon_thread = threading.Thread(
-            target=self._daemon_main_loop,
-            name="KAIROS-Daemon",
-            daemon=True
+            target=self._daemon_main_loop, name="KAIROS-Daemon", daemon=True
         )
         self.daemon_thread.start()
 
@@ -290,13 +304,10 @@ class KairosDaemon:
             task = DaemonTask(**{**task.__dict__, "priority": priority_override})
 
         if self.event_loop:
-            asyncio.run_coroutine_threadsafe(
-                self.task_queue.put(task),
-                self.event_loop
-            )
+            asyncio.run_coroutine_threadsafe(self.task_queue.put(task), self.event_loop)
             logger.info(f"Task queued: {task.name}")
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current daemon status"""
         self._update_metrics()
         return {
@@ -309,7 +320,9 @@ class KairosDaemon:
             "hourly_cost": self.hourly_cost,
             "scheduled_tasks": len(self.scheduled_tasks),
             "running_tasks": len(self.running_tasks),
-            "last_user_activity": self.metrics.last_user_activity.isoformat() if self.metrics.last_user_activity else None,
+            "last_user_activity": self.metrics.last_user_activity.isoformat()
+            if self.metrics.last_user_activity
+            else None,
         }
 
     def _set_state(self, new_state: DaemonState):
@@ -415,12 +428,12 @@ class KairosDaemon:
 
     async def _process_task_queue(self):
         """Process tasks from the queue"""
-        while not self.task_queue.empty() and len(self.running_tasks) < self.config.max_concurrent_tasks:
+        while (
+            not self.task_queue.empty()
+            and len(self.running_tasks) < self.config.max_concurrent_tasks
+        ):
             try:
-                task = await asyncio.wait_for(
-                    self.task_queue.get(),
-                    timeout=0.1
-                )
+                task = await asyncio.wait_for(self.task_queue.get(), timeout=0.1)
                 asyncio.create_task(self._execute_task(task))
             except asyncio.TimeoutError:
                 break
@@ -538,7 +551,7 @@ class KairosDaemon:
             logger.warning(f"No handler for task: {task.id}")
             return None
 
-    async def _run_memory_consolidation(self) -> Dict[str, Any]:
+    async def _run_memory_consolidation(self) -> dict[str, Any]:
         """Run memory consolidation process"""
         logger.info("🧠 Starting memory consolidation...")
 
@@ -564,7 +577,7 @@ class KairosDaemon:
                             key=fact["key"],
                             value=fact["value"],
                             category=fact["category"],
-                            importance=importance - 1
+                            importance=importance - 1,
                         )
                         results["facts_consolidated"] += 1
 
@@ -583,17 +596,13 @@ class KairosDaemon:
 
         return results
 
-    async def _run_health_check(self) -> Dict[str, Any]:
+    async def _run_health_check(self) -> dict[str, Any]:
         """Run system health check"""
-        health = {
-            "timestamp": datetime.now().isoformat(),
-            "status": "healthy",
-            "checks": {}
-        }
+        health = {"timestamp": datetime.now().isoformat(), "status": "healthy", "checks": {}}
 
         try:
             # Check memory system
-            facts = memory.search_memory(limit=1)
+            memory.search_memory(limit=1)
             health["checks"]["memory"] = "ok"
 
             # Check skills
@@ -610,7 +619,7 @@ class KairosDaemon:
 
         return health
 
-    async def _run_skill_optimization(self) -> Dict[str, Any]:
+    async def _run_skill_optimization(self) -> dict[str, Any]:
         """Optimize skills based on usage patterns"""
         results = {
             "timestamp": datetime.now().isoformat(),

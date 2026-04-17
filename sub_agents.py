@@ -2,15 +2,19 @@
 Sub-Agent Spawning System
 Enables main agent to spawn specialized sub-agents for complex multi-step workflows
 """
+
 import asyncio
 import uuid
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any, Optional
+
 from loguru import logger
-from router import router, AgentRole
+
 from memory import memory
+from router import AgentRole, router
+
 
 class SubAgentStatus(str, Enum):
     CREATED = "created"
@@ -19,31 +23,36 @@ class SubAgentStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
 
+
 @dataclass
 class SubAgentTask:
     """A task assigned to a sub-agent"""
+
     id: str
     description: str
     role: AgentRole
     parent_id: Optional[str] = None
-    dependencies: List[str] = field(default_factory=list)
-    context: Dict[str, Any] = field(default_factory=dict)
-    result: Optional[Dict] = None
+    dependencies: list[str] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
+    result: Optional[dict] = None
     status: SubAgentStatus = SubAgentStatus.CREATED
     created_at: datetime = field(default_factory=datetime.now)
     completed_at: Optional[datetime] = None
     cost: float = 0.0
     error: Optional[str] = None
 
+
 @dataclass
 class WorkflowPlan:
     """A plan decomposed into sub-agent tasks"""
+
     id: str
     description: str
-    tasks: List[SubAgentTask]
+    tasks: list[SubAgentTask]
     created_at: datetime = field(default_factory=datetime.now)
     completed_at: Optional[datetime] = None
     total_cost: float = 0.0
+
 
 class SubAgentOrchestrator:
     """
@@ -59,14 +68,10 @@ class SubAgentOrchestrator:
     """
 
     def __init__(self):
-        self.active_workflows: Dict[str, WorkflowPlan] = {}
-        self.active_agents: Dict[str, SubAgentTask] = {}
+        self.active_workflows: dict[str, WorkflowPlan] = {}
+        self.active_agents: dict[str, SubAgentTask] = {}
 
-    async def decompose_task(
-        self,
-        task: str,
-        context: Optional[Dict] = None
-    ) -> WorkflowPlan:
+    async def decompose_task(self, task: str, context: Optional[dict] = None) -> WorkflowPlan:
         """
         Use Architect to decompose complex task into sub-tasks
 
@@ -107,13 +112,13 @@ Format:
 }}"""
 
         decision, result = await router.execute_with_routing(
-            task=decomposition_prompt,
-            context={"requires_reasoning": True}
+            task=decomposition_prompt, context={"requires_reasoning": True}
         )
 
         # Parse workflow plan
         try:
             import json
+
             # Extract JSON from response
             content = result.get("content", "")
 
@@ -135,15 +140,11 @@ Format:
                     description=task_data["description"],
                     role=AgentRole(task_data.get("role", "researcher")),
                     dependencies=task_data.get("dependencies", []),
-                    context=task_data.get("context", {})
+                    context=task_data.get("context", {}),
                 )
                 tasks.append(task_obj)
 
-            workflow = WorkflowPlan(
-                id=workflow_id,
-                description=task,
-                tasks=tasks
-            )
+            workflow = WorkflowPlan(id=workflow_id, description=task, tasks=tasks)
 
             self.active_workflows[workflow_id] = workflow
             logger.info(f"Created workflow with {len(tasks)} sub-tasks")
@@ -157,22 +158,12 @@ Format:
             workflow = WorkflowPlan(
                 id=workflow_id,
                 description=task,
-                tasks=[
-                    SubAgentTask(
-                        id="task_1",
-                        description=task,
-                        role=AgentRole.RESEARCHER
-                    )
-                ]
+                tasks=[SubAgentTask(id="task_1", description=task, role=AgentRole.RESEARCHER)],
             )
             self.active_workflows[workflow_id] = workflow
             return workflow
 
-    async def execute_workflow(
-        self,
-        workflow: WorkflowPlan,
-        parallel: bool = True
-    ) -> WorkflowPlan:
+    async def execute_workflow(self, workflow: WorkflowPlan, parallel: bool = True) -> WorkflowPlan:
         """
         Execute workflow by spawning and coordinating sub-agents
 
@@ -195,7 +186,8 @@ Format:
         while len(completed) < len(workflow.tasks):
             # Find tasks that can run now (all dependencies met)
             ready_tasks = [
-                t for t in workflow.tasks
+                t
+                for t in workflow.tasks
                 if t.id not in completed
                 and all(dep in completed for dep in t.dependencies)
                 and t.status == SubAgentStatus.CREATED
@@ -205,7 +197,9 @@ Format:
                 # Check if we're stuck
                 remaining = [t for t in workflow.tasks if t.id not in completed]
                 if remaining:
-                    logger.error(f"Workflow stuck! {len(remaining)} tasks remaining with unmet dependencies")
+                    logger.error(
+                        f"Workflow stuck! {len(remaining)} tasks remaining with unmet dependencies"
+                    )
                     for task in remaining:
                         task.status = SubAgentStatus.FAILED
                         task.error = "Dependency deadlock"
@@ -216,7 +210,7 @@ Format:
                 # Execute in parallel
                 results = await asyncio.gather(
                     *[self._execute_sub_agent(t, task_map) for t in ready_tasks],
-                    return_exceptions=True
+                    return_exceptions=True,
                 )
 
                 for task, result in zip(ready_tasks, results):
@@ -257,15 +251,17 @@ Format:
                 "workflow_id": workflow.id,
                 "tasks_completed": len(completed),
                 "total_tasks": len(workflow.tasks),
-                "results": [t.result for t in workflow.tasks if t.result]
+                "results": [t.result for t in workflow.tasks if t.result],
             },
             cost=total_cost,
-            duration=duration
+            duration=duration,
         )
 
         return workflow
 
-    async def _execute_sub_agent(self, task: SubAgentTask, task_map: Optional[Dict] = None) -> SubAgentTask:
+    async def _execute_sub_agent(
+        self, task: SubAgentTask, task_map: Optional[dict] = None
+    ) -> SubAgentTask:
         """Execute a single sub-agent task"""
         logger.info(f"Spawning sub-agent for: {task.description[:80]}...")
 
@@ -294,8 +290,7 @@ Context:
 Provide a clear, actionable result."""
 
             decision, result = await router.execute_with_routing(
-                task=task_prompt,
-                context={"sub_agent": True, "role": task.role.value}
+                task=task_prompt, context={"sub_agent": True, "role": task.role.value}
             )
 
             # Store result
@@ -303,7 +298,7 @@ Provide a clear, actionable result."""
                 "content": result.get("content", ""),
                 "role": task.role.value,
                 "model": decision.model,
-                "cost": decision.estimated_cost
+                "cost": decision.estimated_cost,
             }
             task.cost = decision.estimated_cost
             task.status = SubAgentStatus.COMPLETED
@@ -325,11 +320,8 @@ Provide a clear, actionable result."""
         return task
 
     async def execute_task_with_sub_agents(
-        self,
-        task: str,
-        context: Optional[Dict] = None,
-        parallel: bool = True
-    ) -> Dict[str, Any]:
+        self, task: str, context: Optional[dict] = None, parallel: bool = True
+    ) -> dict[str, Any]:
         """
         High-level API: Execute task using sub-agent workflow
 
@@ -354,11 +346,12 @@ Sub-agent results:
                 if t.result:
                     aggregation_prompt += f"\n{i}. {t.role.value}: {t.result['content'][:500]}\n"
 
-            aggregation_prompt += "\nProvide a coherent, final answer that integrates all sub-agent work."
+            aggregation_prompt += (
+                "\nProvide a coherent, final answer that integrates all sub-agent work."
+            )
 
             decision, final_result = await router.execute_with_routing(
-                task=aggregation_prompt,
-                context={"requires_reasoning": True}
+                task=aggregation_prompt, context={"requires_reasoning": True}
             )
 
             return {
@@ -366,7 +359,7 @@ Sub-agent results:
                 "workflow_id": completed_workflow.id,
                 "sub_agents_used": len(completed_workflow.tasks),
                 "total_cost": completed_workflow.total_cost + decision.estimated_cost,
-                "sub_results": [t.result for t in completed_workflow.tasks if t.result]
+                "sub_results": [t.result for t in completed_workflow.tasks if t.result],
             }
         else:
             # Single task, return directly
@@ -375,10 +368,10 @@ Sub-agent results:
                 "content": task_result.get("content", "") if task_result else "",
                 "workflow_id": completed_workflow.id,
                 "sub_agents_used": 1,
-                "total_cost": completed_workflow.total_cost
+                "total_cost": completed_workflow.total_cost,
             }
 
-    def get_workflow_status(self, workflow_id: str) -> Optional[Dict]:
+    def get_workflow_status(self, workflow_id: str) -> Optional[dict]:
         """Get status of active workflow"""
         workflow = self.active_workflows.get(workflow_id)
         if not workflow:
@@ -388,7 +381,9 @@ Sub-agent results:
             "id": workflow.id,
             "description": workflow.description,
             "total_tasks": len(workflow.tasks),
-            "completed_tasks": len([t for t in workflow.tasks if t.status == SubAgentStatus.COMPLETED]),
+            "completed_tasks": len(
+                [t for t in workflow.tasks if t.status == SubAgentStatus.COMPLETED]
+            ),
             "failed_tasks": len([t for t in workflow.tasks if t.status == SubAgentStatus.FAILED]),
             "total_cost": workflow.total_cost,
             "tasks": [
@@ -397,10 +392,10 @@ Sub-agent results:
                     "description": t.description,
                     "role": t.role.value,
                     "status": t.status.value,
-                    "cost": t.cost
+                    "cost": t.cost,
                 }
                 for t in workflow.tasks
-            ]
+            ],
         }
 
     # ==========================================================
@@ -408,11 +403,8 @@ Sub-agent results:
     # ==========================================================
 
     async def execute_hierarchical(
-        self,
-        task: str,
-        team: Optional[List[Dict]] = None,
-        context: Optional[Dict] = None
-    ) -> Dict[str, Any]:
+        self, task: str, team: Optional[list[dict]] = None, context: Optional[dict] = None
+    ) -> dict[str, Any]:
         """
         Orchestrate entire teams of specialist agents — a Researcher, Analyst,
         Writer, and Reviewer working in concert — with the parent agent managing
@@ -436,10 +428,7 @@ Sub-agent results:
                 {"role": "architect", "description": "Review, quality assurance, and synthesis"},
             ]
 
-        logger.info(
-            f"Starting hierarchical coordination: {task[:80]}... "
-            f"({len(team)} specialists)"
-        )
+        logger.info(f"Starting hierarchical coordination: {task[:80]}... ({len(team)} specialists)")
 
         # Phase 1: Architect creates the execution plan
         plan_prompt = f"""You are the Lead Architect orchestrating a team of {len(team)} specialists.
@@ -457,7 +446,7 @@ Format as JSON:
     "plan_summary": "High-level plan description",
     "assignments": [
         {{
-            "role": "{team[0]['role']}",
+            "role": "{team[0]["role"]}",
             "task": "Specific task for this team member",
             "priority": 1,
             "depends_on": []
@@ -466,12 +455,12 @@ Format as JSON:
 }}"""
 
         decision, plan_result = await router.execute_with_routing(
-            task=plan_prompt,
-            context={"requires_reasoning": True}
+            task=plan_prompt, context={"requires_reasoning": True}
         )
 
         # Parse plan
         import json
+
         plan_content = plan_result.get("content", "")
         try:
             start = plan_content.find("{")
@@ -485,9 +474,14 @@ Format as JSON:
             plan = {
                 "plan_summary": "Parallel execution by all specialists",
                 "assignments": [
-                    {"role": m["role"], "task": f"Handle your part of: {task}", "priority": 1, "depends_on": []}
+                    {
+                        "role": m["role"],
+                        "task": f"Handle your part of: {task}",
+                        "priority": 1,
+                        "depends_on": [],
+                    }
                     for m in team
-                ]
+                ],
             }
 
         # Phase 2: Execute assignments respecting dependencies
@@ -507,7 +501,8 @@ Format as JSON:
             # Find assignments that can run now. Track completion by assignment
             # identity, not by role, so duplicate-role assignments are still run.
             ready = [
-                a for a in pending_assignments
+                a
+                for a in pending_assignments
                 if all(dep in executed_roles for dep in a.get("depends_on", []))
             ]
 
@@ -518,10 +513,7 @@ Format as JSON:
             # Remove selected assignments from the pending queue before execution
             # so each assignment instance is executed exactly once.
             ready_ids = {id(a) for a in ready}
-            pending_assignments = [
-                a for a in pending_assignments
-                if id(a) not in ready_ids
-            ]
+            pending_assignments = [a for a in pending_assignments if id(a) not in ready_ids]
             # Execute ready assignments in parallel
             async_tasks = []
             for assignment in ready:
@@ -533,7 +525,7 @@ Format as JSON:
                     all_results[str(raw_role)] = {
                         "status": "failed",
                         "error": f"Invalid agent role: {raw_role!r}",
-                        "content": ""
+                        "content": "",
                     }
                     executed_roles.add(raw_role)
                     continue
@@ -543,8 +535,7 @@ Format as JSON:
                 role_context = context.copy() if context else {}
                 if all_results:
                     role_context["previous_results"] = {
-                        r: res.get("content", "")[:500]
-                        for r, res in all_results.items()
+                        r: res.get("content", "")[:500] for r, res in all_results.items()
                     }
 
                 role_prompt = f"""You are a specialist {role.value} on a coordinated team.
@@ -553,14 +544,13 @@ Your assignment: {role_task}
 
 Original team task: {task}
 
-{f"Results from other team members: {json.dumps(role_context.get('previous_results', {}), indent=2)}" if role_context.get('previous_results') else ""}
+{f"Results from other team members: {json.dumps(role_context.get('previous_results', {}), indent=2)}" if role_context.get("previous_results") else ""}
 
 Provide your specialized contribution."""
 
                 async_tasks.append(
                     router.execute_with_routing(
-                        task=role_prompt,
-                        context={"sub_agent": True, "role": role.value}
+                        task=role_prompt, context={"sub_agent": True, "role": role.value}
                     )
                 )
 
@@ -586,14 +576,17 @@ Original task: {task}
 Team contributions:
 """
         for role, result in all_results.items():
-            content = result.get("content", "")[:800] if isinstance(result, dict) else str(result)[:800]
+            content = (
+                result.get("content", "")[:800] if isinstance(result, dict) else str(result)[:800]
+            )
             synthesis_prompt += f"\n--- {role.title()} ---\n{content}\n"
 
-        synthesis_prompt += "\nCreate a comprehensive, polished final output that integrates all contributions."
+        synthesis_prompt += (
+            "\nCreate a comprehensive, polished final output that integrates all contributions."
+        )
 
         dec, synthesis = await router.execute_with_routing(
-            task=synthesis_prompt,
-            context={"requires_reasoning": True}
+            task=synthesis_prompt, context={"requires_reasoning": True}
         )
         total_cost += dec.estimated_cost
 
@@ -607,19 +600,24 @@ Team contributions:
             "plan": plan.get("plan_summary", ""),
             "team_size": len(team),
             "specialist_results": {
-                role: result.get("content", "")[:500] if isinstance(result, dict) else str(result)[:500]
+                role: result.get("content", "")[:500]
+                if isinstance(result, dict)
+                else str(result)[:500]
                 for role, result in all_results.items()
             },
             "total_cost": total_cost,
-            "workflow_type": "hierarchical_coordination"
+            "workflow_type": "hierarchical_coordination",
         }
+
 
 # ==========================================================
 # Enhanced Multi-Agent Coordination System
 # ==========================================================
 
+
 class AgentHealthStatus(str, Enum):
     """Health status of an agent"""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -629,6 +627,7 @@ class AgentHealthStatus(str, Enum):
 @dataclass
 class AgentHealth:
     """Health information for an agent"""
+
     agent_id: str
     status: AgentHealthStatus = AgentHealthStatus.UNKNOWN
     last_success: Optional[datetime] = None
@@ -644,9 +643,10 @@ class AgentHealth:
 @dataclass
 class AgentChannel:
     """Communication channel between agents"""
+
     channel_id: str
-    participants: List[str]
-    messages: List[Dict[str, Any]] = field(default_factory=list)
+    participants: list[str]
+    messages: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
 
 
@@ -665,23 +665,23 @@ class EnhancedOrchestrator:
     MAX_WORKERS = 10
     HEALTH_CHECK_INTERVAL = 60  # seconds
     FAILOVER_THRESHOLD = 3  # consecutive failures before failover
-    LATENCY_HISTORY_WEIGHT = 0.8   # Exponential moving average weight for history
-    LATENCY_CURRENT_WEIGHT = 0.2   # Weight for the most recent sample
+    LATENCY_HISTORY_WEIGHT = 0.8  # Exponential moving average weight for history
+    LATENCY_CURRENT_WEIGHT = 0.2  # Weight for the most recent sample
 
     def __init__(self):
         self.base_orchestrator = SubAgentOrchestrator()
-        self.worker_pool: Dict[str, SubAgentTask] = {}
-        self.agent_health: Dict[str, AgentHealth] = {}
-        self.channels: Dict[str, AgentChannel] = {}
+        self.worker_pool: dict[str, SubAgentTask] = {}
+        self.agent_health: dict[str, AgentHealth] = {}
+        self.channels: dict[str, AgentChannel] = {}
         self._worker_semaphore = asyncio.Semaphore(self.MAX_WORKERS)
         self._health_lock = asyncio.Lock()
 
     async def spawn_workers(
         self,
-        tasks: List[Dict[str, Any]],
+        tasks: list[dict[str, Any]],
         max_parallel: Optional[int] = None,
-        retry_failed: bool = True
-    ) -> List[Dict[str, Any]]:
+        retry_failed: bool = True,
+    ) -> list[dict[str, Any]]:
         """
         Spawn parallel worker agents for multiple tasks.
 
@@ -700,27 +700,28 @@ class EnhancedOrchestrator:
         # semaphore so scale_workers() can adjust runtime concurrency.
         batch_semaphore = asyncio.Semaphore(max_workers)
 
-        async def execute_with_limit(task_info: Dict) -> Dict[str, Any]:
+        async def execute_with_limit(task_info: dict) -> dict[str, Any]:
             async with self._worker_semaphore:
                 async with batch_semaphore:
                     return await self._execute_worker_task(task_info, retry_failed)
 
         # Execute all tasks with limited parallelism
         results = await asyncio.gather(
-            *[execute_with_limit(t) for t in tasks],
-            return_exceptions=True
+            *[execute_with_limit(t) for t in tasks], return_exceptions=True
         )
 
         # Process results
         final_results = []
         for task, result in zip(tasks, results):
             if isinstance(result, Exception):
-                final_results.append({
-                    "task": task.get("description", "Unknown"),
-                    "status": "failed",
-                    "error": str(result),
-                    "content": ""
-                })
+                final_results.append(
+                    {
+                        "task": task.get("description", "Unknown"),
+                        "status": "failed",
+                        "error": str(result),
+                        "content": "",
+                    }
+                )
             else:
                 final_results.append(result)
 
@@ -731,10 +732,8 @@ class EnhancedOrchestrator:
         return final_results
 
     async def _execute_worker_task(
-        self,
-        task_info: Dict[str, Any],
-        retry_failed: bool
-    ) -> Dict[str, Any]:
+        self, task_info: dict[str, Any], retry_failed: bool
+    ) -> dict[str, Any]:
         """Execute a single worker task with health tracking"""
         task_id = str(uuid.uuid4())
         description = task_info.get("description", "")
@@ -759,7 +758,7 @@ class EnhancedOrchestrator:
                     id=task_id,
                     description=description,
                     role=role,
-                    context=task_info.get("context", {})
+                    context=task_info.get("context", {}),
                 )
 
                 # Execute using base orchestrator
@@ -767,11 +766,7 @@ class EnhancedOrchestrator:
 
                 # Track success
                 latency = (datetime.now() - start_time).total_seconds() * 1000
-                await self._update_agent_health(
-                    agent_key,
-                    success=True,
-                    latency_ms=latency
-                )
+                await self._update_agent_health(agent_key, success=True, latency_ms=latency)
 
                 return {
                     "task_id": task_id,
@@ -781,7 +776,7 @@ class EnhancedOrchestrator:
                     "content": result.result.get("content", "") if result.result else "",
                     "cost": result.cost,
                     "latency_ms": latency,
-                    "attempts": attempt + 1
+                    "attempts": attempt + 1,
                 }
 
             except Exception as e:
@@ -801,7 +796,7 @@ class EnhancedOrchestrator:
         agent_id: str,
         starting: bool = False,
         success: Optional[bool] = None,
-        latency_ms: float = 0.0
+        latency_ms: float = 0.0,
     ):
         """Update agent health metrics"""
         async with self._health_lock:
@@ -840,27 +835,18 @@ class EnhancedOrchestrator:
                     health.average_latency_ms = latency_ms
                 else:
                     health.average_latency_ms = (
-                        health.average_latency_ms * self.LATENCY_HISTORY_WEIGHT +
-                        latency_ms * self.LATENCY_CURRENT_WEIGHT
+                        health.average_latency_ms * self.LATENCY_HISTORY_WEIGHT
+                        + latency_ms * self.LATENCY_CURRENT_WEIGHT
                     )
 
-    def create_channel(self, participants: List[str]) -> str:
+    def create_channel(self, participants: list[str]) -> str:
         """Create a communication channel between agents"""
         channel_id = str(uuid.uuid4())
-        self.channels[channel_id] = AgentChannel(
-            channel_id=channel_id,
-            participants=participants
-        )
+        self.channels[channel_id] = AgentChannel(channel_id=channel_id, participants=participants)
         logger.info(f"Created agent channel: {channel_id} with {len(participants)} participants")
         return channel_id
 
-    def send_message(
-        self,
-        channel_id: str,
-        sender: str,
-        message: str,
-        message_type: str = "info"
-    ):
+    def send_message(self, channel_id: str, sender: str, message: str, message_type: str = "info"):
         """Send a message through a channel"""
         if channel_id not in self.channels:
             logger.warning(f"Channel not found: {channel_id}")
@@ -870,32 +856,29 @@ class EnhancedOrchestrator:
         if sender not in channel.participants:
             channel.participants.append(sender)
 
-        channel.messages.append({
-            "sender": sender,
-            "message": message,
-            "type": message_type,
-            "timestamp": datetime.now().isoformat()
-        })
+        channel.messages.append(
+            {
+                "sender": sender,
+                "message": message,
+                "type": message_type,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
     def get_channel_messages(
-        self,
-        channel_id: str,
-        since: Optional[datetime] = None
-    ) -> List[Dict[str, Any]]:
+        self, channel_id: str, since: Optional[datetime] = None
+    ) -> list[dict[str, Any]]:
         """Get messages from a channel"""
         if channel_id not in self.channels:
             return []
 
         messages = self.channels[channel_id].messages
         if since:
-            messages = [
-                m for m in messages
-                if datetime.fromisoformat(m["timestamp"]) > since
-            ]
+            messages = [m for m in messages if datetime.fromisoformat(m["timestamp"]) > since]
 
         return messages
 
-    def get_agent_health(self, agent_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_agent_health(self, agent_id: Optional[str] = None) -> dict[str, Any]:
         """Get health status of agents"""
         if agent_id:
             health = self.agent_health.get(agent_id)
@@ -910,21 +893,18 @@ class EnhancedOrchestrator:
                 "total_tasks": health.total_tasks,
                 "average_latency_ms": health.average_latency_ms,
                 "last_success": health.last_success.isoformat() if health.last_success else None,
-                "last_failure": health.last_failure.isoformat() if health.last_failure else None
+                "last_failure": health.last_failure.isoformat() if health.last_failure else None,
             }
 
         # Return all agents' health
-        return {
-            aid: self.get_agent_health(aid)
-            for aid in self.agent_health
-        }
+        return {aid: self.get_agent_health(aid) for aid in self.agent_health}
 
     async def execute_with_failover(
         self,
         task: str,
         primary_role: AgentRole = AgentRole.WORKER,
-        fallback_roles: Optional[List[AgentRole]] = None
-    ) -> Dict[str, Any]:
+        fallback_roles: Optional[list[AgentRole]] = None,
+    ) -> dict[str, Any]:
         """
         Execute a task with automatic failover to alternate agents.
 
@@ -950,8 +930,7 @@ class EnhancedOrchestrator:
 
             try:
                 result = await self._execute_worker_task(
-                    {"description": task, "role": role.value},
-                    retry_failed=False
+                    {"description": task, "role": role.value}, retry_failed=False
                 )
 
                 if result.get("status") != "failed":
@@ -965,15 +944,12 @@ class EnhancedOrchestrator:
         return {
             "status": "failed",
             "error": "All agents failed",
-            "roles_tried": [r.value for r in roles_to_try]
+            "roles_tried": [r.value for r in roles_to_try],
         }
 
     async def coordinate_team(
-        self,
-        goal: str,
-        team_config: Optional[List[Dict]] = None,
-        enable_communication: bool = True
-    ) -> Dict[str, Any]:
+        self, goal: str, team_config: Optional[list[dict]] = None, enable_communication: bool = True
+    ) -> dict[str, Any]:
         """
         Coordinate a team of agents with inter-agent communication.
 
@@ -991,7 +967,7 @@ class EnhancedOrchestrator:
                 {"role": "researcher", "specialization": "information gathering"},
                 {"role": "worker", "specialization": "data processing"},
                 {"role": "coder", "specialization": "implementation"},
-                {"role": "architect", "specialization": "review and synthesis"}
+                {"role": "architect", "specialization": "review and synthesis"},
             ]
 
         # Create communication channel if enabled
@@ -1003,8 +979,10 @@ class EnhancedOrchestrator:
         # Use hierarchical coordination with channel support
         result = await self.base_orchestrator.execute_hierarchical(
             task=goal,
-            team=[{"role": t["role"], "description": t.get("specialization", "")} for t in team_config],
-            context={"channel_id": channel_id} if channel_id else None
+            team=[
+                {"role": t["role"], "description": t.get("specialization", "")} for t in team_config
+            ],
+            context={"channel_id": channel_id} if channel_id else None,
         )
 
         # Add channel messages to result if available
@@ -1019,22 +997,17 @@ class EnhancedOrchestrator:
         self.MAX_WORKERS = min(max(1, new_max), 20)  # Clamp between 1-20
         logger.info(f"Worker pool scaled: {old_max} -> {self.MAX_WORKERS}")
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get orchestrator status"""
         return {
             "max_workers": self.MAX_WORKERS,
             "active_workers": len(self.worker_pool),
             "active_channels": len(self.channels),
             "agent_health_summary": {
-                status.value: len([
-                    h for h in self.agent_health.values()
-                    if h.status == status
-                ])
+                status.value: len([h for h in self.agent_health.values() if h.status == status])
                 for status in AgentHealthStatus
             },
-            "total_tasks_processed": sum(
-                h.total_tasks for h in self.agent_health.values()
-            )
+            "total_tasks_processed": sum(h.total_tasks for h in self.agent_health.values()),
         }
 
 

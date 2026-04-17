@@ -2,16 +2,20 @@
 Plaid Banking Integration
 Connects to bank accounts for balance/transaction data and ACH transfers
 """
-import httpx
-from typing import Dict, List, Optional, Any
+
 from dataclasses import dataclass
+from typing import Any, Optional
+
+import httpx
 from loguru import logger
+
 from config import settings
 
 
 @dataclass
 class PlaidResult:
     """Result of a Plaid operation"""
+
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
@@ -44,7 +48,7 @@ class PlaidIntegration:
         self.client_id = settings.plaid_client_id
         self.secret = settings.plaid_secret
 
-    def _auth_payload(self) -> Dict:
+    def _auth_payload(self) -> dict:
         return {"client_id": self.client_id, "secret": self.secret}
 
     async def health_check(self) -> bool:

@@ -2,13 +2,16 @@
 Revenue Engine – Sub-Agent Orchestrated Revenue Generation
 Coordinates multiple revenue streams via goal-oriented sub-agent tasks
 """
+
 import asyncio
 import uuid
-from datetime import datetime, date
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from enum import Enum
+from typing import Optional
+
 from loguru import logger
+
 from config import settings
 
 
@@ -34,13 +37,14 @@ class RiskLevel(str, Enum):
 @dataclass
 class RevenueTask:
     """A revenue-generating task assigned to a sub-agent"""
+
     id: str
     stream: RevenueStream
     description: str
     goal_usd: float
     risk: RiskLevel
     status: str = "pending"
-    result: Optional[Dict] = None
+    result: Optional[dict] = None
     revenue_usd: float = 0.0
     cost_usd: float = 0.0
     created_at: datetime = field(default_factory=datetime.now)
@@ -55,11 +59,12 @@ class RevenueTask:
 @dataclass
 class RevenueReport:
     """Daily revenue summary"""
+
     date: str
     total_revenue: float
     total_cost: float
     total_profit: float
-    by_stream: Dict[str, float]
+    by_stream: dict[str, float]
     tasks_completed: int
     tasks_failed: int
     goal_daily: float
@@ -83,9 +88,9 @@ class RevenueEngine:
     """
 
     def __init__(self):
-        self.tasks: Dict[str, RevenueTask] = {}
-        self.daily_revenue: Dict[str, float] = {}   # date_str -> revenue
-        self.daily_cost: Dict[str, float] = {}       # date_str -> cost
+        self.tasks: dict[str, RevenueTask] = {}
+        self.daily_revenue: dict[str, float] = {}  # date_str -> revenue
+        self.daily_cost: dict[str, float] = {}  # date_str -> cost
         self._active = False
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -93,7 +98,7 @@ class RevenueEngine:
     # ──────────────────────────────────────────────────────────────────────────
 
     @property
-    def active_streams(self) -> List[RevenueStream]:
+    def active_streams(self) -> list[RevenueStream]:
         """Parse active streams from settings"""
         raw = settings.revenue_active_streams or ""
         result = []
@@ -134,7 +139,9 @@ class RevenueEngine:
         today = date.today().isoformat()
         self.daily_revenue[today] = self.daily_revenue.get(today, 0.0) + amount
         self.daily_cost[today] = self.daily_cost.get(today, 0.0) + cost
-        logger.info(f"Revenue recorded: +${amount:.2f} (cost ${cost:.2f}). Today total: ${self.get_today_revenue():.2f}")
+        logger.info(
+            f"Revenue recorded: +${amount:.2f} (cost ${cost:.2f}). Today total: ${self.get_today_revenue():.2f}"
+        )
 
     # ──────────────────────────────────────────────────────────────────────────
     # Task Management
@@ -159,7 +166,9 @@ class RevenueEngine:
         logger.info(f"Revenue task created: [{task.id}] {stream.value} – ${goal_usd:.2f} goal")
         return task
 
-    def complete_task(self, task_id: str, revenue: float, cost: float = 0.0, result: Optional[Dict] = None):
+    def complete_task(
+        self, task_id: str, revenue: float, cost: float = 0.0, result: Optional[dict] = None
+    ):
         """Mark a task complete and record revenue"""
         task = self.tasks.get(task_id)
         if not task:
@@ -171,7 +180,9 @@ class RevenueEngine:
         task.result = result or {}
         task.completed_at = datetime.now()
         self.record_revenue(revenue, cost)
-        logger.info(f"Revenue task {task_id} complete: +${revenue:.2f} profit=${task.profit_usd:.2f}")
+        logger.info(
+            f"Revenue task {task_id} complete: +${revenue:.2f} profit=${task.profit_usd:.2f}"
+        )
 
     def fail_task(self, task_id: str, error: str):
         """Mark a task as failed"""
@@ -205,7 +216,9 @@ class RevenueEngine:
             logger.info("No active revenue streams configured")
             return self._build_report()
 
-        logger.info(f"Revenue engine session starting: goal=${goal:.2f} streams={[s.value for s in streams]}")
+        logger.info(
+            f"Revenue engine session starting: goal=${goal:.2f} streams={[s.value for s in streams]}"
+        )
 
         per_stream_goal = goal / len(streams) if streams else 0.0
         tasks_to_run = []
@@ -246,24 +259,26 @@ class RevenueEngine:
             if handler:
                 await handler(task, max_single)
             else:
-                logger.warning(f"No handler for stream: {task.stream.value} – task {task.id} skipped")
+                logger.warning(
+                    f"No handler for stream: {task.stream.value} – task {task.id} skipped"
+                )
                 self.fail_task(task.id, f"No handler implemented for stream: {task.stream.value}")
         except Exception as e:
             logger.error(f"Revenue task {task.id} exception: {e}")
             self.fail_task(task.id, str(e))
 
-    def _stream_handlers(self) -> Dict:
+    def _stream_handlers(self) -> dict:
         return {
-            RevenueStream.TRADING:      self._handle_trading,
-            RevenueStream.CRYPTO:       self._handle_crypto,
-            RevenueStream.OPTIONS:      self._handle_options,
-            RevenueStream.BETTING:      self._handle_betting,
-            RevenueStream.ECOMMERCE:    self._handle_ecommerce,
-            RevenueStream.SAAS:         self._handle_saas,
-            RevenueStream.MAAS:         self._handle_maas,
+            RevenueStream.TRADING: self._handle_trading,
+            RevenueStream.CRYPTO: self._handle_crypto,
+            RevenueStream.OPTIONS: self._handle_options,
+            RevenueStream.BETTING: self._handle_betting,
+            RevenueStream.ECOMMERCE: self._handle_ecommerce,
+            RevenueStream.SAAS: self._handle_saas,
+            RevenueStream.MAAS: self._handle_maas,
             RevenueStream.SUPPLY_CHAIN: self._handle_supply_chain,
-            RevenueStream.CALL_CENTER:  self._handle_call_center,
-            RevenueStream.FREELANCE:    self._handle_freelance,
+            RevenueStream.CALL_CENTER: self._handle_call_center,
+            RevenueStream.FREELANCE: self._handle_freelance,
         }
 
     # ── Stream Handlers ───────────────────────────────────────────────────────
@@ -273,7 +288,12 @@ class RevenueEngine:
         try:
             logger.info(f"[TRADING] Task {task.id}: researching positions via Alpaca")
             # Placeholder: real implementation would call Alpaca API for orders
-            self.complete_task(task.id, revenue=0.0, cost=0.0, result={"note": "Trading analysis complete – no live orders placed (paper mode)"})
+            self.complete_task(
+                task.id,
+                revenue=0.0,
+                cost=0.0,
+                result={"note": "Trading analysis complete – no live orders placed (paper mode)"},
+            )
         except Exception as e:
             self.fail_task(task.id, str(e))
 
@@ -281,6 +301,7 @@ class RevenueEngine:
         """Binance/Coinbase crypto trading sub-agent"""
         try:
             from integrations.binance_integration import binance
+
             if not settings.binance_enabled:
                 self.fail_task(task.id, "Binance not enabled")
                 return
@@ -293,14 +314,20 @@ class RevenueEngine:
     async def _handle_options(self, task: RevenueTask, max_amount: float):
         """Options trading sub-agent (IBKR / Schwab)"""
         logger.info(f"[OPTIONS] Task {task.id}: options analysis (IBKR/Schwab not yet live)")
-        self.complete_task(task.id, revenue=0.0, cost=0.0, result={"note": "Options integration ready – awaiting IBKR/Schwab credentials"})
+        self.complete_task(
+            task.id,
+            revenue=0.0,
+            cost=0.0,
+            result={"note": "Options integration ready – awaiting IBKR/Schwab credentials"},
+        )
 
     async def _handle_betting(self, task: RevenueTask, max_amount: float):
         """Sports betting sub-agent (DraftKings / PrizePicks / Odds API)"""
         try:
-            from integrations.draftkings_integration import draftkings
             logger.info(f"[BETTING] Task {task.id}: scanning lines via DraftKings")
-            self.complete_task(task.id, revenue=0.0, cost=0.0, result={"note": "Betting line scan complete"})
+            self.complete_task(
+                task.id, revenue=0.0, cost=0.0, result={"note": "Betting line scan complete"}
+            )
         except Exception as e:
             self.fail_task(task.id, str(e))
 
@@ -308,6 +335,7 @@ class RevenueEngine:
         """Shopify ecommerce sub-agent"""
         try:
             from integrations.shopify_integration import shopify
+
             if not settings.shopify_enabled:
                 self.fail_task(task.id, "Shopify not enabled")
                 return
@@ -320,41 +348,61 @@ class RevenueEngine:
         """SaaS subscription revenue sub-agent (Stripe)"""
         try:
             from integrations.stripe_integration import stripe
+
             if not settings.stripe_enabled:
                 self.fail_task(task.id, "Stripe not enabled")
                 return
             result = await stripe.list_subscriptions()
             count = len(result.data) if result.success and result.data else 0
-            self.complete_task(task.id, revenue=0.0, cost=0.0, result={"active_subscriptions": count})
+            self.complete_task(
+                task.id, revenue=0.0, cost=0.0, result={"active_subscriptions": count}
+            )
         except Exception as e:
             self.fail_task(task.id, str(e))
 
     async def _handle_maas(self, task: RevenueTask, max_amount: float):
         """Model-as-a-Service sub-agent"""
-        logger.info(f"[MAAS] Task {task.id}: MaaS endpoint={settings.maas_model_endpoint or 'not configured'}")
-        self.complete_task(task.id, revenue=0.0, cost=0.0, result={"note": "MaaS endpoint integration ready"})
+        logger.info(
+            f"[MAAS] Task {task.id}: MaaS endpoint={settings.maas_model_endpoint or 'not configured'}"
+        )
+        self.complete_task(
+            task.id, revenue=0.0, cost=0.0, result={"note": "MaaS endpoint integration ready"}
+        )
 
     async def _handle_supply_chain(self, task: RevenueTask, max_amount: float):
         """Supply chain / logistics sub-agent (ShipStation / EasyPost)"""
         logger.info(f"[SUPPLY_CHAIN] Task {task.id}: supply chain analysis")
-        self.complete_task(task.id, revenue=0.0, cost=0.0, result={"note": "Supply chain integration ready – configure ShipStation/EasyPost keys"})
+        self.complete_task(
+            task.id,
+            revenue=0.0,
+            cost=0.0,
+            result={"note": "Supply chain integration ready – configure ShipStation/EasyPost keys"},
+        )
 
     async def _handle_call_center(self, task: RevenueTask, max_amount: float):
         """Agentic call center sub-agent (Twilio)"""
         try:
             from integrations.twilio_integration import twilio
+
             if not settings.twilio_enabled:
                 self.fail_task(task.id, "Twilio not enabled")
                 return
             result = await twilio.list_calls(limit=10)
-            self.complete_task(task.id, revenue=0.0, cost=0.0, result={"recent_calls": len(result.data or [])})
+            self.complete_task(
+                task.id, revenue=0.0, cost=0.0, result={"recent_calls": len(result.data or [])}
+            )
         except Exception as e:
             self.fail_task(task.id, str(e))
 
     async def _handle_freelance(self, task: RevenueTask, max_amount: float):
         """Freelance/gig platform sub-agent (Upwork / Fiverr)"""
         logger.info(f"[FREELANCE] Task {task.id}: checking gig platforms")
-        self.complete_task(task.id, revenue=0.0, cost=0.0, result={"note": "Freelance integration ready – configure Upwork/Fiverr keys"})
+        self.complete_task(
+            task.id,
+            revenue=0.0,
+            cost=0.0,
+            result={"note": "Freelance integration ready – configure Upwork/Fiverr keys"},
+        )
 
     # ──────────────────────────────────────────────────────────────────────────
     # Reporting
@@ -366,7 +414,7 @@ class RevenueEngine:
         completed = [t for t in today_tasks if t.status == "completed"]
         failed = [t for t in today_tasks if t.status == "failed"]
 
-        by_stream: Dict[str, float] = {}
+        by_stream: dict[str, float] = {}
         for t in completed:
             by_stream[t.stream.value] = by_stream.get(t.stream.value, 0.0) + t.revenue_usd
 
@@ -407,16 +455,16 @@ class RevenueEngine:
 
     def _default_task_description(self, stream: RevenueStream, goal_usd: float) -> str:
         descs = {
-            RevenueStream.TRADING:      f"Analyze market conditions and execute qualified stock/ETF trades targeting ${goal_usd:.2f}",
-            RevenueStream.CRYPTO:       f"Monitor crypto markets and execute spot trades on high-confidence signals targeting ${goal_usd:.2f}",
-            RevenueStream.OPTIONS:      f"Scan options chain for high-probability plays targeting ${goal_usd:.2f} credit",
-            RevenueStream.BETTING:      f"Identify +EV sports betting opportunities below max stake ${settings.revenue_max_single_trade_usd}",
-            RevenueStream.FREELANCE:    f"Check active freelance platform jobs and submit qualified proposals",
-            RevenueStream.ECOMMERCE:    f"Process pending Shopify orders and optimize product listings",
-            RevenueStream.SAAS:         f"Review SaaS subscription metrics and follow up on churned users",
-            RevenueStream.MAAS:         f"Monitor MaaS API usage and billing",
-            RevenueStream.SUPPLY_CHAIN: f"Check supply chain pipeline and flag arbitrage opportunities",
-            RevenueStream.CALL_CENTER:  f"Process call queue and route inbound leads",
+            RevenueStream.TRADING: f"Analyze market conditions and execute qualified stock/ETF trades targeting ${goal_usd:.2f}",
+            RevenueStream.CRYPTO: f"Monitor crypto markets and execute spot trades on high-confidence signals targeting ${goal_usd:.2f}",
+            RevenueStream.OPTIONS: f"Scan options chain for high-probability plays targeting ${goal_usd:.2f} credit",
+            RevenueStream.BETTING: f"Identify +EV sports betting opportunities below max stake ${settings.revenue_max_single_trade_usd}",
+            RevenueStream.FREELANCE: "Check active freelance platform jobs and submit qualified proposals",
+            RevenueStream.ECOMMERCE: "Process pending Shopify orders and optimize product listings",
+            RevenueStream.SAAS: "Review SaaS subscription metrics and follow up on churned users",
+            RevenueStream.MAAS: "Monitor MaaS API usage and billing",
+            RevenueStream.SUPPLY_CHAIN: "Check supply chain pipeline and flag arbitrage opportunities",
+            RevenueStream.CALL_CENTER: "Process call queue and route inbound leads",
         }
         return descs.get(stream, f"Execute {stream.value} revenue tasks targeting ${goal_usd:.2f}")
 
@@ -447,14 +495,20 @@ async def log_deal(
 
         def _insert_deal():
             db = get_supabase()
-            return db.table("draymond_crm_deals").insert({
-                "contact_id": contact_id,
-                "title": title,
-                "value_cents": value_cents,
-                "service_type": service,
-                "source_platform": source,
-                "stage": "lead",
-            }).execute()
+            return (
+                db.table("draymond_crm_deals")
+                .insert(
+                    {
+                        "contact_id": contact_id,
+                        "title": title,
+                        "value_cents": value_cents,
+                        "service_type": service,
+                        "source_platform": source,
+                        "stage": "lead",
+                    }
+                )
+                .execute()
+            )
 
         return await asyncio.to_thread(_insert_deal)
     except Exception as e:

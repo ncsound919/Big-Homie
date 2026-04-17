@@ -20,28 +20,31 @@ Usage:
     spinner.auto_discover_and_spin()               # fully autonomous
 """
 
-import os
 import json
 import logging
+import os
 import re
-import time
 from datetime import datetime, timezone
 from typing import Optional
 
 from free_api_stack import (
-    brave_search, groq_chat, deploy_worker,
-    supabase_insert, supabase_query,
-    enqueue_job, check_providers,
+    brave_search,
+    check_providers,
+    deploy_worker,
+    enqueue_job,
+    groq_chat,
+    supabase_insert,
+    supabase_query,
 )
-from opencode_provider import route_to_opencode, is_opencode_available
+from opencode_provider import is_opencode_available, route_to_opencode
 
 logger = logging.getLogger(__name__)
 
 # ── Config ──────────────────────────────────────────────────────────────────
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
-STRIPE_SECRET_KEY      = os.getenv("STRIPE_SECRET_KEY", "")
-BASE_WORKER_DOMAIN     = os.getenv("CF_WORKER_DOMAIN", "workers.dev")
-SERVICES_TABLE         = "saas_services"
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+BASE_WORKER_DOMAIN = os.getenv("CF_WORKER_DOMAIN", "workers.dev")
+SERVICES_TABLE = "saas_services"
 
 # Niche discovery search templates
 DISCOVERY_QUERIES = [
@@ -79,12 +82,15 @@ class SaaSSpinner:
         )
 
         prompt = [
-            {"role": "system", "content": (
-                "You are a startup advisor. Given these market research snippets, "
-                "identify ONE specific underserved micro-SaaS or MaaS API idea "
-                "that can be built in under 100 lines of code and monetized with Stripe. "
-                "Reply with ONLY a single sentence describing the niche."
-            )},
+            {
+                "role": "system",
+                "content": (
+                    "You are a startup advisor. Given these market research snippets, "
+                    "identify ONE specific underserved micro-SaaS or MaaS API idea "
+                    "that can be built in under 100 lines of code and monetized with Stripe. "
+                    "Reply with ONLY a single sentence describing the niche."
+                ),
+            },
             {"role": "user", "content": summaries},
         ]
 
@@ -114,16 +120,14 @@ class SaaSSpinner:
             "Reply with ONLY the JavaScript code, no explanation."
         )
         messages = [
-            {"role": "user",
-             "content": f"Build a Cloudflare Worker for this API service: {niche}"}
+            {"role": "user", "content": f"Build a Cloudflare Worker for this API service: {niche}"}
         ]
 
         # Try opencode first, fall back to Groq
         code = None
         if is_opencode_available():
             code = route_to_opencode(
-                "saas_scaffold", messages,
-                system=system_prompt, max_tokens=3000
+                "saas_scaffold", messages, system=system_prompt, max_tokens=3000
             )
 
         if not code and self.providers["groq"]:
@@ -166,6 +170,7 @@ class SaaSSpinner:
             return None
         try:
             import httpx
+
             # Create price
             price_resp = httpx.post(
                 "https://api.stripe.com/v1/prices",
@@ -185,8 +190,7 @@ class SaaSSpinner:
             link_resp = httpx.post(
                 "https://api.stripe.com/v1/payment_links",
                 auth=(STRIPE_SECRET_KEY, ""),
-                data={f"line_items[0][price]": price_id,
-                      "line_items[0][quantity]": "1"},
+                data={"line_items[0][price]": price_id, "line_items[0][quantity]": "1"},
                 timeout=30,
             )
             link_resp.raise_for_status()
@@ -202,6 +206,7 @@ class SaaSSpinner:
         """Log the new service to revenue_engine and Supabase."""
         try:
             from revenue_engine import RevenueEngine  # type: ignore
+
             engine = RevenueEngine()
             engine.register_service(
                 name=service["name"],
@@ -213,17 +218,23 @@ class SaaSSpinner:
             logger.debug(f"revenue_engine unavailable: {exc}")
 
         if self.providers["supabase"]:
-            supabase_insert(SERVICES_TABLE, {
-                **service,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
+            supabase_insert(
+                SERVICES_TABLE,
+                {
+                    **service,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
 
         # Also push to GSD queue so heartbeat tracks it
-        enqueue_job("gsd_inbox", {
-            "title": f"Monitor new service: {service['name']}",
-            "source": "saas_spinner",
-            "meta": service,
-        })
+        enqueue_job(
+            "gsd_inbox",
+            {
+                "title": f"Monitor new service: {service['name']}",
+                "source": "saas_spinner",
+                "meta": service,
+            },
+        )
         logger.info(f"[REPORT] Service registered: {service['name']}")
 
     # ── Full cycle ───────────────────────────────────────────────────────────

@@ -2,24 +2,27 @@
 Tone Analyzer & Preference Tracker for Big Homie
 Analyzes user communication style and tracks preferences
 """
+
 import re
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional
+
 from loguru import logger
-from config import settings
+
 from memory import memory
+
 
 class ToneAnalyzer:
     """Analyzes user communication style and adapts responses"""
 
     def __init__(self):
-        self.recent_messages: List[Dict] = []
+        self.recent_messages: list[dict] = []
         self.max_history = 20
 
-    def analyze_message(self, message: str) -> Dict:
+    def analyze_message(self, message: str) -> dict:
         """Analyze a user message for tone characteristics"""
         words = message.split()
-        sentences = re.split(r'[.!?]+', message)
+        sentences = re.split(r"[.!?]+", message)
         sentences = [s.strip() for s in sentences if s.strip()]
 
         analysis = {
@@ -31,7 +34,7 @@ class ToneAnalyzer:
             "formality_score": self._calculate_formality(message),
             "technical_score": self._calculate_technicality(message),
             "urgency_score": self._calculate_urgency(message),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         self.recent_messages.append(analysis)
@@ -54,8 +57,8 @@ class ToneAnalyzer:
 
     def _calculate_formality(self, message: str) -> float:
         """Calculate formality score (0-1, higher = more formal)"""
-        informal_markers = ['gonna', 'wanna', 'gotta', 'yeah', 'yep', 'nope', 'lol', 'btw']
-        formal_markers = ['please', 'kindly', 'would', 'could', 'appreciate']
+        informal_markers = ["gonna", "wanna", "gotta", "yeah", "yep", "nope", "lol", "btw"]
+        formal_markers = ["please", "kindly", "would", "could", "appreciate"]
 
         message_lower = message.lower()
         informal_count = sum(1 for marker in informal_markers if marker in message_lower)
@@ -69,9 +72,20 @@ class ToneAnalyzer:
     def _calculate_technicality(self, message: str) -> float:
         """Calculate technical language score (0-1)"""
         technical_markers = [
-            'api', 'function', 'class', 'method', 'variable', 'database',
-            'algorithm', 'implementation', 'infrastructure', 'deployment',
-            'architecture', 'optimization', 'performance', 'scalability'
+            "api",
+            "function",
+            "class",
+            "method",
+            "variable",
+            "database",
+            "algorithm",
+            "implementation",
+            "infrastructure",
+            "deployment",
+            "architecture",
+            "optimization",
+            "performance",
+            "scalability",
         ]
 
         message_lower = message.lower()
@@ -80,13 +94,13 @@ class ToneAnalyzer:
 
     def _calculate_urgency(self, message: str) -> float:
         """Calculate urgency score (0-1)"""
-        urgency_markers = ['asap', 'urgent', 'immediately', 'now', 'quick', 'fast', '!', 'critical']
+        urgency_markers = ["asap", "urgent", "immediately", "now", "quick", "fast", "!", "critical"]
         message_lower = message.lower()
         urgency_count = sum(1 for marker in urgency_markers if marker in message_lower)
-        exclamation_count = message.count('!')
+        exclamation_count = message.count("!")
         return min(1.0, (urgency_count * 0.2) + (exclamation_count * 0.1))
 
-    def get_average_style(self) -> Dict:
+    def get_average_style(self) -> dict:
         """Get average communication style from recent messages"""
         if not self.recent_messages:
             return {
@@ -94,15 +108,20 @@ class ToneAnalyzer:
                 "formality": 0.5,
                 "technical": 0.5,
                 "urgency": 0.3,
-                "avg_word_count": 20
+                "avg_word_count": 20,
             }
 
         return {
-            "brevity": sum(m["brevity_score"] for m in self.recent_messages) / len(self.recent_messages),
-            "formality": sum(m["formality_score"] for m in self.recent_messages) / len(self.recent_messages),
-            "technical": sum(m["technical_score"] for m in self.recent_messages) / len(self.recent_messages),
-            "urgency": sum(m["urgency_score"] for m in self.recent_messages) / len(self.recent_messages),
-            "avg_word_count": sum(m["word_count"] for m in self.recent_messages) / len(self.recent_messages)
+            "brevity": sum(m["brevity_score"] for m in self.recent_messages)
+            / len(self.recent_messages),
+            "formality": sum(m["formality_score"] for m in self.recent_messages)
+            / len(self.recent_messages),
+            "technical": sum(m["technical_score"] for m in self.recent_messages)
+            / len(self.recent_messages),
+            "urgency": sum(m["urgency_score"] for m in self.recent_messages)
+            / len(self.recent_messages),
+            "avg_word_count": sum(m["word_count"] for m in self.recent_messages)
+            / len(self.recent_messages),
         }
 
     def suggest_response_style(self) -> str:
@@ -137,7 +156,7 @@ class PreferenceTracker:
     """Tracks and learns user preferences over time"""
 
     def __init__(self):
-        self.preferences: Dict[str, Dict] = {}
+        self.preferences: dict[str, dict] = {}
         self.load_preferences()
 
     def load_preferences(self):
@@ -147,16 +166,12 @@ class PreferenceTracker:
             self.preferences[item["key"]] = {
                 "value": item["value"],
                 "confidence": item["importance"] / 10.0,
-                "occurrences": item.get("access_count", 1)
+                "occurrences": item.get("access_count", 1),
             }
         logger.info(f"Loaded {len(self.preferences)} preferences")
 
     def record_preference(
-        self,
-        key: str,
-        value: str,
-        confidence: float = 1.0,
-        context: Optional[str] = None
+        self, key: str, value: str, confidence: float = 1.0, context: Optional[str] = None
     ):
         """Record a user preference"""
         if key in self.preferences:
@@ -169,7 +184,7 @@ class PreferenceTracker:
                 "value": value,
                 "confidence": confidence,
                 "occurrences": 1,
-                "context": context
+                "context": context,
             }
 
         # Save to long-term memory
@@ -177,7 +192,7 @@ class PreferenceTracker:
             key=key,
             value=value,
             category="preference",
-            importance=int(min(10, self.preferences[key]["confidence"] * 10))
+            importance=int(min(10, self.preferences[key]["confidence"] * 10)),
         )
         logger.info(f"Recorded preference: {key} = {value}")
 
@@ -187,7 +202,7 @@ class PreferenceTracker:
             return self.preferences[key]["value"]
         return default
 
-    def get_all_preferences(self) -> Dict[str, str]:
+    def get_all_preferences(self) -> dict[str, str]:
         """Get all preferences as a simple dict"""
         return {k: v["value"] for k, v in self.preferences.items()}
 
@@ -197,9 +212,7 @@ class PreferenceTracker:
             return "No preferences learned yet."
 
         sorted_prefs = sorted(
-            self.preferences.items(),
-            key=lambda x: x[1]["confidence"],
-            reverse=True
+            self.preferences.items(), key=lambda x: x[1]["confidence"], reverse=True
         )
 
         summary = f"Learned {len(self.preferences)} user preferences:\n\n"
@@ -220,10 +233,13 @@ class PreferenceTracker:
             return ""
 
         context = "# User Preferences (apply these when relevant):\n\n"
-        for key, pref in sorted(high_confidence.items(), key=lambda x: x[1]["confidence"], reverse=True):
+        for key, pref in sorted(
+            high_confidence.items(), key=lambda x: x[1]["confidence"], reverse=True
+        ):
             context += f"- **{key}**: {pref['value']}\n"
 
         return context
+
 
 # Global instances
 tone_analyzer = ToneAnalyzer()

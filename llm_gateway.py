@@ -3,16 +3,20 @@ LLM Gateway - Multi-provider unified interface
 Supports: Anthropic, OpenAI, OpenRouter, Ollama, Groq, GitHub Copilot
 With vision support, cost guards, thought logging, and rate-limit backoff
 """
+
 import asyncio
 import json
 import time
-import httpx
-from typing import Optional, Dict, Any, List, AsyncGenerator, Union
 from enum import Enum
+from typing import Any, Optional, Union
+
+import httpx
 from loguru import logger
+
+import free_api_stack
 from config import settings
 from mcp_integration import mcp
-import free_api_stack
+
 
 class Provider(str, Enum):
     ANTHROPIC = "anthropic"
@@ -23,11 +27,13 @@ class Provider(str, Enum):
     GROQ = "groq"
     COPILOT = "copilot"
 
+
 class TaskType(str, Enum):
     REASONING = "reasoning"
     CODING = "coding"
     FAST = "fast"
     GENERAL = "general"
+
 
 class LLMGateway:
     """Unified LLM interface with automatic provider selection"""
@@ -49,26 +55,30 @@ class LLMGateway:
         self.openai_client = None
         self.total_cost = 0.0
         # Track when each provider's rate limit expires (provider value -> monotonic-time deadline)
-        self._rate_limit_until: Dict[str, float] = {}
+        self._rate_limit_until: dict[str, float] = {}
 
         # Initialize clients based on available API keys
         if settings.anthropic_api_key:
             from anthropic import Anthropic
+
             self.anthropic_client = Anthropic(api_key=settings.anthropic_api_key)
 
         if settings.openai_api_key:
             from openai import OpenAI
+
             self.openai_client = OpenAI(api_key=settings.openai_api_key)
 
         # Initialize cost guard and thoughts logger
         if settings.enable_cost_guards:
             from cost_guards import cost_guard
+
             self.cost_guard = cost_guard
         else:
             self.cost_guard = None
 
         if settings.enable_thought_logging:
             from thoughts_logger import thoughts_logger
+
             self.thoughts_logger = thoughts_logger
         else:
             self.thoughts_logger = None
@@ -114,7 +124,7 @@ class LLMGateway:
         self,
         task_type: TaskType,
         provider_override: Optional[Union[Provider, str]] = None,
-        model_override: Optional[str] = None
+        model_override: Optional[str] = None,
     ) -> tuple[Provider, str]:
         """Resolve the requested provider/model while preserving existing defaults."""
         provider, model = self.select_model(task_type)
@@ -123,7 +133,11 @@ class LLMGateway:
             model = model_override
 
         if provider_override:
-            provider = provider_override if isinstance(provider_override, Provider) else Provider(provider_override)
+            provider = (
+                provider_override
+                if isinstance(provider_override, Provider)
+                else Provider(provider_override)
+            )
         elif model_override:
             inferred_provider = self._infer_provider_from_model(model_override)
             if inferred_provider:
@@ -147,7 +161,7 @@ class LLMGateway:
             return free_api_stack.check_providers().get("groq", False)
         return False
 
-    def _get_fallback_candidates(self, task_type: TaskType) -> List[tuple[Provider, str]]:
+    def _get_fallback_candidates(self, task_type: TaskType) -> list[tuple[Provider, str]]:
         """Get ordered fallback candidates for a task type."""
         fallback_map = {
             TaskType.REASONING: [
@@ -182,28 +196,27 @@ class LLMGateway:
         return fallback_map.get(task_type, fallback_map[TaskType.GENERAL])
 
     def _build_attempt_chain(
-        self,
-        task_type: TaskType,
-        primary_provider: Provider,
-        primary_model: str
-    ) -> List[tuple[Provider, str]]:
+        self, task_type: TaskType, primary_provider: Provider, primary_model: str
+    ) -> list[tuple[Provider, str]]:
         """Build the ordered provider/model attempt chain."""
-        attempts: List[tuple[Provider, str]] = [(primary_provider, primary_model)]
+        attempts: list[tuple[Provider, str]] = [(primary_provider, primary_model)]
 
         if primary_provider == Provider.ANTHROPIC:
             attempts.extend([(Provider.OPENAI, self.OPENAI_FALLBACK_MODEL)])
         elif primary_provider == Provider.OPENAI:
             attempts.extend([(Provider.ANTHROPIC, self.ANTHROPIC_FALLBACK_MODEL)])
         elif primary_provider == Provider.OPENROUTER:
-            attempts.extend([
-                (Provider.OPENAI, self.OPENAI_FALLBACK_MODEL),
-                (Provider.ANTHROPIC, self.ANTHROPIC_FALLBACK_MODEL),
-            ])
+            attempts.extend(
+                [
+                    (Provider.OPENAI, self.OPENAI_FALLBACK_MODEL),
+                    (Provider.ANTHROPIC, self.ANTHROPIC_FALLBACK_MODEL),
+                ]
+            )
 
         attempts.extend(self._get_fallback_candidates(task_type))
 
         now = time.monotonic()
-        deduped_attempts: List[tuple[Provider, str]] = []
+        deduped_attempts: list[tuple[Provider, str]] = []
         seen = set()
         for provider, model in attempts:
             key = (provider.value, model)
@@ -243,11 +256,11 @@ class LLMGateway:
         self,
         provider: Provider,
         model: str,
-        messages: List[Dict[str, str]],
-        tools: Optional[List[Dict]],
+        messages: list[dict[str, str]],
+        tools: Optional[list[dict]],
         stream: bool,
-        **kwargs
-    ) -> Dict[str, Any]:
+        **kwargs,
+    ) -> dict[str, Any]:
         """Invoke a completion on a specific provider."""
         if provider == Provider.ANTHROPIC:
             return await self._anthropic_complete(messages, model, tools, stream, **kwargs)
@@ -265,12 +278,12 @@ class LLMGateway:
 
     def preview_cost(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         task_type: TaskType = TaskType.GENERAL,
         provider: Optional[Union[Provider, str]] = None,
         model: Optional[str] = None,
-        max_tokens: Optional[int] = None
-    ) -> Optional[Dict[str, Any]]:
+        max_tokens: Optional[int] = None,
+    ) -> Optional[dict[str, Any]]:
         """Preview estimated cost and warn when it crosses the spend threshold."""
         if not self.cost_guard:
             return None
@@ -279,7 +292,7 @@ class LLMGateway:
         estimate = self.cost_guard.estimate_cost(
             messages=messages,
             model=resolved_model,
-            max_output_tokens=max_tokens or settings.max_tokens
+            max_output_tokens=max_tokens or settings.max_tokens,
         )
         warning_triggered = estimate.estimated_cost >= settings.spend_warning_threshold
 
@@ -295,10 +308,12 @@ class LLMGateway:
         self,
         task_type: TaskType,
         provider: Optional[Union[Provider, str]] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
     ) -> tuple[Provider, str]:
         """Resolve the first available provider/model pair for preview and execution."""
-        resolved_provider, resolved_model = self._resolve_provider_and_model(task_type, provider, model)
+        resolved_provider, resolved_model = self._resolve_provider_and_model(
+            task_type, provider, model
+        )
         attempts = self._build_attempt_chain(task_type, resolved_provider, resolved_model)
         if attempts:
             return attempts[0]
@@ -311,26 +326,26 @@ class LLMGateway:
 
     async def complete(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         task_type: TaskType = TaskType.GENERAL,
-        tools: Optional[List[Dict]] = None,
+        tools: Optional[list[dict]] = None,
         enable_mcp_tools: bool = True,
         stream: bool = False,
-        **kwargs
-    ) -> Dict[str, Any]:
+        **kwargs,
+    ) -> dict[str, Any]:
         """Generate completion with automatic provider routing and MCP tool support"""
 
         requested_provider = kwargs.pop("provider", None)
         requested_model = kwargs.pop("model", None)
-        provider, model = self._resolve_provider_and_model(task_type, requested_provider, requested_model)
+        provider, model = self._resolve_provider_and_model(
+            task_type, requested_provider, requested_model
+        )
         logger.info(f"Using {provider.value} with model {model} for {task_type.value}")
 
         # Log model selection thought
         if self.thoughts_logger and settings.log_model_selections:
             self.thoughts_logger.log_model_selection(
-                model=model,
-                reason=f"Selected for {task_type.value} task",
-                cost_estimate=None
+                model=model, reason=f"Selected for {task_type.value} task", cost_estimate=None
             )
 
         # Add MCP tools if enabled
@@ -349,9 +364,7 @@ class LLMGateway:
             try:
                 if self.cost_guard:
                     attempt_estimate = self.cost_guard.estimate_cost(
-                        messages=messages,
-                        model=attempt_model,
-                        max_output_tokens=max_output_tokens
+                        messages=messages, model=attempt_model, max_output_tokens=max_output_tokens
                     )
 
                     if self.thoughts_logger and settings.log_cost_decisions:
@@ -359,7 +372,7 @@ class LLMGateway:
                         self.thoughts_logger.log_cost_analysis(
                             operation=f"{attempt_provider.value}/{attempt_model}",
                             estimated_cost=attempt_estimate.estimated_cost,
-                            budget_impact=f"Daily: ${budget_status.daily_spent:.2f}/${budget_status.daily_limit:.2f}"
+                            budget_impact=f"Daily: ${budget_status.daily_spent:.2f}/${budget_status.daily_limit:.2f}",
                         )
 
                     approved = await self.cost_guard.check_budget_and_approve(attempt_estimate)
@@ -372,7 +385,7 @@ class LLMGateway:
                                 "content": "Operation cancelled: Cost guard denied approval",
                                 "tool_calls": [],
                                 "stop_reason": "cost_guard_denied",
-                                "usage": {"input_tokens": 0, "output_tokens": 0}
+                                "usage": {"input_tokens": 0, "output_tokens": 0},
                             }
 
                         last_error = RuntimeError(
@@ -390,7 +403,7 @@ class LLMGateway:
                         self.thoughts_logger.log_decision(
                             decision=f"Fallback to {attempt_provider.value}/{attempt_model}",
                             rationale="Primary provider was unavailable or hit a retryable failure",
-                            metadata={"task_type": task_type.value}
+                            metadata={"task_type": task_type.value},
                         )
 
                 result = await self._invoke_provider(
@@ -399,7 +412,7 @@ class LLMGateway:
                     messages,
                     all_tools if all_tools else None,
                     stream,
-                    **kwargs
+                    **kwargs,
                 )
 
                 # Record actual cost with cost guard
@@ -407,13 +420,21 @@ class LLMGateway:
                     input_tokens = result["usage"].get("input_tokens", 0)
                     output_tokens = result["usage"].get("output_tokens", 0)
                     if attempt_provider == Provider.ANTHROPIC:
-                        actual_cost = self._calculate_anthropic_cost(attempt_model, input_tokens, output_tokens)
+                        actual_cost = self._calculate_anthropic_cost(
+                            attempt_model, input_tokens, output_tokens
+                        )
                     elif attempt_provider == Provider.OPENROUTER:
-                        actual_cost = self._calculate_openrouter_cost(attempt_model, input_tokens, output_tokens)
+                        actual_cost = self._calculate_openrouter_cost(
+                            attempt_model, input_tokens, output_tokens
+                        )
                     elif attempt_provider == Provider.HUGGINGFACE:
-                        actual_cost = self._calculate_huggingface_cost(attempt_model, input_tokens, output_tokens)
+                        actual_cost = self._calculate_huggingface_cost(
+                            attempt_model, input_tokens, output_tokens
+                        )
                     else:
-                        actual_cost = self._calculate_openai_cost(attempt_model, input_tokens, output_tokens)
+                        actual_cost = self._calculate_openai_cost(
+                            attempt_model, input_tokens, output_tokens
+                        )
                     self.cost_guard.record_cost(actual_cost)
 
                 result["_model"] = attempt_model
@@ -422,7 +443,9 @@ class LLMGateway:
 
             except Exception as e:
                 last_error = e
-                logger.error(f"LLM request failed with {attempt_provider.value}/{attempt_model}: {str(e)}")
+                logger.error(
+                    f"LLM request failed with {attempt_provider.value}/{attempt_model}: {str(e)}"
+                )
 
                 is_retryable = self._is_retryable_provider_error(e)
 
@@ -441,7 +464,7 @@ class LLMGateway:
                     break
 
                 # Exponential backoff before falling through to next provider
-                backoff = min(0.5 * (2 ** attempt_index), 8.0)
+                backoff = min(0.5 * (2**attempt_index), 8.0)
                 logger.info(f"Retryable error; backing off {backoff:.1f}s before next provider")
                 await asyncio.sleep(backoff)
 
@@ -450,8 +473,8 @@ class LLMGateway:
         raise RuntimeError("No configured providers are available for this request")
 
     async def _anthropic_complete(
-        self, messages: List[Dict], model: str, tools: Optional[List], stream: bool, **kwargs
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], model: str, tools: Optional[list], stream: bool, **kwargs
+    ) -> dict[str, Any]:
         """Anthropic Claude completion"""
         if not self.anthropic_client:
             raise ValueError("Anthropic client not initialized")
@@ -488,10 +511,15 @@ class LLMGateway:
             self.total_cost += cost
             logger.info(f"Request cost: ${cost:.4f} | Total: ${self.total_cost:.4f}")
 
-        text_content = "".join(
-            block.text for block in response.content
-            if getattr(block, "type", None) == "text" and hasattr(block, "text")
-        ) if response.content else ""
+        text_content = (
+            "".join(
+                block.text
+                for block in response.content
+                if getattr(block, "type", None) == "text" and hasattr(block, "text")
+            )
+            if response.content
+            else ""
+        )
 
         return {
             "content": text_content,
@@ -503,12 +531,12 @@ class LLMGateway:
             "usage": {
                 "input_tokens": response.usage.input_tokens,
                 "output_tokens": response.usage.output_tokens,
-            }
+            },
         }
 
     async def _openai_complete(
-        self, messages: List[Dict], model: str, tools: Optional[List], stream: bool, **kwargs
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], model: str, tools: Optional[list], stream: bool, **kwargs
+    ) -> dict[str, Any]:
         """OpenAI GPT completion"""
         if not self.openai_client:
             raise ValueError("OpenAI client not initialized")
@@ -544,12 +572,12 @@ class LLMGateway:
             "usage": {
                 "input_tokens": response.usage.prompt_tokens,
                 "output_tokens": response.usage.completion_tokens,
-            }
+            },
         }
 
     async def _ollama_complete(
-        self, messages: List[Dict], model: str, tools: Optional[List], stream: bool, **kwargs
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], model: str, tools: Optional[list], stream: bool, **kwargs
+    ) -> dict[str, Any]:
         """Ollama local model completion"""
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -560,9 +588,9 @@ class LLMGateway:
                     "stream": False,
                     "options": {
                         "temperature": kwargs.get("temperature", settings.temperature),
-                    }
+                    },
                 },
-                timeout=120.0
+                timeout=120.0,
             )
 
             if response.status_code != 200:
@@ -578,17 +606,17 @@ class LLMGateway:
                 "usage": {
                     "input_tokens": 0,  # Ollama doesn't provide token counts
                     "output_tokens": 0,
-                }
+                },
             }
 
     async def _openrouter_complete(
-        self, messages: List[Dict], model: str, tools: Optional[List], stream: bool, **kwargs
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], model: str, tools: Optional[list], stream: bool, **kwargs
+    ) -> dict[str, Any]:
         """OpenRouter completion (supports vision/multimodal models)"""
         if not settings.openrouter_api_key:
             raise ValueError("OpenRouter API key not configured (set OPENROUTER_API_KEY)")
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "max_tokens": kwargs.get("max_tokens", settings.max_tokens),
@@ -611,7 +639,9 @@ class LLMGateway:
             )
 
             if response.status_code != 200:
-                raise ValueError(f"OpenRouter request failed ({response.status_code}): {response.text}")
+                raise ValueError(
+                    f"OpenRouter request failed ({response.status_code}): {response.text}"
+                )
 
             data = response.json()
             choices = data.get("choices")
@@ -643,14 +673,14 @@ class LLMGateway:
             }
 
     async def _huggingface_complete(
-        self, messages: List[Dict], model: str, tools: Optional[List], stream: bool, **kwargs
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], model: str, tools: Optional[list], stream: bool, **kwargs
+    ) -> dict[str, Any]:
         """Hugging Face Inference API completion"""
         if not settings.huggingface_api_key:
             raise ValueError("Hugging Face API key not configured (set HUGGINGFACE_API_KEY)")
 
         # Hugging Face uses the OpenAI-compatible chat completions API
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "max_tokens": kwargs.get("max_tokens", settings.max_tokens),
@@ -674,7 +704,9 @@ class LLMGateway:
             )
 
             if response.status_code != 200:
-                raise ValueError(f"Hugging Face request failed ({response.status_code}): {response.text}")
+                raise ValueError(
+                    f"Hugging Face request failed ({response.status_code}): {response.text}"
+                )
 
             data = response.json()
             choices = data.get("choices")
@@ -706,8 +738,8 @@ class LLMGateway:
             }
 
     async def _groq_complete(
-        self, messages: List[Dict], model: str, tools: Optional[List], stream: bool, **kwargs
-    ) -> Dict[str, Any]:
+        self, messages: list[dict], model: str, tools: Optional[list], stream: bool, **kwargs
+    ) -> dict[str, Any]:
         """Groq completion via free_api_stack (fast Llama 3 inference)."""
         temperature = kwargs.get("temperature", settings.temperature)
         max_tokens = kwargs.get("max_tokens", settings.max_tokens)
@@ -719,9 +751,12 @@ class LLMGateway:
             if isinstance(content, list):
                 non_text = [b for b in content if isinstance(b, dict) and b.get("type") != "text"]
                 if non_text:
-                    logger.debug(f"Groq: dropping {len(non_text)} non-text content block(s) (unsupported)")
+                    logger.debug(
+                        f"Groq: dropping {len(non_text)} non-text content block(s) (unsupported)"
+                    )
                 content = " ".join(
-                    block.get("text", "") for block in content
+                    block.get("text", "")
+                    for block in content
                     if isinstance(block, dict) and block.get("type") == "text"
                 )
             flat_messages.append({"role": msg["role"], "content": content})
@@ -776,7 +811,9 @@ class LLMGateway:
         cost = (input_tokens / 1_000_000 * input_price) + (output_tokens / 1_000_000 * output_price)
         return cost
 
-    def _calculate_openrouter_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
+    def _calculate_openrouter_cost(
+        self, model: str, input_tokens: int, output_tokens: int
+    ) -> float:
         """Calculate OpenRouter API cost"""
         # Pricing per million tokens for common vision models
         pricing = {
@@ -790,15 +827,17 @@ class LLMGateway:
         cost = (input_tokens / 1_000_000 * input_price) + (output_tokens / 1_000_000 * output_price)
         return cost
 
-    def _calculate_huggingface_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
+    def _calculate_huggingface_cost(
+        self, model: str, input_tokens: int, output_tokens: int
+    ) -> float:
         """Calculate Hugging Face Inference API cost"""
         # Hugging Face Inference API pricing (per million tokens)
         # Many models are free or very low cost
         pricing = {
             "meta-llama/Llama-3.1-70B-Instruct": (0.0, 0.0),  # Free tier
-            "meta-llama/Llama-3.1-8B-Instruct": (0.0, 0.0),   # Free tier
-            "mistralai/Mistral-7B-Instruct-v0.3": (0.0, 0.0), # Free tier
-            "Qwen/Qwen2.5-72B-Instruct": (0.0, 0.0),          # Free tier
+            "meta-llama/Llama-3.1-8B-Instruct": (0.0, 0.0),  # Free tier
+            "mistralai/Mistral-7B-Instruct-v0.3": (0.0, 0.0),  # Free tier
+            "Qwen/Qwen2.5-72B-Instruct": (0.0, 0.0),  # Free tier
             # Paid inference endpoints (example pricing)
             "meta-llama/Meta-Llama-3-70B": (0.65, 0.65),
             "mistralai/Mixtral-8x7B-Instruct-v0.1": (0.27, 0.27),
@@ -816,12 +855,7 @@ class LLMGateway:
         """Reset cost counter"""
         self.total_cost = 0.0
 
-    async def vision_complete(
-        self,
-        messages: List[Dict],
-        model: str,
-        **kwargs
-    ) -> Dict[str, Any]:
+    async def vision_complete(self, messages: list[dict], model: str, **kwargs) -> dict[str, Any]:
         """
         Public entry point for vision/multimodal completions via OpenRouter.
 
@@ -837,11 +871,11 @@ class LLMGateway:
 
     async def complete_with_tools(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         task_type: TaskType = TaskType.GENERAL,
         max_tool_rounds: int = 5,
-        **kwargs
-    ) -> Dict[str, Any]:
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         Complete with automatic tool execution loop
 
@@ -863,10 +897,7 @@ class LLMGateway:
         while tool_round < max_tool_rounds:
             # Get completion with tools enabled
             response = await self.complete(
-                current_messages,
-                task_type=task_type,
-                enable_mcp_tools=True,
-                **kwargs
+                current_messages, task_type=task_type, enable_mcp_tools=True, **kwargs
             )
 
             # Check if model requested tools
@@ -878,7 +909,9 @@ class LLMGateway:
 
             # Safety check: prevent runaway loops
             if tool_round >= max_tool_rounds - 1:
-                logger.warning(f"Max tool rounds ({max_tool_rounds}) reached, returning current response")
+                logger.warning(
+                    f"Max tool rounds ({max_tool_rounds}) reached, returning current response"
+                )
                 return response
 
             provider = response.get("_provider", Provider.ANTHROPIC.value)
@@ -908,58 +941,69 @@ class LLMGateway:
                 elif not isinstance(result_content, str):
                     result_content = str(result_content)
 
-                tool_results.append({
-                    "tool_call_id": tool_call_id,
-                    "content": result_content,
-                })
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_call_id,
+                        "content": result_content,
+                    }
+                )
 
             # Build provider-specific follow-up messages
             if provider == Provider.ANTHROPIC.value:
                 # Anthropic: replay original content blocks in assistant turn, then tool_result blocks in user turn
-                current_messages.append({
-                    "role": "assistant",
-                    "content": response.get("_raw_content", []),
-                })
-                current_messages.append({
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tr["tool_call_id"],
-                            "content": tr["content"],
-                        }
-                        for tr in tool_results
-                    ],
-                })
+                current_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.get("_raw_content", []),
+                    }
+                )
+                current_messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tr["tool_call_id"],
+                                "content": tr["content"],
+                            }
+                            for tr in tool_results
+                        ],
+                    }
+                )
             else:
                 # OpenAI: assistant message carries serialised tool_calls; one "tool" message per result
-                current_messages.append({
-                    "role": "assistant",
-                    "content": response.get("content") or None,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in tool_calls
-                    ],
-                })
+                current_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.get("content") or None,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                            for tc in tool_calls
+                        ],
+                    }
+                )
                 for tr in tool_results:
-                    current_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tr["tool_call_id"],
-                        "content": tr["content"],
-                    })
+                    current_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tr["tool_call_id"],
+                            "content": tr["content"],
+                        }
+                    )
 
             tool_round += 1
 
         # Max rounds reached, return last response
         logger.warning(f"Max tool rounds ({max_tool_rounds}) reached")
         return response
+
 
 # Global gateway instance
 llm = LLMGateway()

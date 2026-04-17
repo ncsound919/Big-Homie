@@ -4,6 +4,7 @@ Unit tests for cost_guards.py
 Covers: budget gates, daily limits, per-request cost estimation,
 spend warnings, and model cost optimization.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -15,6 +16,7 @@ class TestCostGuards:
     @pytest.fixture
     def guards(self, mock_env):
         from cost_guards import CostGuards
+
         return CostGuards(daily_budget_usd=1.0, session_budget_usd=0.5)
 
     def test_under_budget_allows_request(self, guards):
@@ -46,7 +48,7 @@ class TestCostGuards:
         warnings = []
         guards.on_warning = lambda msg: warnings.append(msg)
         guards.record_spend(amount=0.25)  # default warn threshold
-        if hasattr(guards, 'check_warnings'):
+        if hasattr(guards, "check_warnings"):
             guards.check_warnings()
             assert len(warnings) >= 0  # May or may not fire at 0.25 of 0.5
 

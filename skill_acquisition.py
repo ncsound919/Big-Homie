@@ -2,25 +2,27 @@
 Dynamic Skill Acquisition - Tier 6 Self-Improvement
 Discover, learn, and activate new capability modules on demand
 """
+
 import json
 import uuid
-from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Optional
+
 from loguru import logger
-from config import settings
 
 
 @dataclass
 class SkillDefinition:
     """A learnable skill/capability"""
+
     skill_id: str
     name: str
     description: str
     category: str
-    workflow: List[Dict[str, Any]]
-    prerequisites: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
+    workflow: list[dict[str, Any]]
+    prerequisites: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     version: str = "1.0.0"
     author: str = "system"
     success_rate: float = 0.0
@@ -32,6 +34,7 @@ class SkillDefinition:
 @dataclass
 class SkillExecutionResult:
     """Result of executing a skill"""
+
     skill_id: str
     success: bool
     output: Any = None
@@ -53,7 +56,7 @@ class SkillRegistry:
     """
 
     def __init__(self):
-        self.skills: Dict[str, SkillDefinition] = {}
+        self.skills: dict[str, SkillDefinition] = {}
         self._memory = None
         self._router = None
         self._initialize_built_in_skills()
@@ -61,12 +64,14 @@ class SkillRegistry:
     def _get_memory(self):
         if self._memory is None:
             from memory import memory
+
             self._memory = memory
         return self._memory
 
     def _get_router(self):
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
@@ -81,9 +86,9 @@ class SkillRegistry:
                 workflow=[
                     {"step": 1, "action": "search", "description": "Search for the topic"},
                     {"step": 2, "action": "analyze", "description": "Analyze search results"},
-                    {"step": 3, "action": "synthesize", "description": "Synthesize findings"}
+                    {"step": 3, "action": "synthesize", "description": "Synthesize findings"},
                 ],
-                tags=["research", "web", "search"]
+                tags=["research", "web", "search"],
             ),
             SkillDefinition(
                 skill_id="code_review",
@@ -92,10 +97,18 @@ class SkillRegistry:
                 category="coding",
                 workflow=[
                     {"step": 1, "action": "parse", "description": "Parse and understand the code"},
-                    {"step": 2, "action": "analyze", "description": "Check for bugs and anti-patterns"},
-                    {"step": 3, "action": "suggest", "description": "Generate improvement suggestions"}
+                    {
+                        "step": 2,
+                        "action": "analyze",
+                        "description": "Check for bugs and anti-patterns",
+                    },
+                    {
+                        "step": 3,
+                        "action": "suggest",
+                        "description": "Generate improvement suggestions",
+                    },
                 ],
-                tags=["coding", "review", "quality"]
+                tags=["coding", "review", "quality"],
             ),
             SkillDefinition(
                 skill_id="data_analysis",
@@ -106,9 +119,13 @@ class SkillRegistry:
                     {"step": 1, "action": "load", "description": "Load and inspect data"},
                     {"step": 2, "action": "clean", "description": "Clean and prepare data"},
                     {"step": 3, "action": "analyze", "description": "Run analysis"},
-                    {"step": 4, "action": "visualize", "description": "Generate visualizations/reports"}
+                    {
+                        "step": 4,
+                        "action": "visualize",
+                        "description": "Generate visualizations/reports",
+                    },
                 ],
-                tags=["data", "analysis", "analytics"]
+                tags=["data", "analysis", "analytics"],
             ),
             SkillDefinition(
                 skill_id="document_summary",
@@ -118,9 +135,9 @@ class SkillRegistry:
                 workflow=[
                     {"step": 1, "action": "extract", "description": "Extract key content"},
                     {"step": 2, "action": "identify", "description": "Identify main themes"},
-                    {"step": 3, "action": "summarize", "description": "Generate concise summary"}
+                    {"step": 3, "action": "summarize", "description": "Generate concise summary"},
                 ],
-                tags=["writing", "summary", "documents"]
+                tags=["writing", "summary", "documents"],
             ),
             SkillDefinition(
                 skill_id="task_automation",
@@ -131,9 +148,9 @@ class SkillRegistry:
                     {"step": 1, "action": "analyze", "description": "Analyze the task pattern"},
                     {"step": 2, "action": "plan", "description": "Create automation plan"},
                     {"step": 3, "action": "implement", "description": "Implement automation"},
-                    {"step": 4, "action": "test", "description": "Test and validate"}
+                    {"step": 4, "action": "test", "description": "Test and validate"},
                 ],
-                tags=["automation", "workflow", "efficiency"]
+                tags=["automation", "workflow", "efficiency"],
             ),
         ]
 
@@ -147,9 +164,7 @@ class SkillRegistry:
         # Also persist to memory
         try:
             self._get_memory().save_skill(
-                name=skill.name,
-                description=skill.description,
-                workflow=skill.workflow
+                name=skill.name, description=skill.description, workflow=skill.workflow
             )
         except Exception as e:
             logger.warning(f"Failed to persist skill to memory: {e}")
@@ -189,7 +204,7 @@ class SkillRegistry:
             score += (matching_words / max(len(desc_words), 1)) * 0.3
 
             # Boost by success rate
-            score *= (0.5 + skill.success_rate * 0.5)
+            score *= 0.5 + skill.success_rate * 0.5
 
             if score > best_score:
                 best_score = score
@@ -201,8 +216,8 @@ class SkillRegistry:
         self,
         query: Optional[str] = None,
         category: Optional[str] = None,
-        tags: Optional[List[str]] = None
-    ) -> List[SkillDefinition]:
+        tags: Optional[list[str]] = None,
+    ) -> list[SkillDefinition]:
         """Search skills by query, category, or tags"""
         results = list(self.skills.values())
 
@@ -210,15 +225,13 @@ class SkillRegistry:
             results = [s for s in results if s.category == category]
 
         if tags:
-            results = [
-                s for s in results
-                if any(t in s.tags for t in tags)
-            ]
+            results = [s for s in results if any(t in s.tags for t in tags)]
 
         if query:
             query_lower = query.lower()
             results = [
-                s for s in results
+                s
+                for s in results
                 if query_lower in s.name.lower()
                 or query_lower in s.description.lower()
                 or any(query_lower in t for t in s.tags)
@@ -227,10 +240,7 @@ class SkillRegistry:
         return sorted(results, key=lambda s: s.usage_count, reverse=True)
 
     async def learn_skill_from_task(
-        self,
-        task_description: str,
-        successful_workflow: List[Dict],
-        category: str = "learned"
+        self, task_description: str, successful_workflow: list[dict], category: str = "learned"
     ) -> SkillDefinition:
         """
         Learn a new skill from a successfully completed task workflow.
@@ -265,8 +275,7 @@ Create a generalized, reusable skill definition in JSON:
 }}"""
 
         decision, result = await self._get_router().execute_with_routing(
-            task=learn_prompt,
-            context={"requires_reasoning": True}
+            task=learn_prompt, context={"requires_reasoning": True}
         )
 
         content = result.get("content", "")
@@ -280,7 +289,7 @@ Create a generalized, reusable skill definition in JSON:
                 category=category,
                 workflow=parsed.get("workflow", successful_workflow),
                 tags=parsed.get("tags", []),
-                author="auto_learned"
+                author="auto_learned",
             )
         else:
             skill = SkillDefinition(
@@ -289,7 +298,7 @@ Create a generalized, reusable skill definition in JSON:
                 description=task_description,
                 category=category,
                 workflow=successful_workflow,
-                author="auto_learned"
+                author="auto_learned",
             )
 
         self.register_skill(skill)
@@ -298,9 +307,7 @@ Create a generalized, reusable skill definition in JSON:
         return skill
 
     async def execute_skill(
-        self,
-        skill_id: str,
-        parameters: Optional[Dict] = None
+        self, skill_id: str, parameters: Optional[dict] = None
     ) -> SkillExecutionResult:
         """
         Execute a registered skill.
@@ -313,21 +320,19 @@ Create a generalized, reusable skill definition in JSON:
             SkillExecutionResult with output
         """
         import time
+
         start = time.time()
 
         skill = self.skills.get(skill_id)
         if not skill:
             return SkillExecutionResult(
-                skill_id=skill_id,
-                success=False,
-                error=f"Skill not found: {skill_id}"
+                skill_id=skill_id, success=False, error=f"Skill not found: {skill_id}"
             )
 
         try:
             # Build execution prompt from skill workflow
             workflow_str = "\n".join(
-                f"  {s['step']}. {s['action']}: {s['description']}"
-                for s in skill.workflow
+                f"  {s['step']}. {s['action']}: {s['description']}" for s in skill.workflow
             )
 
             exec_prompt = f"""Execute this skill: {skill.name}
@@ -341,8 +346,7 @@ Workflow:
 Execute each step in order and provide the complete output."""
 
             decision, result = await self._get_router().execute_with_routing(
-                task=exec_prompt,
-                context=parameters or {}
+                task=exec_prompt, context=parameters or {}
             )
 
             output = result.get("content", "")
@@ -352,8 +356,8 @@ Execute each step in order and provide the complete output."""
             skill.usage_count += 1
             skill.last_used = datetime.now().isoformat()
             skill.success_rate = (
-                (skill.success_rate * (skill.usage_count - 1) + 1.0) / skill.usage_count
-            )
+                skill.success_rate * (skill.usage_count - 1) + 1.0
+            ) / skill.usage_count
 
             # Record in memory
             try:
@@ -366,7 +370,7 @@ Execute each step in order and provide the complete output."""
                 success=True,
                 output=output,
                 duration_seconds=duration,
-                cost=decision.estimated_cost
+                cost=decision.estimated_cost,
             )
 
         except Exception as e:
@@ -374,9 +378,7 @@ Execute each step in order and provide the complete output."""
 
             # Update failure metrics
             skill.usage_count += 1
-            skill.success_rate = (
-                (skill.success_rate * (skill.usage_count - 1)) / skill.usage_count
-            )
+            skill.success_rate = (skill.success_rate * (skill.usage_count - 1)) / skill.usage_count
 
             try:
                 self._get_memory().record_skill_result(skill.name, False, duration)
@@ -384,29 +386,26 @@ Execute each step in order and provide the complete output."""
                 pass
 
             return SkillExecutionResult(
-                skill_id=skill_id,
-                success=False,
-                error=str(e),
-                duration_seconds=duration
+                skill_id=skill_id, success=False, error=str(e), duration_seconds=duration
             )
 
-    def get_skill_stats(self) -> Dict[str, Any]:
+    def get_skill_stats(self) -> dict[str, Any]:
         """Get statistics about registered skills"""
         return {
             "total_skills": len(self.skills),
-            "by_category": self._group_by(
-                list(self.skills.values()), lambda s: s.category
-            ),
+            "by_category": self._group_by(list(self.skills.values()), lambda s: s.category),
             "most_used": sorted(
-                [{"name": s.name, "usage": s.usage_count, "success_rate": s.success_rate}
-                 for s in self.skills.values()],
+                [
+                    {"name": s.name, "usage": s.usage_count, "success_rate": s.success_rate}
+                    for s in self.skills.values()
+                ],
                 key=lambda x: x["usage"],
-                reverse=True
+                reverse=True,
             )[:10],
-            "learned_skills": len([s for s in self.skills.values() if s.author == "auto_learned"])
+            "learned_skills": len([s for s in self.skills.values() if s.author == "auto_learned"]),
         }
 
-    def _group_by(self, items: list, key_fn) -> Dict[str, int]:
+    def _group_by(self, items: list, key_fn) -> dict[str, int]:
         """Group items by key function"""
         groups = {}
         for item in items:
@@ -414,7 +413,7 @@ Execute each step in order and provide the complete output."""
             groups[key] = groups.get(key, 0) + 1
         return groups
 
-    def _parse_json(self, content: str) -> Optional[Dict]:
+    def _parse_json(self, content: str) -> Optional[dict]:
         """Parse JSON from response"""
         try:
             return json.loads(content)

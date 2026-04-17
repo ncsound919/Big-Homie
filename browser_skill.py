@@ -2,32 +2,38 @@
 Browser Control Skill
 Headless browser automation using Playwright for web scraping, testing, and automation
 """
+
 import asyncio
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from playwright.async_api import async_playwright, Browser, Page, BrowserContext
+from typing import Any, Optional
+
 from loguru import logger
-from pathlib import Path
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+
 
 @dataclass
 class BrowserTask:
     """A browser automation task"""
+
     url: str
-    actions: List[Dict[str, Any]]
+    actions: list[dict[str, Any]]
     wait_for: Optional[str] = None
     screenshot: bool = False
-    extract: Optional[List[str]] = None
+    extract: Optional[list[str]] = None
+
 
 @dataclass
 class BrowserResult:
     """Result of browser automation"""
+
     success: bool
     url: str
     title: str
     content: Optional[str] = None
     screenshot_path: Optional[str] = None
-    extracted_data: Optional[Dict] = None
+    extracted_data: Optional[dict] = None
     error: Optional[str] = None
+
 
 class BrowserSkill:
     """
@@ -64,8 +70,7 @@ class BrowserSkill:
             self.playwright = await async_playwright().start()
             self.browser = await self.playwright.chromium.launch(headless=headless)
             self.context = await self.browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                user_agent="Mozilla/5.0 (Big Homie Agent)"
+                viewport={"width": 1920, "height": 1080}, user_agent="Mozilla/5.0 (Big Homie Agent)"
             )
             self.page = await self.context.new_page()
             logger.info("Browser started")
@@ -110,21 +115,11 @@ class BrowserSkill:
             title = await self.page.title()
             content = await self.page.content()
 
-            return BrowserResult(
-                success=True,
-                url=self.page.url,
-                title=title,
-                content=content
-            )
+            return BrowserResult(success=True, url=self.page.url, title=title, content=content)
 
         except Exception as e:
             logger.error(f"Navigation failed: {e}")
-            return BrowserResult(
-                success=False,
-                url=url,
-                title="",
-                error=str(e)
-            )
+            return BrowserResult(success=False, url=url, title="", error=str(e))
 
     async def click(self, selector: str, wait: bool = True) -> bool:
         """
@@ -193,7 +188,7 @@ class BrowserSkill:
             logger.error(f"Extract failed: {selector} - {e}")
             return None
 
-    async def extract_multiple(self, selector: str, attribute: Optional[str] = None) -> List[str]:
+    async def extract_multiple(self, selector: str, attribute: Optional[str] = None) -> list[str]:
         """
         Extract text/attributes from multiple elements
 
@@ -214,21 +209,13 @@ class BrowserSkill:
                     if await elem.get_attribute(attribute)
                 ]
             else:
-                return [
-                    await elem.text_content()
-                    for elem in elements
-                    if await elem.text_content()
-                ]
+                return [await elem.text_content() for elem in elements if await elem.text_content()]
 
         except Exception as e:
             logger.error(f"Extract multiple failed: {selector} - {e}")
             return []
 
-    async def screenshot(
-        self,
-        path: Optional[str] = None,
-        full_page: bool = True
-    ) -> Optional[str]:
+    async def screenshot(self, path: Optional[str] = None, full_page: bool = True) -> Optional[str]:
         """
         Take screenshot
 
@@ -270,13 +257,13 @@ class BrowserSkill:
             logger.error(f"Script execution failed: {e}")
             return None
 
-    async def get_cookies(self) -> List[Dict]:
+    async def get_cookies(self) -> list[dict]:
         """Get all cookies"""
         if self.context:
             return await self.context.cookies()
         return []
 
-    async def set_cookies(self, cookies: List[Dict]):
+    async def set_cookies(self, cookies: list[dict]):
         """Set cookies"""
         if self.context:
             await self.context.add_cookies(cookies)
@@ -333,19 +320,16 @@ class BrowserSkill:
                 title=await self.page.title(),
                 content=await self.page.content(),
                 screenshot_path=screenshot_path,
-                extracted_data=extracted if extracted else None
+                extracted_data=extracted if extracted else None,
             )
 
         except Exception as e:
             logger.error(f"Task execution failed: {e}")
-            return BrowserResult(
-                success=False,
-                url=task.url,
-                title="",
-                error=str(e)
-            )
+            return BrowserResult(success=False, url=task.url, title="", error=str(e))
+
 
 # Convenience functions
+
 
 async def quick_navigate(url: str, screenshot: bool = False) -> BrowserResult:
     """Quick navigation helper"""
@@ -355,7 +339,8 @@ async def quick_navigate(url: str, screenshot: bool = False) -> BrowserResult:
             result.screenshot_path = await browser.screenshot()
     return result
 
-async def quick_scrape(url: str, selectors: Dict[str, str]) -> Dict[str, str]:
+
+async def quick_scrape(url: str, selectors: dict[str, str]) -> dict[str, str]:
     """
     Quick scraping helper
 
@@ -374,6 +359,7 @@ async def quick_scrape(url: str, selectors: Dict[str, str]) -> Dict[str, str]:
             results[name] = await browser.extract_text(selector)
 
     return results
+
 
 # Global browser instance (reusable for efficiency)
 browser_skill = BrowserSkill()
