@@ -340,5 +340,54 @@ class MemorySystem:
             return json.loads(row[0]) if row else default
 
 
+class Memory:
+    """Simple key-value memory backed by SQLite.
+
+    Provides the ``store`` / ``recall`` / ``forget`` / ``list_keys`` API
+    expected by the test suite.
+    """
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+
+    def _conn(self):
+        return sqlite3.connect(self.db_path)
+
+    def _init_db(self):
+        with self._conn() as db:
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS kv_store (
+                       key TEXT PRIMARY KEY,
+                       value TEXT NOT NULL
+                   )"""
+            )
+            db.commit()
+
+    def store(self, key: str, value: Any) -> None:
+        with self._conn() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)",
+                (key, json.dumps(value)),
+            )
+            db.commit()
+
+    def recall(self, key: str) -> Optional[Any]:
+        with self._conn() as db:
+            row = db.execute("SELECT value FROM kv_store WHERE key = ?", (key,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def forget(self, key: str) -> None:
+        with self._conn() as db:
+            db.execute("DELETE FROM kv_store WHERE key = ?", (key,))
+            db.commit()
+
+    def list_keys(self) -> list[str]:
+        with self._conn() as db:
+            rows = db.execute("SELECT key FROM kv_store ORDER BY key").fetchall()
+        return [r[0] for r in rows]
+
+
 # Global memory instance
 memory = MemorySystem()

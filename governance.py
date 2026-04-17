@@ -36,6 +36,10 @@ class ActionRiskLevel(str, Enum):
     CRITICAL = "critical"  # Require explicit confirmation
 
 
+# Alias for test compatibility
+RiskLevel = ActionRiskLevel
+
+
 @dataclass
 class ApprovalRequest:
     """A request for human approval"""
@@ -64,11 +68,11 @@ class HumanInTheLoop:
     - CRITICAL: Requires confirmation dialog (deleting data, deployments)
     """
 
-    def __init__(self):
+    def __init__(self, auto_approve_low_risk: bool = True):
         self.pending_requests: dict[str, ApprovalRequest] = {}
         self.approval_history: list[ApprovalRequest] = []
         self.approval_callback: Optional[Callable] = None
-        self.auto_approve_low: bool = True
+        self.auto_approve_low: bool = auto_approve_low_risk
 
         # Risk classification rules
         self.risk_rules: dict[str, ActionRiskLevel] = {
@@ -93,9 +97,10 @@ class HumanInTheLoop:
             "system_modification": ActionRiskLevel.CRITICAL,
         }
 
-    def classify_risk(self, action: str) -> ActionRiskLevel:
+    def classify_risk(self, action: str, context: Optional[dict] = None) -> ActionRiskLevel:
         """Classify the risk level of an action"""
         action_lower = action.lower()
+        ctx = context or {}
 
         # Check explicit rules first
         for pattern, level in self.risk_rules.items():
@@ -103,9 +108,34 @@ class HumanInTheLoop:
                 return level
 
         # Heuristic classification
-        high_risk_keywords = ["delete", "remove", "payment", "send", "deploy", "drop", "truncate"]
+        critical_keywords = [
+            "delete_all",
+            "drop_all",
+            "truncate_all",
+            "destroy",
+            "format",
+        ]
+        high_risk_keywords = [
+            "delete",
+            "remove",
+            "payment",
+            "send",
+            "deploy",
+            "drop",
+            "truncate",
+            "transfer",
+            "funds",
+        ]
         medium_risk_keywords = ["write", "create", "update", "modify", "install"]
 
+        # Escalate to CRITICAL when context indicates production or large scope
+        scope = str(ctx.get("scope", "")).lower()
+        if scope in ("production", "prod", "all"):
+            if any(kw in action_lower for kw in high_risk_keywords + critical_keywords):
+                return ActionRiskLevel.CRITICAL
+
+        if any(kw in action_lower for kw in critical_keywords):
+            return ActionRiskLevel.CRITICAL
         if any(kw in action_lower for kw in high_risk_keywords):
             return ActionRiskLevel.HIGH
         elif any(kw in action_lower for kw in medium_risk_keywords):
@@ -113,7 +143,7 @@ class HumanInTheLoop:
 
         return ActionRiskLevel.LOW
 
-    async def request_approval(
+    async def async_request_approval(
         self,
         action: str,
         description: str,
@@ -123,7 +153,7 @@ class HumanInTheLoop:
         timeout: float = 300.0,
     ) -> bool:
         """
-        Request human approval for an action.
+        Request human approval for an action (async version).
 
         Returns True if approved, False if denied or timed out.
         """
@@ -179,6 +209,47 @@ class HumanInTheLoop:
 
         return False
 
+    def request_approval(
+        self,
+        action: str,
+        description: str = "",
+        estimated_impact: str = "",
+        risk_level: Optional[ActionRiskLevel] = None,
+        metadata: Optional[dict] = None,
+        context: Optional[dict] = None,
+        timeout: float = 300.0,
+    ) -> bool:
+        """Synchronous approval request (delegates to async version when needed)."""
+        if context is not None and not description:
+            description = json.dumps(context)
+        if context is not None and metadata is None:
+            metadata = context
+
+        if risk_level is None:
+            risk_level = self.classify_risk(action)
+
+        if risk_level == ActionRiskLevel.LOW and self.auto_approve_low:
+            return True
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            return False
+
+        return asyncio.run(
+            self.async_request_approval(
+                action=action,
+                description=description,
+                estimated_impact=estimated_impact,
+                risk_level=risk_level,
+                metadata=metadata,
+                timeout=timeout,
+            )
+        )
+
     def add_risk_rule(self, pattern: str, level: ActionRiskLevel):
         """Add a custom risk classification rule"""
         self.risk_rules[pattern] = level
@@ -212,11 +283,18 @@ class AuditTrail:
     with timestamps, full context, and cryptographic integrity.
     """
 
-    def __init__(self):
-        self.db_path = Path(settings.data_dir) / "audit_trail.db"
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
-        self._last_hash = self._get_last_hash()
+    def __init__(self, log_file: Optional[str] = None):
+        self._log_file = log_file
+        if log_file is not None:
+            self._last_hash = "GENESIS"
+            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+            if Path(log_file).exists():
+                self._last_hash = self._jsonl_get_last_hash()
+        else:
+            self.db_path = Path(settings.data_dir) / "audit_trail.db"
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._init_db()
+            self._last_hash = self._get_last_hash()
 
     def _conn(self):
         return sqlite3.connect(str(self.db_path))
@@ -265,9 +343,9 @@ class AuditTrail:
 
     def log(
         self,
-        event_type: str,
-        actor: str,
-        action: str,
+        event_type: str = "action",
+        actor: str = "agent",
+        action: str = "",
         target: str = "",
         details: Optional[dict] = None,
     ) -> AuditEntry:
@@ -307,39 +385,106 @@ class AuditTrail:
             previous_hash=self._last_hash,
         )
 
-        # Persist
-        with self._conn() as db:
-            db.execute(
-                """INSERT INTO audit_log
-                   (entry_id, timestamp, event_type,
-                    actor, action, target, details,
-                    hash, previous_hash)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    entry.entry_id,
-                    entry.timestamp,
-                    entry.event_type,
-                    entry.actor,
-                    entry.action,
-                    entry.target,
-                    json.dumps(entry.details),
-                    entry.hash,
-                    entry.previous_hash,
-                ),
-            )
-            db.commit()
+        if self._log_file is not None:
+            self._jsonl_append(entry)
+        else:
+            with self._conn() as db:
+                db.execute(
+                    """INSERT INTO audit_log
+                       (entry_id, timestamp, event_type,
+                        actor, action, target, details,
+                        hash, previous_hash)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        entry.entry_id,
+                        entry.timestamp,
+                        entry.event_type,
+                        entry.actor,
+                        entry.action,
+                        entry.target,
+                        json.dumps(entry.details),
+                        entry.hash,
+                        entry.previous_hash,
+                    ),
+                )
+                db.commit()
 
         self._last_hash = entry_hash
 
         return entry
 
-    def verify_integrity(self) -> dict[str, Any]:
+    # ------------------------------------------------------------------
+    # JSONL file-based backend helpers
+    # ------------------------------------------------------------------
+
+    def _jsonl_append(self, entry: AuditEntry) -> None:
+        record = {
+            "entry_id": entry.entry_id,
+            "timestamp": entry.timestamp,
+            "event_type": entry.event_type,
+            "actor": entry.actor,
+            "action": entry.action,
+            "target": entry.target,
+            "details": entry.details,
+            "hash": entry.hash,
+            "previous_hash": entry.previous_hash,
+        }
+        with open(self._log_file, "a", encoding="utf-8") as fh:  # noqa: PTH123
+            fh.write(json.dumps(record) + "\n")
+
+    def _jsonl_get_last_hash(self) -> str:
+        try:
+            with open(self._log_file, encoding="utf-8") as fh:  # noqa: PTH123
+                lines = [ln for ln in fh.read().splitlines() if ln.strip()]
+            if lines:
+                return json.loads(lines[-1])["hash"]
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            pass
+        return "GENESIS"
+
+    def _jsonl_read_entries(self) -> list[dict]:
+        try:
+            with open(self._log_file, encoding="utf-8") as fh:  # noqa: PTH123
+                return [json.loads(ln) for ln in fh.read().splitlines() if ln.strip()]
+        except FileNotFoundError:
+            return []
+
+    def get_entries(self) -> list[dict]:
+        """Return all audit entries (JSONL or SQLite)."""
+        if self._log_file is not None:
+            return self._jsonl_read_entries()
+        return self.query(limit=10_000)
+
+    def _jsonl_verify_integrity(self) -> bool:
+        entries = self._jsonl_read_entries()
+        if not entries:
+            return True
+        expected_prev = "GENESIS"
+        for entry in entries:
+            details_json = json.dumps(entry.get("details", {}), sort_keys=True)
+            entry_data = (
+                f"{entry['timestamp']}:{entry.get('event_type', 'action')}"
+                f":{entry.get('actor', 'agent')}:{entry['action']}"
+                f":{entry.get('target', '')}:{details_json}"
+            )
+            expected_hash = self._compute_hash(entry_data, expected_prev)
+            if entry.get("previous_hash") != expected_prev:
+                return False
+            if entry.get("hash") != expected_hash:
+                return False
+            expected_prev = entry["hash"]
+        return True
+
+    def verify_integrity(self):
         """
         Verify the integrity of the entire audit trail.
 
-        Checks that the hash chain is unbroken — any tampering
-        would break the chain.
+        When backed by a JSONL file, returns ``True`` / ``False``.
+        When backed by SQLite, returns a dict with details.
         """
+        if self._log_file is not None:
+            return self._jsonl_verify_integrity()
+
         with self._conn() as db:
             rows = db.execute(
                 "SELECT entry_id, timestamp, event_type,"
@@ -503,6 +648,12 @@ class SandboxConfig:
             requested_filesystem_read if filesystem_read is None else filesystem_read
         )
         self.filesystem_write = filesystem_write
+        self.blocked_commands: list[str] = [
+            "rm -rf",
+            "mkfs",
+            "dd if=",
+            "chmod 777",
+        ]
 
     @property
     def max_memory_mb(self) -> int:
@@ -862,10 +1013,48 @@ except Exception as e:
                 success=False, error=str(e), execution_time_ms=(time.time() - start) * 1000
             )
 
+    # ------------------------------------------------------------------
+    # Synchronous convenience wrappers
+    # ------------------------------------------------------------------
 
-# ===================================================================
-# Kill Switch Protocol
-# ===================================================================
+    def get_safe_env(self) -> dict[str, str]:
+        """Return a restricted environment (alias for ``_get_restricted_env``)."""
+        return self._get_restricted_env()
+
+    def execute(self, command: str) -> SandboxResult:
+        """Run a shell command synchronously; raises on blocked commands."""
+        dangerous = ["rm -rf", "mkfs", "dd if=", "> /dev/", "chmod 777", ":(){ :|:& };:"]
+        for pattern in dangerous:
+            if pattern in command:
+                raise RuntimeError(f"Blocked dangerous command pattern: {pattern}")
+
+        import shlex
+
+        parts = shlex.split(command)
+        if not parts:
+            raise ValueError("Empty command")
+        base_cmd = os.path.basename(parts[0])
+        if os.sep in parts[0] or "/" in parts[0]:
+            raise RuntimeError(f"Path-based commands not allowed: {parts[0]!r}")
+        if base_cmd not in self.ALLOWED_COMMANDS:
+            raise RuntimeError(f"Command not in allowlist: {base_cmd!r}")
+
+        result = asyncio.run(self.execute_shell(command))
+        if not result.success and result.error:
+            raise RuntimeError(result.error)
+        return result
+
+    def execute_code(self, code: str) -> SandboxResult:
+        """Run Python code synchronously; raises on blocked imports."""
+        cfg = self.config
+        for blocked in cfg.blocked_imports:
+            if f"import {blocked}" in code or f"from {blocked}" in code:
+                raise RuntimeError(f"Blocked import: {blocked}")
+
+        result = asyncio.run(self.execute_python(code))
+        if not result.success and result.error:
+            raise RuntimeError(result.error)
+        return result
 
 
 class KillSwitchState(str, Enum):
@@ -905,7 +1094,8 @@ class KillSwitch:
     PREF_KEY_HEARTBEAT = "last_heartbeat_time"
     PREF_KEY_LOG_REVIEW = "last_log_review"
 
-    def __init__(self):
+    def __init__(self, state_file: Optional[str] = None):
+        self._state_file = state_file
         self.state = KillSwitchState.ARMED
         self._saved_states: list[AgentState] = []
         self._shutdown_callbacks: list[Callable] = []
@@ -966,6 +1156,20 @@ class KillSwitch:
 
             logger.critical("🚨 All systems halted. State preserved.")
 
+            # 5. Persist state to file if configured
+            if self._state_file:
+                try:
+                    state_data = {
+                        "active": False,
+                        "triggered_at": state.timestamp,
+                        "reason": reason,
+                        "state_id": state.state_id,
+                    }
+                    with open(self._state_file, "w", encoding="utf-8") as fh:  # noqa: PTH123
+                        json.dump(state_data, fh, indent=2)
+                except Exception as exc:
+                    logger.error(f"Failed to write kill-switch state file: {exc}")
+
             return state
 
     def _capture_state(self) -> AgentState:
@@ -1005,6 +1209,10 @@ class KillSwitch:
 
         return state
 
+    def is_active(self) -> bool:
+        """Return ``True`` when the switch has *not* been triggered."""
+        return self.state != KillSwitchState.TRIGGERED
+
     def recover(self) -> Optional[AgentState]:
         """
         Recover from a kill switch trigger.
@@ -1024,6 +1232,15 @@ class KillSwitch:
             # Resume to normal
             self.state = KillSwitchState.ARMED
             logger.info("✅ Recovery complete. Kill switch re-armed.")
+
+            # Update state file
+            if self._state_file:
+                try:
+                    state_data = {"active": True, "recovered_at": datetime.now().isoformat()}
+                    with open(self._state_file, "w", encoding="utf-8") as fh:  # noqa: PTH123
+                        json.dump(state_data, fh, indent=2)
+                except Exception as exc:
+                    logger.error(f"Failed to update kill-switch state file: {exc}")
 
             return last_state
 

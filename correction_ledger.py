@@ -4,7 +4,9 @@ Learns from user corrections to avoid repeating mistakes
 """
 
 import json
+import sqlite3
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from loguru import logger
@@ -15,10 +17,131 @@ from config import settings
 class CorrectionLedger:
     """Tracks and learns from user corrections"""
 
-    def __init__(self):
-        self.ledger_path = settings.data_dir / "correction_ledger.json"
-        self.corrections: list[dict] = []
-        self.load()
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path is not None:
+            self._use_db = True
+            self._db_path = db_path
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            self._init_db()
+            self.ledger_path = None
+            self.corrections: list[dict] = []
+        else:
+            self._use_db = False
+            self._db_path = None
+            self.ledger_path = settings.data_dir / "correction_ledger.json"
+            self.corrections: list[dict] = []
+            self.load()
+
+    # ------------------------------------------------------------------
+    # SQLite backend (used when db_path is provided)
+    # ------------------------------------------------------------------
+
+    def _conn(self):
+        return sqlite3.connect(self._db_path)
+
+    def _init_db(self):
+        with self._conn() as db:
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS corrections (
+                       id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       original_action TEXT NOT NULL,
+                       corrected_action TEXT NOT NULL,
+                       context TEXT NOT NULL DEFAULT '{}',
+                       timestamp TEXT NOT NULL
+                   )"""
+            )
+            db.commit()
+
+    # ------------------------------------------------------------------
+    # Test-compatible API
+    # ------------------------------------------------------------------
+
+    def record(
+        self,
+        original_action: str,
+        corrected_action: str,
+        context: Optional[dict] = None,
+    ) -> None:
+        """Record a correction (test-compatible method)."""
+        ctx = context or {}
+        now = datetime.now().isoformat()
+        if self._use_db:
+            with self._conn() as db:
+                db.execute(
+                    "INSERT INTO corrections"
+                    " (original_action, corrected_action, context, timestamp)"
+                    " VALUES (?, ?, ?, ?)",
+                    (original_action, corrected_action, json.dumps(ctx), now),
+                )
+                db.commit()
+        else:
+            self.add_correction(
+                mistake=original_action,
+                correction=corrected_action,
+                context=json.dumps(ctx),
+            )
+
+    def get_all(self) -> list[dict]:
+        """Return every correction entry."""
+        if self._use_db:
+            with self._conn() as db:
+                rows = db.execute(
+                    "SELECT original_action, corrected_action, context, timestamp"
+                    " FROM corrections ORDER BY id"
+                ).fetchall()
+            return [
+                {
+                    "original_action": r[0],
+                    "corrected_action": r[1],
+                    "context": json.loads(r[2]),
+                    "timestamp": r[3],
+                }
+                for r in rows
+            ]
+        return list(self.corrections)
+
+    def count(self) -> int:
+        if self._use_db:
+            with self._conn() as db:
+                return db.execute("SELECT COUNT(*) FROM corrections").fetchone()[0]
+        return len(self.corrections)
+
+    def get_recent(self, n: int = 5) -> list[dict]:
+        if self._use_db:
+            with self._conn() as db:
+                rows = db.execute(
+                    "SELECT original_action, corrected_action, context, timestamp"
+                    " FROM corrections ORDER BY id DESC LIMIT ?",
+                    (n,),
+                ).fetchall()
+            return [
+                {
+                    "original_action": r[0],
+                    "corrected_action": r[1],
+                    "context": json.loads(r[2]),
+                    "timestamp": r[3],
+                }
+                for r in rows
+            ]
+        return list(
+            sorted(self.corrections, key=lambda x: x.get("timestamp", ""), reverse=True)[:n]
+        )
+
+    def find_similar(self, context: Optional[dict] = None) -> list[dict]:
+        """Return entries whose context overlaps with *context*."""
+        ctx = context or {}
+        all_entries = self.get_all()
+        results = []
+        for entry in all_entries:
+            entry_ctx = entry.get("context", {})
+            if isinstance(entry_ctx, str):
+                try:
+                    entry_ctx = json.loads(entry_ctx)
+                except (json.JSONDecodeError, TypeError):
+                    entry_ctx = {}
+            if any(entry_ctx.get(k) == v for k, v in ctx.items()):
+                results.append(entry)
+        return results
 
     def load(self):
         """Load existing corrections from disk"""

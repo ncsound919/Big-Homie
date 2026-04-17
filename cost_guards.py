@@ -378,5 +378,94 @@ class CostGuard:
         self.session_cost = 0.0
 
 
+class CostGuards:
+    """Test-compatible wrapper providing a simplified budget-guard API.
+
+    Accepts ``daily_budget_usd`` and ``session_budget_usd`` constructor
+    parameters and exposes lightweight ``can_proceed`` / ``record_spend``
+    helpers that the unit-test suite expects.
+    """
+
+    def __init__(
+        self,
+        daily_budget_usd: float = 5.0,
+        session_budget_usd: float = 2.0,
+        warn_threshold: float = 0.75,
+    ):
+        self.daily_budget_usd = daily_budget_usd
+        self.session_budget_usd = session_budget_usd
+        self.warn_threshold = warn_threshold
+
+        self._daily_spend: float = 0.0
+        self._session_spend: float = 0.0
+
+        self.on_warning: Optional[Callable[[str], None]] = None
+
+    # ------------------------------------------------------------------
+    # Core gate
+    # ------------------------------------------------------------------
+
+    def can_proceed(self, estimated_cost: float = 0.0) -> bool:
+        if estimated_cost == 0.0:
+            return True
+        if self._daily_spend + estimated_cost > self.daily_budget_usd:
+            return False
+        if self._session_spend + estimated_cost > self.session_budget_usd:
+            return False
+        return True
+
+    def record_spend(self, amount: float) -> None:
+        if amount < 0:
+            raise ValueError("Spend amount must be non-negative")
+        self._daily_spend += amount
+        self._session_spend += amount
+
+    def get_session_spend(self) -> float:
+        return self._session_spend
+
+    def reset_session(self) -> None:
+        self._session_spend = 0.0
+
+    def get_remaining_session_budget(self) -> float:
+        return max(0.0, self.session_budget_usd - self._session_spend)
+
+    # ------------------------------------------------------------------
+    # Warnings
+    # ------------------------------------------------------------------
+
+    def check_warnings(self) -> None:
+        ratio = self._session_spend / self.session_budget_usd if self.session_budget_usd else 0.0
+        if ratio >= self.warn_threshold and self.on_warning:
+            self.on_warning(
+                f"Session spend {self._session_spend:.4f} reached "
+                f"{ratio:.0%} of budget {self.session_budget_usd:.2f}"
+            )
+
+    # ------------------------------------------------------------------
+    # Cost estimation (simplified)
+    # ------------------------------------------------------------------
+
+    _PRICING: dict[str, tuple[float, float]] = {
+        "claude-haiku": (0.25, 1.25),
+        "claude-3-haiku": (0.25, 1.25),
+        "claude-sonnet": (3.0, 15.0),
+        "claude-opus": (15.0, 75.0),
+        "gpt-4": (30.0, 60.0),
+        "gpt-4-turbo": (10.0, 30.0),
+        "gpt-3.5-turbo": (0.5, 1.5),
+    }
+
+    def estimate_cost(
+        self,
+        model: str = "gpt-4",
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> float:
+        for key, (inp, out) in self._PRICING.items():
+            if key in model.lower():
+                return (input_tokens / 1_000_000 * inp) + (output_tokens / 1_000_000 * out)
+        return (input_tokens / 1_000_000 * 3.0) + (output_tokens / 1_000_000 * 15.0)
+
+
 # Global cost guard instance
 cost_guard = CostGuard()
