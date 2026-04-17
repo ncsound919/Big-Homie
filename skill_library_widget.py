@@ -372,7 +372,9 @@ class SkillLibraryWidget(QWidget):
         self._list.clear()
         for skill in skills:
             item = QListWidgetItem(
-                f"{skill.name}  [{skill.category}]  ✓{int(skill.success_rate * 100)}%  ×{skill.usage_count}"
+                f"{skill.name}  [{skill.category}]  "
+                f"✓{int(skill.success_rate * 100)}%  "
+                f"×{skill.usage_count}"
             )
             item.setData(Qt.ItemDataRole.UserRole, skill.skill_id)
             self._list.addItem(item)
@@ -489,7 +491,8 @@ class SkillLibraryWidget(QWidget):
         QMessageBox.information(
             self,
             "Schedule Skill",
-            f"Skill '{skill.name}' sent to Cron Manager.\nOpen the ⏰ Cron Jobs tab to set the schedule.",
+            f"Skill '{skill.name}' sent to Cron Manager.\n"
+            "Open the ⏰ Cron Jobs tab to set the schedule.",
         )
 
     def _create_skill(self):

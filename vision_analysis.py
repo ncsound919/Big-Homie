@@ -291,7 +291,12 @@ Provide 3-5 specific actionable improvements."""
                 logger.warning(f"Local OCR failed: {e}, falling back to vision API")
 
         # Fallback to vision API
-        prompt = "Extract all text visible in this image. Provide the text exactly as it appears, maintaining structure and formatting where possible."
+        prompt = (
+            "Extract all text visible in this image. "
+            "Provide the text exactly as it appears, "
+            "maintaining structure and formatting "
+            "where possible."
+        )
 
         result = await self.analyze_image(
             image_path,

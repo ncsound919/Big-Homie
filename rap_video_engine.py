@@ -205,7 +205,10 @@ Make it authentic, vivid, and specific. No generic filler lines."""
             )
             return response.content if hasattr(response, "content") else str(response)
         except ImportError:
-            return f"Big Homie on the beat, {theme} is the theme, building an empire chasing the dream."
+            return (
+                f"Big Homie on the beat, {theme} is the theme, "
+                "building an empire chasing the dream."
+            )
 
     async def _generate_beat(self, job_id: str, beat_prompt: str) -> tuple[str, float]:
         """Generate instrumental beat via media_generation.py (MiniMax or Google Lyria)"""
@@ -267,8 +270,10 @@ Make it authentic, vivid, and specific. No generic filler lines."""
             from media_generation import MediaType, media_manager
 
             prompts = [
-                f"Cinematic rap video scene {i + 1} of {count}: {theme}. Visual style: {visual_mood}. "
-                f"Smooth camera movement, professional cinematography, 5 seconds."
+                f"Cinematic rap video scene {i + 1} of {count}: "
+                f"{theme}. Visual style: {visual_mood}. "
+                f"Smooth camera movement, professional "
+                f"cinematography, 5 seconds."
                 for i in range(count)
             ]
 

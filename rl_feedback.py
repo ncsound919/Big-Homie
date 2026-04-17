@@ -159,7 +159,9 @@ class ReinforcementFeedback:
         with self._conn() as db:
             db.execute(
                 """INSERT INTO feedback_signals
-                   (signal_id, decision_context, action_taken, outcome, reward, reasoning, timestamp, metadata)
+                   (signal_id, decision_context,
+                    action_taken, outcome, reward,
+                    reasoning, timestamp, metadata)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     signal.signal_id,
@@ -255,7 +257,9 @@ class ReinforcementFeedback:
         with self._conn() as db:
             # Check if pattern exists
             row = db.execute(
-                "SELECT average_reward, sample_count FROM decision_patterns WHERE context_pattern = ?",
+                "SELECT average_reward, sample_count "
+                "FROM decision_patterns "
+                "WHERE context_pattern = ?",
                 (pattern_key,),
             ).fetchone()
 
@@ -268,8 +272,14 @@ class ReinforcementFeedback:
 
                 db.execute(
                     """UPDATE decision_patterns
-                       SET average_reward = ?, sample_count = ?, confidence = ?,
-                           recommended_action = CASE WHEN ? > average_reward THEN ? ELSE recommended_action END,
+                       SET average_reward = ?,
+                           sample_count = ?,
+                           confidence = ?,
+                           recommended_action =
+                             CASE WHEN ? > average_reward
+                               THEN ?
+                               ELSE recommended_action
+                             END,
                            last_updated = ?
                        WHERE context_pattern = ?""",
                     (
@@ -413,7 +423,9 @@ class ReinforcementFeedback:
             best_score = 0.0
 
             rows = db.execute(
-                "SELECT * FROM decision_patterns WHERE confidence > 0.3 ORDER BY average_reward DESC"
+                "SELECT * FROM decision_patterns "
+                "WHERE confidence > 0.3 "
+                "ORDER BY average_reward DESC"
             ).fetchall()
 
             for row in rows:
@@ -515,12 +527,16 @@ class ReinforcementFeedback:
             ).fetchone()[0]
 
             positive = db.execute(
-                "SELECT COUNT(*) FROM feedback_signals WHERE timestamp > ? AND outcome = 'positive'",
+                "SELECT COUNT(*) FROM feedback_signals "
+                "WHERE timestamp > ? "
+                "AND outcome = 'positive'",
                 (since,),
             ).fetchone()[0]
 
             negative = db.execute(
-                "SELECT COUNT(*) FROM feedback_signals WHERE timestamp > ? AND outcome = 'negative'",
+                "SELECT COUNT(*) FROM feedback_signals "
+                "WHERE timestamp > ? "
+                "AND outcome = 'negative'",
                 (since,),
             ).fetchone()[0]
 

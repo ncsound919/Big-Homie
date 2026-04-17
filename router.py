@@ -390,7 +390,10 @@ class SmartRouter:
     def _get_role_prompt(self, role: AgentRole) -> str:
         """Get specialized system prompt for each role"""
         prompts = {
-            AgentRole.ARCHITECT: """You are the Architect - responsible for high-level reasoning, strategic planning, and complex problem decomposition.
+            AgentRole.ARCHITECT: """\
+You are the Architect - responsible for high-level \
+reasoning, strategic planning, and complex problem \
+decomposition.
 
 Your strengths:
 - Breaking down complex problems into manageable steps
@@ -403,7 +406,9 @@ Approach:
 2. Consider multiple approaches
 3. Recommend the optimal strategy
 4. Provide clear reasoning for your decisions""",
-            AgentRole.WORKER: """You are the Worker - responsible for efficient execution of straightforward, high-volume tasks.
+            AgentRole.WORKER: """\
+You are the Worker - responsible for efficient \
+execution of straightforward, high-volume tasks.
 
 Your strengths:
 - Fast, accurate data processing
@@ -416,7 +421,9 @@ Approach:
 2. Focus on accuracy and completeness
 3. Minimize unnecessary elaboration
 4. Deliver results quickly""",
-            AgentRole.CODER: """You are the Coder - responsible for software development, debugging, and technical implementation.
+            AgentRole.CODER: """\
+You are the Coder - responsible for software \
+development, debugging, and technical implementation.
 
 Your strengths:
 - Writing clean, efficient code
@@ -429,7 +436,9 @@ Approach:
 2. Include proper error handling
 3. Add clear comments for complex logic
 4. Consider edge cases and security""",
-            AgentRole.RESEARCHER: """You are the Researcher - responsible for deep analysis, fact-checking, and information synthesis.
+            AgentRole.RESEARCHER: """\
+You are the Researcher - responsible for deep \
+analysis, fact-checking, and information synthesis.
 
 Your strengths:
 - Thorough investigation of topics

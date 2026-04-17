@@ -256,7 +256,9 @@ class SkillRegistry:
             The newly created skill
         """
         # Use the router to generate a clean skill definition
-        learn_prompt = f"""A task was completed successfully. Create a reusable skill from this workflow.
+        learn_prompt = f"""\
+A task was completed successfully. \
+Create a reusable skill from this workflow.
 
 Task: {task_description}
 

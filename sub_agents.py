@@ -81,7 +81,9 @@ class SubAgentOrchestrator:
         logger.info(f"Decomposing task: {task[:100]}...")
 
         # Use Architect role for decomposition
-        decomposition_prompt = f"""You are the Architect. Decompose this complex task into specialized sub-tasks for different sub-agents.
+        decomposition_prompt = f"""\
+You are the Architect. Decompose this complex task \
+into specialized sub-tasks for different sub-agents.
 
 Task: {task}
 
@@ -336,7 +338,9 @@ Provide a clear, actionable result."""
 
         # Aggregate results using Architect
         if len(completed_workflow.tasks) > 1:
-            aggregation_prompt = f"""You are the Architect. Review and synthesize results from {len(completed_workflow.tasks)} sub-agents.
+            aggregation_prompt = f"""\
+You are the Architect. Review and synthesize \
+results from {len(completed_workflow.tasks)} sub-agents.
 
 Original task: {task}
 
@@ -431,7 +435,9 @@ Sub-agent results:
         logger.info(f"Starting hierarchical coordination: {task[:80]}... ({len(team)} specialists)")
 
         # Phase 1: Architect creates the execution plan
-        plan_prompt = f"""You are the Lead Architect orchestrating a team of {len(team)} specialists.
+        plan_prompt = f"""\
+You are the Lead Architect orchestrating a team \
+of {len(team)} specialists.
 
 Task: {task}
 
@@ -538,13 +544,24 @@ Format as JSON:
                         r: res.get("content", "")[:500] for r, res in all_results.items()
                     }
 
+                prev = ""
+                if role_context.get("previous_results"):
+                    prev_json = json.dumps(
+                        role_context["previous_results"],
+                        indent=2,
+                    )
+                    prev = (
+                        "Results from other team members: "
+                        f"{prev_json}"
+                    )
+
                 role_prompt = f"""You are a specialist {role.value} on a coordinated team.
 
 Your assignment: {role_task}
 
 Original team task: {task}
 
-{f"Results from other team members: {json.dumps(role_context.get('previous_results', {}), indent=2)}" if role_context.get("previous_results") else ""}
+{prev}
 
 Provide your specialized contribution."""
 
@@ -569,7 +586,10 @@ Provide your specialized contribution."""
                 executed_roles.add(role)
 
         # Phase 3: Architect synthesizes all results
-        synthesis_prompt = f"""You are the Lead Architect. Synthesize the work from your entire team into a cohesive final deliverable.
+        synthesis_prompt = f"""\
+You are the Lead Architect. Synthesize the work \
+from your entire team into a cohesive final \
+deliverable.
 
 Original task: {task}
 

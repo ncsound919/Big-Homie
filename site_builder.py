@@ -190,7 +190,8 @@ class SiteBuilder:
                 prompt=(
                     f"Professional hero banner for {brief.niche} website called '{brief.name}'. "
                     f"Color palette: {brief.colors}. Tone: {brief.tone}. "
-                    f"Wide 16:9 format, minimal text space on left, abstract/atmospheric background. "
+                    "Wide 16:9 format, minimal text space on "
+                    "left, abstract/atmospheric background. "
                     f"High quality, commercial photography style."
                 ),
                 provider="comfyui",

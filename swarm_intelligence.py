@@ -161,7 +161,9 @@ class AgentToAgentProtocol:
             before_cap = len(self.message_queue)
             self.message_queue = self.message_queue[-self.MAX_QUEUE_SIZE :]
             logger.debug(
-                f"Message queue capped: removed {before_cap - len(self.message_queue)} oldest messages"
+                f"Message queue capped: removed "
+                f"{before_cap - len(self.message_queue)}"
+                " oldest messages"
             )
 
         # Trigger handlers
@@ -409,10 +411,14 @@ class SwarmIntelligence:
         task.status = "completed"
         task.completed_at = datetime.now().isoformat()
 
+        ok = [
+            r for aid, r in task.results.items()
+            if not aid.startswith('_') and 'error' not in r
+        ]
         logger.info(
             f"Swarm task completed: {task.task_id} "
             f"({len(task.assigned_agents)} agents, "
-            f"{len([result for agent_id, result in task.results.items() if not agent_id.startswith('_') and 'error' not in result])} succeeded)"
+            f"{len(ok)} succeeded)"
         )
 
         return task
@@ -480,7 +486,9 @@ Provide your expert analysis and response based on your specialization."""
             indent=2,
         )
 
-        consensus_prompt = f"""Multiple agents have responded to the same task. Evaluate their responses and determine the best answer.
+        consensus_prompt = f"""\
+Multiple agents have responded to the same task. \
+Evaluate their responses and determine the best answer.
 
 Task: {task.description}
 

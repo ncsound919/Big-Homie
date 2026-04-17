@@ -140,7 +140,9 @@ class RevenueEngine:
         self.daily_revenue[today] = self.daily_revenue.get(today, 0.0) + amount
         self.daily_cost[today] = self.daily_cost.get(today, 0.0) + cost
         logger.info(
-            f"Revenue recorded: +${amount:.2f} (cost ${cost:.2f}). Today total: ${self.get_today_revenue():.2f}"
+            f"Revenue recorded: +${amount:.2f} "
+            f"(cost ${cost:.2f}). "
+            f"Today total: ${self.get_today_revenue():.2f}"
         )
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -217,7 +219,9 @@ class RevenueEngine:
             return self._build_report()
 
         logger.info(
-            f"Revenue engine session starting: goal=${goal:.2f} streams={[s.value for s in streams]}"
+            f"Revenue engine session starting: "
+            f"goal=${goal:.2f} "
+            f"streams={[s.value for s in streams]}"
         )
 
         per_stream_goal = goal / len(streams) if streams else 0.0
@@ -363,7 +367,8 @@ class RevenueEngine:
     async def _handle_maas(self, task: RevenueTask, max_amount: float):
         """Model-as-a-Service sub-agent"""
         logger.info(
-            f"[MAAS] Task {task.id}: MaaS endpoint={settings.maas_model_endpoint or 'not configured'}"
+            f"[MAAS] Task {task.id}: MaaS "
+            f"endpoint={settings.maas_model_endpoint or 'not configured'}"
         )
         self.complete_task(
             task.id, revenue=0.0, cost=0.0, result={"note": "MaaS endpoint integration ready"}
@@ -455,15 +460,36 @@ class RevenueEngine:
 
     def _default_task_description(self, stream: RevenueStream, goal_usd: float) -> str:
         descs = {
-            RevenueStream.TRADING: f"Analyze market conditions and execute qualified stock/ETF trades targeting ${goal_usd:.2f}",
-            RevenueStream.CRYPTO: f"Monitor crypto markets and execute spot trades on high-confidence signals targeting ${goal_usd:.2f}",
-            RevenueStream.OPTIONS: f"Scan options chain for high-probability plays targeting ${goal_usd:.2f} credit",
-            RevenueStream.BETTING: f"Identify +EV sports betting opportunities below max stake ${settings.revenue_max_single_trade_usd}",
-            RevenueStream.FREELANCE: "Check active freelance platform jobs and submit qualified proposals",
+            RevenueStream.TRADING: (
+                "Analyze market conditions and execute "
+                "qualified stock/ETF trades "
+                f"targeting ${goal_usd:.2f}"
+            ),
+            RevenueStream.CRYPTO: (
+                "Monitor crypto markets and execute "
+                "spot trades on high-confidence "
+                f"signals targeting ${goal_usd:.2f}"
+            ),
+            RevenueStream.OPTIONS: (
+                "Scan options chain for high-probability"
+                f" plays targeting ${goal_usd:.2f} credit"
+            ),
+            RevenueStream.BETTING: (
+                "Identify +EV sports betting "
+                "opportunities below max stake "
+                f"${settings.revenue_max_single_trade_usd}"
+            ),
+            RevenueStream.FREELANCE: (
+                "Check active freelance platform "
+                "jobs and submit qualified proposals"
+            ),
             RevenueStream.ECOMMERCE: "Process pending Shopify orders and optimize product listings",
             RevenueStream.SAAS: "Review SaaS subscription metrics and follow up on churned users",
             RevenueStream.MAAS: "Monitor MaaS API usage and billing",
-            RevenueStream.SUPPLY_CHAIN: "Check supply chain pipeline and flag arbitrage opportunities",
+            RevenueStream.SUPPLY_CHAIN: (
+                "Check supply chain pipeline "
+                "and flag arbitrage opportunities"
+            ),
             RevenueStream.CALL_CENTER: "Process call queue and route inbound leads",
         }
         return descs.get(stream, f"Execute {stream.value} revenue tasks targeting ${goal_usd:.2f}")
