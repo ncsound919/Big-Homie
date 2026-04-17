@@ -48,7 +48,7 @@ class LLMGateway:
         self.anthropic_client = None
         self.openai_client = None
         self.total_cost = 0.0
-        # Track when each provider's rate limit expires (provider value -> unix timestamp)
+        # Track when each provider's rate limit expires (provider value -> monotonic-time deadline)
         self._rate_limit_until: Dict[str, float] = {}
 
         # Initialize clients based on available API keys
