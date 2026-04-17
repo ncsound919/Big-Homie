@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 
 function getAgentApiKey(): string {
@@ -57,10 +58,14 @@ function unauthorizedResponse() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
+const VALID_AGENT_TYPES = new Set(['config', 'code', 'folder']);
+
 function serializeAgent(
   agent: Awaited<ReturnType<typeof db.agent.findMany>>[number],
   includeSensitive: boolean,
 ) {
+  const isFolder = agent.type === 'folder';
+
   return {
     id: agent.id,
     name: agent.name,
@@ -69,7 +74,8 @@ function serializeAgent(
     securityTier: agent.securityTier,
     enabled: agent.enabled,
     addedAt: agent.addedAt.toISOString(),
-    ...(includeSensitive ? { config: agent.config, code: agent.code } : {}),
+    ...(includeSensitive && !isFolder ? { config: agent.config, code: agent.code } : {}),
+    ...(includeSensitive && isFolder ? { files: agent.config } : {}),
   };
 }
 
@@ -92,7 +98,7 @@ export async function POST(request: Request) {
 
   const body = await request.json();
 
-  if (body.type !== 'config' && body.type !== 'code') {
+  if (!VALID_AGENT_TYPES.has(body.type)) {
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
   }
 
@@ -100,11 +106,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
 
+  let configData: Prisma.InputJsonValue | typeof Prisma.JsonNull = Prisma.JsonNull;
+  if (body.type === 'config') {
+    configData = body.config;
+  } else if (body.type === 'folder') {
+    configData = body.files ?? Prisma.JsonNull;
+  }
+
   const updateData = {
     name: body.name,
     description: body.description,
     type: body.type,
-    config: body.type === 'config' ? body.config : null,
+    config: configData,
     code: body.type === 'code' ? body.code : null,
     securityTier: body.securityTier,
     enabled: body.enabled,
@@ -114,7 +127,7 @@ export async function POST(request: Request) {
     name: body.name,
     description: body.description,
     type: body.type,
-    config: body.type === 'config' ? body.config : null,
+    config: configData,
     code: body.type === 'code' ? body.code : null,
     securityTier: body.securityTier || 'full',
     enabled: body.enabled ?? true,

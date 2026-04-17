@@ -426,7 +426,7 @@ python main.py
 
 ## 📞 Support
 
-- **GitHub Issues**: https://github.com/tap919/Big-Homie/issues
+- **GitHub Issues**: https://github.com/ncsound919/Big-Homie/issues
 - **Logs**: `~/.big_homie/logs/`
 - **Config**: `~/.big_homie/`
 
