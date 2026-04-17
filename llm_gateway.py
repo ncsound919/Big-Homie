@@ -1,15 +1,18 @@
 """
 LLM Gateway - Multi-provider unified interface
-Supports: Anthropic, OpenAI, OpenRouter, Ollama, GitHub Copilot
-With vision support, cost guards, and thought logging
+Supports: Anthropic, OpenAI, OpenRouter, Ollama, Groq, GitHub Copilot
+With vision support, cost guards, thought logging, and rate-limit backoff
 """
+import asyncio
 import json
+import time
 import httpx
 from typing import Optional, Dict, Any, List, AsyncGenerator, Union
 from enum import Enum
 from loguru import logger
 from config import settings
 from mcp_integration import mcp
+import free_api_stack
 
 class Provider(str, Enum):
     ANTHROPIC = "anthropic"
@@ -17,6 +20,7 @@ class Provider(str, Enum):
     OPENROUTER = "openrouter"
     OLLAMA = "ollama"
     HUGGINGFACE = "huggingface"
+    GROQ = "groq"
     COPILOT = "copilot"
 
 class TaskType(str, Enum):
@@ -35,11 +39,17 @@ class LLMGateway:
     OPENROUTER_GENERAL_FALLBACK = "google/gemini-flash-1.5-8b"
     OLLAMA_GENERAL_FALLBACK = "qwen2.5:7b"
     OLLAMA_CODER_FALLBACK = "deepseek-coder:6.7b"
+    GROQ_DEFAULT_MODEL = free_api_stack.GROQ_MODEL
+
+    # Rate-limit cooldown: default 60 seconds before retrying a rate-limited provider
+    RATE_LIMIT_COOLDOWN = 60.0
 
     def __init__(self):
         self.anthropic_client = None
         self.openai_client = None
         self.total_cost = 0.0
+        # Track when each provider's rate limit expires (provider value -> unix timestamp)
+        self._rate_limit_until: Dict[str, float] = {}
 
         # Initialize clients based on available API keys
         if settings.anthropic_api_key:
@@ -93,6 +103,8 @@ class LLMGateway:
             return Provider.ANTHROPIC
         if model_lower.startswith("gpt-"):
             return Provider.OPENAI
+        if model_lower.startswith("llama") or model_lower.startswith("mixtral"):
+            return Provider.GROQ
         if ":" in model:
             return Provider.OLLAMA
 
@@ -131,6 +143,8 @@ class LLMGateway:
             return bool(settings.ollama_enabled)
         if provider == Provider.HUGGINGFACE:
             return bool(settings.huggingface_enabled and settings.huggingface_api_key)
+        if provider == Provider.GROQ:
+            return free_api_stack.check_providers().get("groq", False)
         return False
 
     def _get_fallback_candidates(self, task_type: TaskType) -> List[tuple[Provider, str]]:
@@ -139,16 +153,19 @@ class LLMGateway:
             TaskType.REASONING: [
                 (Provider.OPENAI, self.OPENAI_FALLBACK_MODEL),
                 (Provider.OPENROUTER, self.OPENROUTER_REASONING_FALLBACK),
+                (Provider.GROQ, self.GROQ_DEFAULT_MODEL),
                 (Provider.HUGGINGFACE, settings.huggingface_default_model),
                 (Provider.OLLAMA, self.OLLAMA_GENERAL_FALLBACK),
             ],
             TaskType.CODING: [
                 (Provider.ANTHROPIC, self.ANTHROPIC_FALLBACK_MODEL),
                 (Provider.OPENROUTER, self.OPENROUTER_REASONING_FALLBACK),
+                (Provider.GROQ, self.GROQ_DEFAULT_MODEL),
                 (Provider.HUGGINGFACE, settings.huggingface_default_model),
                 (Provider.OLLAMA, self.OLLAMA_CODER_FALLBACK),
             ],
             TaskType.FAST: [
+                (Provider.GROQ, self.GROQ_DEFAULT_MODEL),
                 (Provider.OPENAI, "gpt-4o-mini"),
                 (Provider.OPENROUTER, self.OPENROUTER_FAST_FALLBACK),
                 (Provider.HUGGINGFACE, settings.huggingface_default_model),
@@ -157,6 +174,7 @@ class LLMGateway:
             TaskType.GENERAL: [
                 (Provider.OPENAI, self.OPENAI_FALLBACK_MODEL),
                 (Provider.OPENROUTER, self.OPENROUTER_GENERAL_FALLBACK),
+                (Provider.GROQ, self.GROQ_DEFAULT_MODEL),
                 (Provider.HUGGINGFACE, settings.huggingface_default_model),
                 (Provider.OLLAMA, self.OLLAMA_GENERAL_FALLBACK),
             ],
@@ -184,11 +202,20 @@ class LLMGateway:
 
         attempts.extend(self._get_fallback_candidates(task_type))
 
+        now = time.monotonic()
         deduped_attempts: List[tuple[Provider, str]] = []
         seen = set()
         for provider, model in attempts:
             key = (provider.value, model)
             if key in seen or not self._provider_is_available(provider):
+                continue
+            # Skip providers that are currently rate-limited
+            rate_limit_expiry = self._rate_limit_until.get(provider.value, 0)
+            if rate_limit_expiry > now:
+                logger.debug(
+                    f"Skipping rate-limited provider {provider.value} "
+                    f"(cooldown expires in {rate_limit_expiry - now:.1f}s)"
+                )
                 continue
             deduped_attempts.append((provider, model))
             seen.add(key)
@@ -232,6 +259,8 @@ class LLMGateway:
             return await self._openrouter_complete(messages, model, tools, stream, **kwargs)
         if provider == Provider.HUGGINGFACE:
             return await self._huggingface_complete(messages, model, tools, stream, **kwargs)
+        if provider == Provider.GROQ:
+            return await self._groq_complete(messages, model, tools, stream, **kwargs)
         raise ValueError(f"Provider {provider} not supported yet")
 
     def preview_cost(
@@ -394,8 +423,27 @@ class LLMGateway:
             except Exception as e:
                 last_error = e
                 logger.error(f"LLM request failed with {attempt_provider.value}/{attempt_model}: {str(e)}")
-                if attempt_index == len(attempts) - 1 or not self._is_retryable_provider_error(e):
+
+                is_retryable = self._is_retryable_provider_error(e)
+
+                # Track rate-limited providers so they are skipped on subsequent chains
+                error_text = str(e).lower()
+                if any(m in error_text for m in ("429", "rate limit", "too many requests")):
+                    self._rate_limit_until[attempt_provider.value] = (
+                        time.monotonic() + self.RATE_LIMIT_COOLDOWN
+                    )
+                    logger.warning(
+                        f"Provider {attempt_provider.value} rate-limited; "
+                        f"cooldown for {self.RATE_LIMIT_COOLDOWN}s"
+                    )
+
+                if attempt_index == len(attempts) - 1 or not is_retryable:
                     break
+
+                # Exponential backoff before falling through to next provider
+                backoff = min(0.5 * (2 ** attempt_index), 8.0)
+                logger.info(f"Retryable error; backing off {backoff:.1f}s before next provider")
+                await asyncio.sleep(backoff)
 
         if last_error:
             raise last_error
@@ -656,6 +704,51 @@ class LLMGateway:
                     "output_tokens": usage.get("completion_tokens", 0),
                 },
             }
+
+    async def _groq_complete(
+        self, messages: List[Dict], model: str, tools: Optional[List], stream: bool, **kwargs
+    ) -> Dict[str, Any]:
+        """Groq completion via free_api_stack (fast Llama 3 inference)."""
+        temperature = kwargs.get("temperature", settings.temperature)
+        max_tokens = kwargs.get("max_tokens", settings.max_tokens)
+
+        # Flatten messages to simple role/content dicts that groq_chat expects
+        flat_messages = []
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                non_text = [b for b in content if isinstance(b, dict) and b.get("type") != "text"]
+                if non_text:
+                    logger.debug(f"Groq: dropping {len(non_text)} non-text content block(s) (unsupported)")
+                content = " ".join(
+                    block.get("text", "") for block in content
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+            flat_messages.append({"role": msg["role"], "content": content})
+
+        # groq_chat is synchronous; run in executor to avoid blocking the loop
+        result_text = await asyncio.to_thread(
+            free_api_stack.groq_chat,
+            flat_messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        if result_text is None:
+            raise ValueError("Groq completion returned no result (check GROQ_API_KEY)")
+
+        return {
+            "content": result_text,
+            "tool_calls": [],
+            "_provider": Provider.GROQ.value,
+            "_model": model,
+            "stop_reason": "stop",
+            "usage": {
+                "input_tokens": 0,  # Groq free tier doesn't expose token counts
+                "output_tokens": 0,
+            },
+        }
 
     def _calculate_anthropic_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculate Anthropic API cost"""
