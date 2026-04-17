@@ -532,7 +532,10 @@ class BestOfNSampler:
             f"=== Draft {i + 1} ===\n{d.content}" for i, d in enumerate(drafts)
         )
 
-        scoring_prompt = f"""You are a strict judge. Score these {len(drafts)} responses to the question below.
+        n_drafts = len(drafts)
+        scoring_prompt = f"""\
+You are a strict judge. Score these \
+{n_drafts} responses to the question below.
 
 Question: {query}
 
@@ -604,36 +607,70 @@ class FewShotLibrary:
         {
             "task_type": "code_review",
             "input": "Review this Python function for bugs:\ndef divide(a, b):\n    return a / b",
-            "output": "Issue: Division by zero not handled. Fix:\ndef divide(a, b):\n    if b == 0:\n        raise ValueError('Division by zero')\n    return a / b",
+            "output": (
+                "Issue: Division by zero not handled. Fix:\n"
+                "def divide(a, b):\n"
+                "    if b == 0:\n"
+                "        raise ValueError('Division by zero')\n"
+                "    return a / b"
+            ),
             "tags": ["code", "review", "python", "bug"],
         },
         {
             "task_type": "summarization",
-            "input": "Summarize: The Federal Reserve raised interest rates by 0.25% in a unanimous vote, citing continued inflation pressures above the 2% target.",
+            "input": (
+                "Summarize: The Federal Reserve raised"
+                " interest rates by 0.25% in a unanimous"
+                " vote, citing continued inflation"
+                " pressures above the 2% target."
+            ),
             "output": "The Fed raised rates by 0.25% due to persistent above-target inflation.",
             "tags": ["summarize", "finance", "concise"],
         },
         {
             "task_type": "reasoning",
-            "input": "If all Bloops are Razzies and all Razzies are Lazzies, are all Bloops definitely Lazzies?",
-            "output": "Yes. By transitivity: Bloop → Razzie → Lazzie. Therefore all Bloops are Lazzies.",
+            "input": (
+                "If all Bloops are Razzies and all"
+                " Razzies are Lazzies, are all"
+                " Bloops definitely Lazzies?"
+            ),
+            "output": (
+                "Yes. By transitivity: Bloop → Razzie"
+                " → Lazzie. Therefore all Bloops"
+                " are Lazzies."
+            ),
             "tags": ["logic", "reasoning", "syllogism"],
         },
         {
             "task_type": "data_extraction",
-            "input": "Extract name and email: 'Contact John Smith at john@example.com for more info.'",
+            "input": (
+                "Extract name and email: 'Contact"
+                " John Smith at john@example.com"
+                " for more info.'"
+            ),
             "output": '{"name": "John Smith", "email": "john@example.com"}',
             "tags": ["extraction", "structured", "json"],
         },
         {
             "task_type": "planning",
             "input": "Plan a task: Deploy a new API to production.",
-            "output": "1. Code review & tests pass\n2. Staging deploy & smoke test\n3. Feature flag rollout (10% → 50% → 100%)\n4. Monitor error rates\n5. Rollback plan ready",
+            "output": (
+                "1. Code review & tests pass\n"
+                "2. Staging deploy & smoke test\n"
+                "3. Feature flag rollout"
+                " (10% → 50% → 100%)\n"
+                "4. Monitor error rates\n"
+                "5. Rollback plan ready"
+            ),
             "tags": ["planning", "deployment", "steps"],
         },
         {
             "task_type": "classification",
-            "input": "Classify sentiment: 'The product was absolutely terrible and broke after one day.'",
+            "input": (
+                "Classify sentiment: 'The product"
+                " was absolutely terrible and broke"
+                " after one day.'"
+            ),
             "output": '{"sentiment": "negative", "intensity": "strong", "confidence": 0.97}',
             "tags": ["classification", "sentiment", "json"],
         },
@@ -849,7 +886,8 @@ Respond in JSON:
 {{
     "step_scores": [
         {{"step": 1, "score": 0.95, "is_valid": true, "critique": "Correct and clear"}},
-        {{"step": 2, "score": 0.42, "is_valid": false, "critique": "This step makes an unwarranted assumption..."}}
+        {{"step": 2, "score": 0.42, "is_valid": false, \
+"critique": "This step makes an unwarranted assumption..."}}
     ],
     "overall_score": 0.78
 }}"""
@@ -1143,7 +1181,9 @@ class ConstitutionalReviewer:
 
         for _revision in range(max_revisions + 1):
             # Check each principle
-            check_prompt = f"""You are a constitutional reviewer. Check this response against each principle.
+            check_prompt = f"""\
+You are a constitutional reviewer. \
+Check this response against each principle.
 
 Original query: {original_query}
 
@@ -1204,6 +1244,13 @@ Respond in JSON:
 
             # Revise the output
             failures = [c for c in cycle_checks if not c.passed]
+            violations = json.dumps(
+                [
+                    {"principle": c.principle, "violation": c.violation_description}
+                    for c in failures
+                ],
+                indent=2,
+            )
             revise_prompt = f"""Revise this response to comply with these principles:
 
 Original query: {original_query}
@@ -1212,7 +1259,7 @@ Current response:
 {current_output}
 
 Violations to fix:
-{json.dumps([{"principle": c.principle, "violation": c.violation_description} for c in failures], indent=2)}
+{violations}
 
 Produce an improved response that satisfies all principles while remaining helpful."""
 

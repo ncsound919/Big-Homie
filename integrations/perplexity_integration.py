@@ -76,7 +76,10 @@ class PerplexityIntegration:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a helpful research assistant. Provide accurate, well-cited information.",
+                        "content": (
+                            "You are a helpful research assistant."
+                            " Provide accurate, well-cited information."
+                        ),
                     },
                     {"role": "user", "content": query},
                 ],

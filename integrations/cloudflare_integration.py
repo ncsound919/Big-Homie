@@ -94,7 +94,11 @@ class CloudflareIntegration:
             return err
 
         try:
-            url = f"{self.base_url}/accounts/{settings.cloudflare_account_id}/workers/scripts/{script_name}"
+            acct = settings.cloudflare_account_id
+            url = (
+                f"{self.base_url}/accounts/{acct}"
+                f"/workers/scripts/{script_name}"
+            )
 
             # Prepare metadata for the multipart upload
             metadata = {"body_part": "script", "bindings": bindings or []}
@@ -151,7 +155,11 @@ class CloudflareIntegration:
             return err
 
         try:
-            url = f"{self.base_url}/accounts/{settings.cloudflare_account_id}/workers/scripts/{script_name}"
+            acct = settings.cloudflare_account_id
+            url = (
+                f"{self.base_url}/accounts/{acct}"
+                f"/workers/scripts/{script_name}"
+            )
 
             async with httpx.AsyncClient() as client:
                 response = await client.delete(url, headers=self.headers, timeout=10.0)
@@ -174,7 +182,12 @@ class CloudflareIntegration:
             return err
 
         try:
-            url = f"{self.base_url}/accounts/{settings.cloudflare_account_id}/storage/kv/namespaces/{namespace_id}/values/{key}"
+            acct = settings.cloudflare_account_id
+            url = (
+                f"{self.base_url}/accounts/{acct}"
+                f"/storage/kv/namespaces/{namespace_id}"
+                f"/values/{key}"
+            )
 
             async with httpx.AsyncClient() as client:
                 response = await client.put(url, headers=self.headers, content=value, timeout=10.0)
@@ -196,7 +209,12 @@ class CloudflareIntegration:
             return err
 
         try:
-            url = f"{self.base_url}/accounts/{settings.cloudflare_account_id}/storage/kv/namespaces/{namespace_id}/values/{key}"
+            acct = settings.cloudflare_account_id
+            url = (
+                f"{self.base_url}/accounts/{acct}"
+                f"/storage/kv/namespaces/{namespace_id}"
+                f"/values/{key}"
+            )
 
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=self.headers, timeout=10.0)
@@ -218,7 +236,12 @@ class CloudflareIntegration:
             return err
 
         try:
-            url = f"{self.base_url}/accounts/{settings.cloudflare_account_id}/storage/kv/namespaces/{namespace_id}/values/{key}"
+            acct = settings.cloudflare_account_id
+            url = (
+                f"{self.base_url}/accounts/{acct}"
+                f"/storage/kv/namespaces/{namespace_id}"
+                f"/values/{key}"
+            )
 
             async with httpx.AsyncClient() as client:
                 response = await client.delete(url, headers=self.headers, timeout=10.0)
