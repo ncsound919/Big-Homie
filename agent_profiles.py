@@ -2,18 +2,23 @@
 Multi-Agent Profiles System for Big Homie
 Run unlimited isolated agents with persistent role definitions
 """
+
 import json
 import re
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
-from pathlib import Path
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
+
 from loguru import logger
+
 from config import settings
+
 
 @dataclass
 class AgentProfile:
     """Represents an agent profile with persistent configuration"""
+
     profile_id: str
     name: str
     role: str
@@ -21,20 +26,21 @@ class AgentProfile:
     model: str
     temperature: float
     max_tokens: int
-    tools_enabled: List[str]
+    tools_enabled: list[str]
     memory_isolated: bool
     created_at: str
     updated_at: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert profile to dictionary"""
         return asdict(self)
 
     @staticmethod
-    def from_dict(data: Dict) -> "AgentProfile":
+    def from_dict(data: dict) -> "AgentProfile":
         """Create profile from dictionary"""
         return AgentProfile(**data)
+
 
 class AgentProfileManager:
     """
@@ -53,7 +59,7 @@ class AgentProfileManager:
         self.profiles_dir = settings.data_dir / "agent_profiles"
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
         self._state_file = self.profiles_dir / "_state.json"
-        self.profiles: Dict[str, AgentProfile] = {}
+        self.profiles: dict[str, AgentProfile] = {}
         self.active_profile_id: Optional[str] = None
         self._load_profiles()
 
@@ -63,7 +69,7 @@ class AgentProfileManager:
             if profile_file.name == "_state.json":
                 continue
             try:
-                with open(profile_file, "r") as f:
+                with open(profile_file) as f:
                     data = json.load(f)
                     profile = AgentProfile.from_dict(data)
                     self.profiles[profile.profile_id] = profile
@@ -95,7 +101,10 @@ class AgentProfileManager:
             profile_id="default",
             name="Big Homie Default",
             role="General Purpose AI Assistant",
-            system_prompt="You are Big Homie, a helpful AI assistant with access to tools and capabilities.",
+            system_prompt=(
+                "You are Big Homie, a helpful AI assistant"
+                " with access to tools and capabilities."
+            ),
             model=settings.default_model,
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
@@ -103,7 +112,7 @@ class AgentProfileManager:
             memory_isolated=False,
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat(),
-            metadata={}
+            metadata={},
         )
         self.save_profile(default_profile)
 
@@ -120,13 +129,13 @@ class AgentProfileManager:
         characters present.
         """
         if "/" in profile_id or "\\" in profile_id:
-            raise ValueError(
-                f"Invalid profile_id '{profile_id}': path separators are not allowed"
-            )
+            raise ValueError(f"Invalid profile_id '{profile_id}': path separators are not allowed")
         sanitized = re.sub(r"[^a-z0-9_\-]", "", profile_id.lower())
         if not sanitized:
             raise ValueError(
-                f"Invalid profile_id '{profile_id}': must contain at least one alphanumeric character"
+                f"Invalid profile_id '{profile_id}': "
+                "must contain at least one "
+                "alphanumeric character"
             )
         return sanitized
 
@@ -139,9 +148,9 @@ class AgentProfileManager:
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-        tools_enabled: Optional[List[str]] = None,
+        tools_enabled: Optional[list[str]] = None,
         memory_isolated: bool = True,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None,
     ) -> AgentProfile:
         """
         Create a new agent profile
@@ -183,7 +192,7 @@ class AgentProfileManager:
             memory_isolated=memory_isolated,
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat(),
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         self.save_profile(profile)
@@ -206,7 +215,7 @@ class AgentProfileManager:
         """Get a profile by ID"""
         return self.profiles.get(profile_id)
 
-    def list_profiles(self) -> List[AgentProfile]:
+    def list_profiles(self) -> list[AgentProfile]:
         """List all profiles"""
         return list(self.profiles.values())
 
@@ -252,9 +261,7 @@ class AgentProfileManager:
 
         # Persist the active profile so the selection survives restarts
         try:
-            self._state_file.write_text(
-                json.dumps({"active_profile_id": profile_id}, indent=2)
-            )
+            self._state_file.write_text(json.dumps({"active_profile_id": profile_id}, indent=2))
         except Exception as e:
             logger.warning(f"Could not persist active profile state: {e}")
 
@@ -275,8 +282,8 @@ class AgentProfileManager:
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-        tools_enabled: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        tools_enabled: Optional[list[str]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> AgentProfile:
         """
         Update an existing profile
@@ -342,7 +349,14 @@ class AgentProfileManager:
             "coder": {
                 "name": "Code Assistant",
                 "role": "Expert Software Engineer",
-                "system_prompt": "You are an expert software engineer with deep knowledge of multiple programming languages, design patterns, and best practices. Focus on writing clean, efficient, and well-documented code.",
+                "system_prompt": (
+                    "You are an expert software engineer"
+                    " with deep knowledge of multiple"
+                    " programming languages, design"
+                    " patterns, and best practices."
+                    " Focus on writing clean, efficient,"
+                    " and well-documented code."
+                ),
                 "model": settings.coding_model,
                 "temperature": 0.3,
                 "tools_enabled": ["all"],
@@ -350,7 +364,13 @@ class AgentProfileManager:
             "researcher": {
                 "name": "Research Assistant",
                 "role": "Research Specialist",
-                "system_prompt": "You are a thorough research specialist. Your goal is to find accurate, comprehensive information and provide well-sourced, detailed analysis.",
+                "system_prompt": (
+                    "You are a thorough research"
+                    " specialist. Your goal is to find"
+                    " accurate, comprehensive information"
+                    " and provide well-sourced, detailed"
+                    " analysis."
+                ),
                 "model": settings.reasoning_model,
                 "temperature": 0.5,
                 "tools_enabled": ["web_search", "github_search_repos", "browser_navigate"],
@@ -358,7 +378,13 @@ class AgentProfileManager:
             "writer": {
                 "name": "Content Writer",
                 "role": "Creative Writing Specialist",
-                "system_prompt": "You are a skilled content writer with expertise in various writing styles. Create engaging, well-structured content tailored to the audience.",
+                "system_prompt": (
+                    "You are a skilled content writer"
+                    " with expertise in various writing"
+                    " styles. Create engaging,"
+                    " well-structured content tailored"
+                    " to the audience."
+                ),
                 "model": settings.default_model,
                 "temperature": 0.8,
                 "tools_enabled": ["web_search"],
@@ -366,7 +392,12 @@ class AgentProfileManager:
             "analyst": {
                 "name": "Data Analyst",
                 "role": "Data Analysis Specialist",
-                "system_prompt": "You are a data analyst with strong analytical and statistical skills. Analyze data thoroughly and provide clear, actionable insights.",
+                "system_prompt": (
+                    "You are a data analyst with strong"
+                    " analytical and statistical skills."
+                    " Analyze data thoroughly and provide"
+                    " clear, actionable insights."
+                ),
                 "model": settings.reasoning_model,
                 "temperature": 0.4,
                 "tools_enabled": ["all"],
@@ -374,7 +405,9 @@ class AgentProfileManager:
         }
 
         if template_name not in templates:
-            raise ValueError(f"Unknown template: {template_name}. Available: {list(templates.keys())}")
+            raise ValueError(
+                f"Unknown template: {template_name}. Available: {list(templates.keys())}"
+            )
 
         template = templates[template_name]
         template.update(kwargs)
@@ -394,7 +427,7 @@ class AgentProfileManager:
 
     def import_profile(self, import_path: Path) -> AgentProfile:
         """Import a profile from a JSON file"""
-        with open(import_path, "r") as f:
+        with open(import_path) as f:
             data = json.load(f)
 
         profile = AgentProfile.from_dict(data)
@@ -410,6 +443,7 @@ class AgentProfileManager:
         logger.info(f"Imported profile: {profile.name}")
 
         return profile
+
 
 # Global profile manager instance
 profile_manager = AgentProfileManager()

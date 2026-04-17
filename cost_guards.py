@@ -2,31 +2,39 @@
 Cost Guards Module
 Budget management, throttling, and cost estimation for LLM operations
 """
+
 import asyncio
-from datetime import datetime, date, timedelta
-from typing import Optional, Dict, Any, Callable
 from dataclasses import dataclass
+from datetime import date
 from enum import Enum
+from typing import Any, Callable, Optional
+
 from loguru import logger
+
 from config import settings
 
 try:
     import tiktoken
+
     TIKTOKEN_AVAILABLE = True
 except ImportError:
     TIKTOKEN_AVAILABLE = False
     logger.warning("tiktoken not available - token counting will be approximate")
 
+
 class CostLevel(str, Enum):
     """Cost threshold levels"""
-    LOW = "low"          # < $0.10
-    MEDIUM = "medium"    # $0.10 - $0.50
-    HIGH = "high"        # $0.50 - $2.00
+
+    LOW = "low"  # < $0.10
+    MEDIUM = "medium"  # $0.10 - $0.50
+    HIGH = "high"  # $0.50 - $2.00
     VERY_HIGH = "very_high"  # > $2.00
+
 
 @dataclass
 class CostEstimate:
     """Estimated cost for an operation"""
+
     input_tokens: int
     output_tokens_estimated: int
     total_tokens: int
@@ -35,9 +43,11 @@ class CostEstimate:
     model: str
     requires_approval: bool
 
+
 @dataclass
 class BudgetStatus:
     """Current budget status"""
+
     daily_limit: float
     daily_spent: float
     daily_remaining: float
@@ -45,6 +55,7 @@ class BudgetStatus:
     last_reset: date
     is_over_budget: bool
     warning_threshold_reached: bool
+
 
 class CostGuard:
     """
@@ -60,8 +71,10 @@ class CostGuard:
 
     def __init__(self):
         self.daily_budget = settings.max_autonomous_cost
-        self.approval_threshold = getattr(settings, 'cost_approval_threshold', 0.50)
-        self.warning_threshold = getattr(settings, 'cost_warning_threshold', 0.75)  # Warn at 75% of budget by default
+        self.approval_threshold = getattr(settings, "cost_approval_threshold", 0.50)
+        self.warning_threshold = getattr(
+            settings, "cost_warning_threshold", 0.75
+        )  # Warn at 75% of budget by default
 
         # Track spending
         self.session_cost = 0.0
@@ -122,10 +135,7 @@ class CostGuard:
         return len(text) // 4
 
     def estimate_cost(
-        self,
-        messages: list,
-        model: str,
-        max_output_tokens: int = 4096
+        self, messages: list, model: str, max_output_tokens: int = 4096
     ) -> CostEstimate:
         """
         Estimate cost of an LLM operation
@@ -139,11 +149,14 @@ class CostGuard:
             CostEstimate with details
         """
         # Count input tokens
-        input_text = " ".join([
-            msg.get("content", "") if isinstance(msg.get("content"), str)
-            else str(msg.get("content", ""))
-            for msg in messages
-        ])
+        input_text = " ".join(
+            [
+                msg.get("content", "")
+                if isinstance(msg.get("content"), str)
+                else str(msg.get("content", ""))
+                for msg in messages
+            ]
+        )
         input_tokens = self.count_tokens(input_text, model)
 
         # Estimate output tokens (use max or 50% of max as default)
@@ -174,7 +187,7 @@ class CostGuard:
             estimated_cost=cost,
             cost_level=level,
             model=model,
-            requires_approval=requires_approval
+            requires_approval=requires_approval,
         )
 
     def _calculate_model_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
@@ -187,16 +200,13 @@ class CostGuard:
             "claude-3.5-sonnet": (3.0, 15.0),
             "claude-haiku": (0.25, 1.25),
             "claude-3-haiku": (0.25, 1.25),
-
             # OpenAI GPT
             "gpt-4": (30.0, 60.0),
             "gpt-4-turbo": (10.0, 30.0),
             "gpt-3.5-turbo": (0.5, 1.5),
-
             # Google Gemini (via OpenRouter)
             "google/gemini-flash-1.5-8b": (0.04, 0.15),
             "google/gemini-pro-1.5": (1.25, 5.0),
-
             # Ollama (local - free)
             "qwen2.5:7b": (0.0, 0.0),
             "deepseek-coder:6.7b": (0.0, 0.0),
@@ -205,7 +215,9 @@ class CostGuard:
         # Find matching pricing
         for key, (input_price, output_price) in pricing.items():
             if key in model.lower():
-                cost = (input_tokens / 1_000_000 * input_price) + (output_tokens / 1_000_000 * output_price)
+                cost = (input_tokens / 1_000_000 * input_price) + (
+                    output_tokens / 1_000_000 * output_price
+                )
                 return cost
 
         # Default to moderate pricing if unknown
@@ -228,14 +240,18 @@ class CostGuard:
         if self.daily_cost + estimate.estimated_cost > self.daily_budget:
             logger.warning(
                 f"Operation would exceed daily budget: "
-                f"${self.daily_cost:.4f} + ${estimate.estimated_cost:.4f} > ${self.daily_budget:.2f}"
+                f"${self.daily_cost:.4f} + "
+                f"${estimate.estimated_cost:.4f} "
+                f"> ${self.daily_budget:.2f}"
             )
             return False
 
         # Check if requires approval
         if estimate.requires_approval:
             logger.info(
-                f"Operation requires approval (${estimate.estimated_cost:.4f} >= ${self.approval_threshold:.2f})"
+                f"Operation requires approval "
+                f"(${estimate.estimated_cost:.4f} "
+                f">= ${self.approval_threshold:.2f})"
             )
 
             # Call approval callback if set
@@ -249,7 +265,9 @@ class CostGuard:
             else:
                 # Deny in headless/unconfigured mode to enforce explicit approval
                 logger.warning(
-                    f"Denying ${estimate.estimated_cost:.4f} operation because it requires approval "
+                    f"Denying ${estimate.estimated_cost:.4f}"
+                    " operation because it requires"
+                    " approval "
                     f"and no approval callback is set"
                 )
                 return False
@@ -273,7 +291,8 @@ class CostGuard:
         if self.daily_cost >= self.daily_budget * self.warning_threshold:
             remaining = self.daily_budget - self.daily_cost
             logger.warning(
-                f"Budget warning: ${remaining:.2f} remaining ({(remaining/self.daily_budget*100):.1f}%)"
+                f"Budget warning: ${remaining:.2f} remaining "
+                f"({(remaining / self.daily_budget * 100):.1f}%)"
             )
 
     def get_budget_status(self) -> BudgetStatus:
@@ -289,7 +308,7 @@ class CostGuard:
             session_spent=self.session_cost,
             last_reset=self.last_reset_date,
             is_over_budget=self.daily_cost >= self.daily_budget,
-            warning_threshold_reached=self.daily_cost >= self.daily_budget * self.warning_threshold
+            warning_threshold_reached=self.daily_cost >= self.daily_budget * self.warning_threshold,
         )
 
     def _reset_daily_if_needed(self):
@@ -300,7 +319,9 @@ class CostGuard:
             self.daily_cost = 0.0
             self.last_reset_date = today
 
-    def suggest_context_pruning(self, messages: list, target_reduction: float = 0.5) -> Dict[str, Any]:
+    def suggest_context_pruning(
+        self, messages: list, target_reduction: float = 0.5
+    ) -> dict[str, Any]:
         """
         Suggest how to prune context to reduce costs
 
@@ -320,28 +341,34 @@ class CostGuard:
             "current_tokens": total_tokens,
             "target_tokens": target_tokens,
             "reduction_needed": total_tokens - target_tokens,
-            "strategies": []
+            "strategies": [],
         }
 
         # Suggest strategies
         if len(messages) > 10:
-            suggestions["strategies"].append({
-                "strategy": "Keep only recent messages",
-                "description": f"Keep last {min(10, len(messages)//2)} messages",
-                "estimated_savings": total_tokens * 0.3
-            })
+            suggestions["strategies"].append(
+                {
+                    "strategy": "Keep only recent messages",
+                    "description": f"Keep last {min(10, len(messages) // 2)} messages",
+                    "estimated_savings": total_tokens * 0.3,
+                }
+            )
 
-        suggestions["strategies"].append({
-            "strategy": "Summarize old messages",
-            "description": "Summarize messages older than 5 turns",
-            "estimated_savings": total_tokens * target_reduction
-        })
+        suggestions["strategies"].append(
+            {
+                "strategy": "Summarize old messages",
+                "description": "Summarize messages older than 5 turns",
+                "estimated_savings": total_tokens * target_reduction,
+            }
+        )
 
-        suggestions["strategies"].append({
-            "strategy": "Remove system messages",
-            "description": "Keep only user/assistant messages",
-            "estimated_savings": total_tokens * 0.1
-        })
+        suggestions["strategies"].append(
+            {
+                "strategy": "Remove system messages",
+                "description": "Keep only user/assistant messages",
+                "estimated_savings": total_tokens * 0.1,
+            }
+        )
 
         return suggestions
 
@@ -349,6 +376,7 @@ class CostGuard:
         """Reset session cost counter"""
         logger.info(f"Session cost reset: ${self.session_cost:.4f} -> $0.00")
         self.session_cost = 0.0
+
 
 # Global cost guard instance
 cost_guard = CostGuard()

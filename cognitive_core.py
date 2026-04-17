@@ -2,18 +2,21 @@
 Cognitive Core - Tier 1 Agent Reasoning Engine
 Chain-of-Thought, ReAct Loop, Tree-of-Thought, Self-Consistency Verification
 """
+
 import asyncio
 import json
 import uuid
-from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any, Optional
+
 from loguru import logger
 
 
 class ReasoningStrategy(str, Enum):
     """Available reasoning strategies"""
+
     CHAIN_OF_THOUGHT = "cot"
     REACT = "react"
     TREE_OF_THOUGHT = "tot"
@@ -23,6 +26,7 @@ class ReasoningStrategy(str, Enum):
 @dataclass
 class ReasoningStep:
     """A single step in a reasoning chain"""
+
     step_id: str
     step_number: int
     thought: str
@@ -35,24 +39,26 @@ class ReasoningStep:
 @dataclass
 class ReasoningTrace:
     """Complete trace of a reasoning process"""
+
     trace_id: str
     strategy: ReasoningStrategy
     query: str
-    steps: List[ReasoningStep] = field(default_factory=list)
+    steps: list[ReasoningStep] = field(default_factory=list)
     final_answer: Optional[str] = None
     total_confidence: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
 @dataclass
 class ThoughtBranch:
     """A branch in Tree-of-Thought reasoning"""
+
     branch_id: str
     parent_id: Optional[str]
     thought: str
     score: float = 0.0
-    children: List[str] = field(default_factory=list)
+    children: list[str] = field(default_factory=list)
     is_terminal: bool = False
     is_pruned: bool = False
 
@@ -80,7 +86,7 @@ class CognitiveCore:
     MAX_OUTPUT_PREVIEW = 3000
 
     def __init__(self):
-        self.traces: Dict[str, ReasoningTrace] = {}
+        self.traces: dict[str, ReasoningTrace] = {}
         self._llm = None
         self._router = None
         self._thoughts_logger = None
@@ -90,6 +96,7 @@ class CognitiveCore:
         """Lazy-load LLM gateway to avoid circular imports"""
         if self._llm is None:
             from llm_gateway import LLMGateway
+
             self._llm = LLMGateway()
         return self._llm
 
@@ -97,6 +104,7 @@ class CognitiveCore:
         """Lazy-load router"""
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
@@ -104,8 +112,10 @@ class CognitiveCore:
         """Lazy-load thoughts logger"""
         if self._thoughts_logger is None:
             from config import settings
+
             if settings.enable_thought_logging:
                 from thoughts_logger import thoughts_logger
+
                 self._thoughts_logger = thoughts_logger
         return self._thoughts_logger
 
@@ -113,16 +123,14 @@ class CognitiveCore:
         """Lazy-load KarpathyEngine to avoid circular imports"""
         if self._karpathy is None:
             from karpathy_methods import KarpathyEngine
+
             self._karpathy = KarpathyEngine()
         return self._karpathy
 
     # ===== Chain-of-Thought Reasoning =====
 
     async def chain_of_thought(
-        self,
-        query: str,
-        context: Optional[Dict] = None,
-        max_steps: int = 10
+        self, query: str, context: Optional[dict] = None, max_steps: int = 10
     ) -> ReasoningTrace:
         """
         Decompose a problem into explicit intermediate steps before producing an answer.
@@ -139,9 +147,7 @@ class CognitiveCore:
             ReasoningTrace with all steps and final answer
         """
         trace = ReasoningTrace(
-            trace_id=str(uuid.uuid4()),
-            strategy=ReasoningStrategy.CHAIN_OF_THOUGHT,
-            query=query
+            trace_id=str(uuid.uuid4()), strategy=ReasoningStrategy.CHAIN_OF_THOUGHT, query=query
         )
 
         cot_prompt = f"""You are solving a problem step-by-step using Chain-of-Thought reasoning.
@@ -167,8 +173,7 @@ Respond in JSON format:
 }}"""
 
         decision, result = await self._get_router().execute_with_routing(
-            task=cot_prompt,
-            context={"requires_reasoning": True}
+            task=cot_prompt, context={"requires_reasoning": True}
         )
 
         content = result.get("content", "")
@@ -180,7 +185,7 @@ Respond in JSON format:
                     step_id=str(uuid.uuid4()),
                     step_number=step_data.get("step", 0),
                     thought=step_data.get("thought", ""),
-                    confidence=step_data.get("confidence", 0.5)
+                    confidence=step_data.get("confidence", 0.5),
                 )
                 trace.steps.append(step)
 
@@ -188,12 +193,11 @@ Respond in JSON format:
             trace.total_confidence = parsed.get("overall_confidence", 0.5)
         else:
             # Fallback: treat entire response as a single reasoning step
-            trace.steps.append(ReasoningStep(
-                step_id=str(uuid.uuid4()),
-                step_number=1,
-                thought=content,
-                confidence=0.5
-            ))
+            trace.steps.append(
+                ReasoningStep(
+                    step_id=str(uuid.uuid4()), step_number=1, thought=content, confidence=0.5
+                )
+            )
             trace.final_answer = content
             trace.total_confidence = 0.5
 
@@ -210,9 +214,9 @@ Respond in JSON format:
     async def react_loop(
         self,
         query: str,
-        available_tools: Optional[List[Dict]] = None,
-        context: Optional[Dict] = None,
-        max_iterations: int = 8
+        available_tools: Optional[list[dict]] = None,
+        context: Optional[dict] = None,
+        max_iterations: int = 8,
     ) -> ReasoningTrace:
         """
         Think → Act → Observe iterative cycle.
@@ -230,9 +234,7 @@ Respond in JSON format:
             ReasoningTrace with interleaved thought/action/observation steps
         """
         trace = ReasoningTrace(
-            trace_id=str(uuid.uuid4()),
-            strategy=ReasoningStrategy.REACT,
-            query=query
+            trace_id=str(uuid.uuid4()), strategy=ReasoningStrategy.REACT, query=query
         )
 
         tool_descriptions = ""
@@ -242,7 +244,9 @@ Respond in JSON format:
             )
 
         conversation = [
-            {"role": "system", "content": f"""You are an agent using the ReAct (Reasoning + Acting) framework.
+            {
+                "role": "system",
+                "content": f"""You are an agent using the ReAct (Reasoning + Acting) framework.
 For each step, you must:
 1. THOUGHT: Reason about what to do next
 2. ACTION: Choose an action to take (or "finish" if done)
@@ -264,29 +268,33 @@ When you have the final answer, respond with:
     "action": "finish",
     "action_input": {{"answer": "The final answer"}},
     "is_final": true
-}}"""},
-            {"role": "user", "content": f"Task: {query}\n{f'Context: {json.dumps(context)}' if context else ''}"}
+}}""",
+            },
+            {
+                "role": "user",
+                "content": f"Task: {query}\n{f'Context: {json.dumps(context)}' if context else ''}",
+            },
         ]
 
         for iteration in range(max_iterations):
             # THINK + ACT
             from llm_gateway import TaskType
-            result = await self._get_llm().complete(
-                conversation,
-                task_type=TaskType.REASONING
-            )
+
+            result = await self._get_llm().complete(conversation, task_type=TaskType.REASONING)
 
             content = result.get("content", "")
             parsed = self._parse_json_response(content)
 
             if not parsed:
                 # If can't parse, create a thought step and break
-                trace.steps.append(ReasoningStep(
-                    step_id=str(uuid.uuid4()),
-                    step_number=iteration + 1,
-                    thought=content,
-                    confidence=0.5
-                ))
+                trace.steps.append(
+                    ReasoningStep(
+                        step_id=str(uuid.uuid4()),
+                        step_number=iteration + 1,
+                        thought=content,
+                        confidence=0.5,
+                    )
+                )
                 trace.final_answer = content
                 break
 
@@ -300,7 +308,7 @@ When you have the final answer, respond with:
                 step_number=iteration + 1,
                 thought=thought,
                 action=f"{action}({json.dumps(action_input)})" if action != "finish" else None,
-                confidence=0.7
+                confidence=0.7,
             )
 
             if is_final or action == "finish":
@@ -324,28 +332,26 @@ When you have the final answer, respond with:
             trace.final_answer = "\n".join(
                 f"Step {s.step_number}: {s.thought}" for s in trace.steps
             )
-            trace.total_confidence = sum(s.confidence for s in trace.steps) / max(len(trace.steps), 1)
+            trace.total_confidence = sum(s.confidence for s in trace.steps) / max(
+                len(trace.steps), 1
+            )
 
         self.traces[trace.trace_id] = trace
         self._log_trace(trace)
 
         return trace
 
-    async def _execute_react_action(self, action: str, action_input: Dict) -> str:
+    async def _execute_react_action(self, action: str, action_input: dict) -> str:
         """Execute an action in the ReAct loop and return observation"""
         try:
-            from mcp_integration import mcp
-            from mcp_integration import ToolCall, ToolResult
+            from mcp_integration import ToolCall, mcp
 
-            tool_call = ToolCall(
-                tool_name=action,
-                arguments=action_input
-            )
+            tool_call = ToolCall(tool_name=action, arguments=action_input)
 
             result = await mcp.execute_tool(tool_call)
 
             if result.success:
-                return str(result.data)[:self.MAX_OBSERVATION_LENGTH]
+                return str(result.data)[: self.MAX_OBSERVATION_LENGTH]
             else:
                 return f"Action failed: {result.error}"
 
@@ -357,10 +363,10 @@ When you have the final answer, respond with:
     async def tree_of_thought(
         self,
         query: str,
-        context: Optional[Dict] = None,
+        context: Optional[dict] = None,
         num_branches: int = 3,
         max_depth: int = 3,
-        beam_width: int = 2
+        beam_width: int = 2,
     ) -> ReasoningTrace:
         """
         Explore multiple reasoning branches simultaneously, evaluate each path,
@@ -379,15 +385,15 @@ When you have the final answer, respond with:
             ReasoningTrace with the best reasoning path
         """
         trace = ReasoningTrace(
-            trace_id=str(uuid.uuid4()),
-            strategy=ReasoningStrategy.TREE_OF_THOUGHT,
-            query=query
+            trace_id=str(uuid.uuid4()), strategy=ReasoningStrategy.TREE_OF_THOUGHT, query=query
         )
 
-        branches: Dict[str, ThoughtBranch] = {}
+        branches: dict[str, ThoughtBranch] = {}
 
         # Step 1: Generate initial thought branches
-        generation_prompt = f"""You are exploring multiple approaches to solve a problem using Tree-of-Thought reasoning.
+        generation_prompt = f"""\
+You are exploring multiple approaches to solve a problem \
+using Tree-of-Thought reasoning.
 
 Problem: {query}
 
@@ -406,8 +412,7 @@ Respond in JSON:
 }}"""
 
         decision, result = await self._get_router().execute_with_routing(
-            task=generation_prompt,
-            context={"requires_reasoning": True}
+            task=generation_prompt, context={"requires_reasoning": True}
         )
 
         parsed = self._parse_json_response(result.get("content", ""))
@@ -418,8 +423,8 @@ Respond in JSON:
             branch = ThoughtBranch(
                 branch_id=str(uuid.uuid4()),
                 parent_id=None,
-                thought=branch_data.get("thought", f"Approach {i+1}"),
-                score=0.0
+                thought=branch_data.get("thought", f"Approach {i + 1}"),
+                score=0.0,
             )
             branches[branch.branch_id] = branch
 
@@ -444,13 +449,16 @@ Score each approach from 0.0 to 1.0 based on:
 Respond in JSON:
 {{
     "scores": [
-        {{"id": "{current_level[0] if current_level else 'example'}", "score": 0.85, "feedback": "Strong because..."}}
+        {{
+            "id": "{current_level[0] if current_level else "example"}",
+            "score": 0.85,
+            "feedback": "Strong because..."
+        }}
     ]
 }}"""
 
             _, eval_result = await self._get_router().execute_with_routing(
-                task=evaluation_prompt,
-                context={"requires_reasoning": True}
+                task=evaluation_prompt, context={"requires_reasoning": True}
             )
 
             eval_parsed = self._parse_json_response(eval_result.get("content", ""))
@@ -461,7 +469,9 @@ Respond in JSON:
                         branches[bid].score = score_data.get("score", 0.5)
 
             # Keep only beam_width best branches
-            scored_branches = sorted(current_level, key=lambda bid: branches[bid].score, reverse=True)
+            scored_branches = sorted(
+                current_level, key=lambda bid: branches[bid].score, reverse=True
+            )
             active_branches = scored_branches[:beam_width]
 
             # Prune low-scoring branches
@@ -488,8 +498,7 @@ Respond in JSON:
 }}"""
 
                     _, expand_result = await self._get_router().execute_with_routing(
-                        task=expand_prompt,
-                        context={"requires_reasoning": True}
+                        task=expand_prompt, context={"requires_reasoning": True}
                     )
 
                     expand_parsed = self._parse_json_response(expand_result.get("content", ""))
@@ -498,7 +507,7 @@ Respond in JSON:
                             branch_id=str(uuid.uuid4()),
                             parent_id=bid,
                             thought=expand_parsed.get("next_thought", ""),
-                            is_terminal=expand_parsed.get("is_conclusion", False)
+                            is_terminal=expand_parsed.get("is_conclusion", False),
                         )
                         branches[child.branch_id] = child
                         parent.children.append(child.branch_id)
@@ -521,12 +530,14 @@ Respond in JSON:
             current = branches.get(current.parent_id) if current.parent_id else None
 
         for i, branch in enumerate(path):
-            trace.steps.append(ReasoningStep(
-                step_id=branch.branch_id,
-                step_number=i + 1,
-                thought=branch.thought,
-                confidence=branch.score
-            ))
+            trace.steps.append(
+                ReasoningStep(
+                    step_id=branch.branch_id,
+                    step_number=i + 1,
+                    thought=branch.thought,
+                    confidence=branch.score,
+                )
+            )
 
         # Generate final answer from best path
         path_summary = " → ".join(b.thought[:100] for b in path)
@@ -538,8 +549,7 @@ Reasoning path: {path_summary}
 Provide a clear, concise final answer."""
 
         _, final_result = await self._get_router().execute_with_routing(
-            task=final_prompt,
-            context={"requires_reasoning": True}
+            task=final_prompt, context={"requires_reasoning": True}
         )
 
         trace.final_answer = final_result.get("content", "")
@@ -558,9 +568,9 @@ Provide a clear, concise final answer."""
     async def self_consistency(
         self,
         query: str,
-        context: Optional[Dict] = None,
+        context: Optional[dict] = None,
         num_samples: int = 3,
-        temperature_range: Tuple[float, float] = (0.5, 0.9)
+        temperature_range: tuple[float, float] = (0.5, 0.9),
     ) -> ReasoningTrace:
         """
         Sample multiple independent reasoning paths and select the most
@@ -576,9 +586,7 @@ Provide a clear, concise final answer."""
             ReasoningTrace with consensus answer and confidence
         """
         trace = ReasoningTrace(
-            trace_id=str(uuid.uuid4()),
-            strategy=ReasoningStrategy.SELF_CONSISTENCY,
-            query=query
+            trace_id=str(uuid.uuid4()), strategy=ReasoningStrategy.SELF_CONSISTENCY, query=query
         )
 
         # Generate multiple independent reasoning paths
@@ -602,7 +610,6 @@ Respond in JSON:
         reasoning_paths = []
 
         # Generate samples with varying temperatures for diversity
-        from llm_gateway import TaskType
         temp_step = (temperature_range[1] - temperature_range[0]) / max(num_samples - 1, 1)
 
         tasks = []
@@ -630,12 +637,14 @@ Respond in JSON:
             answers.append(answer)
             reasoning_paths.append(reasoning)
 
-            trace.steps.append(ReasoningStep(
-                step_id=str(uuid.uuid4()),
-                step_number=i + 1,
-                thought=f"Path {i+1}: {reasoning[:500]}",
-                confidence=confidence
-            ))
+            trace.steps.append(
+                ReasoningStep(
+                    step_id=str(uuid.uuid4()),
+                    step_number=i + 1,
+                    thought=f"Path {i + 1}: {reasoning[:500]}",
+                    confidence=confidence,
+                )
+            )
 
         if not answers:
             trace.final_answer = "Unable to generate consistent answers"
@@ -661,24 +670,22 @@ Respond in JSON:
 
     async def _generate_sample(
         self, prompt: str, temperature: float, index: int
-    ) -> Tuple[Optional[Dict], str]:
+    ) -> tuple[Optional[dict], str]:
         """Generate a single reasoning sample"""
         from llm_gateway import TaskType
+
         result = await self._get_llm().complete(
             [{"role": "user", "content": prompt}],
             task_type=TaskType.REASONING,
-            temperature=temperature
+            temperature=temperature,
         )
         content = result.get("content", "")
         parsed = self._parse_json_response(content)
         return parsed, content
 
     async def _vote_on_answers(
-        self,
-        query: str,
-        answers: List[str],
-        reasoning_paths: List[str]
-    ) -> Tuple[str, float]:
+        self, query: str, answers: list[str], reasoning_paths: list[str]
+    ) -> tuple[str, float]:
         """Vote across multiple answer paths to find consensus"""
         if len(answers) == 1:
             return answers[0], 0.7
@@ -688,7 +695,15 @@ Respond in JSON:
 Question: {query}
 
 Answers from independent reasoning paths:
-{json.dumps([{"path": i+1, "answer": a, "reasoning": r[:300]} for i, (a, r) in enumerate(zip(answers, reasoning_paths))], indent=2)}
+{json.dumps(
+    [
+        {"path": i + 1, "answer": a, "reasoning": r[:300]}
+        for i, (a, r) in enumerate(
+            zip(answers, reasoning_paths)
+        )
+    ],
+    indent=2,
+)}
 
 Select the BEST answer based on:
 1. Consistency - Which answer appears most frequently or similarly across paths?
@@ -704,16 +719,12 @@ Respond in JSON:
 }}"""
 
         _, result = await self._get_router().execute_with_routing(
-            task=vote_prompt,
-            context={"requires_reasoning": True}
+            task=vote_prompt, context={"requires_reasoning": True}
         )
 
         parsed = self._parse_json_response(result.get("content", ""))
         if parsed:
-            return (
-                parsed.get("consensus_answer", answers[0]),
-                parsed.get("confidence", 0.7)
-            )
+            return (parsed.get("consensus_answer", answers[0]), parsed.get("confidence", 0.7))
 
         # Fallback: return most common answer or first one
         return answers[0], 0.6
@@ -764,8 +775,7 @@ Respond in JSON:
 }}"""
 
             decision, result = await self._get_router().execute_with_routing(
-                task=skeptic_prompt,
-                context={"requires_reasoning": True}
+                task=skeptic_prompt, context={"requires_reasoning": True}
             )
 
             content = result.get("content", "")
@@ -781,11 +791,13 @@ Respond in JSON:
                 issues = parsed.get("issues", [])
                 suggested_correction = parsed.get("suggested_correction", "")
 
-                reflection_meta.update({
-                    "skeptic_confidence": skeptic_confidence,
-                    "issues_found": issues,
-                    "suggested_correction": suggested_correction[:300],
-                })
+                reflection_meta.update(
+                    {
+                        "skeptic_confidence": skeptic_confidence,
+                        "issues_found": issues,
+                        "suggested_correction": suggested_correction[:300],
+                    }
+                )
 
                 if skeptic_confidence >= REFLECTION_CONFIDENCE_THRESHOLD:
                     # Answer holds up — accept it
@@ -835,12 +847,12 @@ Respond in JSON:
     async def reason(
         self,
         query: str,
-        context: Optional[Dict] = None,
+        context: Optional[dict] = None,
         strategy: Optional[ReasoningStrategy] = None,
         enable_reflection: bool = True,
         use_karpathy: bool = False,
         high_stakes: bool = False,
-        **kwargs
+        **kwargs,
     ) -> ReasoningTrace:
         """
         Main entry point: automatically select and execute the best reasoning strategy.
@@ -862,7 +874,7 @@ Respond in JSON:
 
         logger.info(f"Using reasoning strategy: {strategy.value}")
 
-        karpathy_meta: Dict[str, Any] = {}
+        karpathy_meta: dict[str, Any] = {}
 
         # --- Karpathy pre-reasoning: temperature calibration ---
         calibrated_temp: Optional[float] = None
@@ -880,9 +892,7 @@ Respond in JSON:
             karpathy_meta["debate_verdict"] = debate_result.final_verdict[:300]
             karpathy_meta["debate_confidence"] = debate_result.confidence
             karpathy_meta["debate_cost"] = debate_result.cost
-            logger.info(
-                f"Karpathy debate completed: confidence={debate_result.confidence:.2f}"
-            )
+            logger.info(f"Karpathy debate completed: confidence={debate_result.confidence:.2f}")
             # Enrich context with debate findings for the main strategy
             context = context or {}
             context["debate_verdict"] = debate_result.final_verdict
@@ -931,7 +941,7 @@ Respond in JSON:
 
         return trace
 
-    def _select_strategy(self, query: str, context: Optional[Dict] = None) -> ReasoningStrategy:
+    def _select_strategy(self, query: str, context: Optional[dict] = None) -> ReasoningStrategy:
         """Auto-select the best reasoning strategy based on query characteristics"""
         query_lower = query.lower()
 
@@ -941,14 +951,31 @@ Respond in JSON:
             return ReasoningStrategy.REACT
 
         # Tree-of-Thought: creative, strategic, or multi-path problems
-        tot_indicators = ["creative", "strategy", "design", "multiple ways", "brainstorm",
-                         "explore", "alternatives", "options", "best approach"]
+        tot_indicators = [
+            "creative",
+            "strategy",
+            "design",
+            "multiple ways",
+            "brainstorm",
+            "explore",
+            "alternatives",
+            "options",
+            "best approach",
+        ]
         if any(ind in query_lower for ind in tot_indicators):
             return ReasoningStrategy.TREE_OF_THOUGHT
 
         # Self-Consistency: high-stakes decisions or factual questions
-        sc_indicators = ["verify", "accurate", "certain", "factual", "correct answer",
-                        "important", "critical", "precise"]
+        sc_indicators = [
+            "verify",
+            "accurate",
+            "certain",
+            "factual",
+            "correct answer",
+            "important",
+            "critical",
+            "precise",
+        ]
         if any(ind in query_lower for ind in sc_indicators):
             return ReasoningStrategy.SELF_CONSISTENCY
 
@@ -957,7 +984,7 @@ Respond in JSON:
 
     # ===== Utility Methods =====
 
-    def _parse_json_response(self, content: str) -> Optional[Dict]:
+    def _parse_json_response(self, content: str) -> Optional[dict]:
         """Safely parse JSON from LLM response"""
         try:
             # Try direct parse
@@ -1000,20 +1027,20 @@ Respond in JSON:
                     "trace_id": trace.trace_id,
                     "strategy": trace.strategy.value,
                     "steps": len(trace.steps),
-                    "confidence": trace.total_confidence
-                }
+                    "confidence": trace.total_confidence,
+                },
             )
 
     def get_trace(self, trace_id: str) -> Optional[ReasoningTrace]:
         """Retrieve a reasoning trace by ID"""
         return self.traces.get(trace_id)
 
-    def get_recent_traces(self, limit: int = 10) -> List[ReasoningTrace]:
+    def get_recent_traces(self, limit: int = 10) -> list[ReasoningTrace]:
         """Get recent reasoning traces"""
         traces = sorted(self.traces.values(), key=lambda t: t.created_at, reverse=True)
         return traces[:limit]
 
-    def export_trace(self, trace_id: str) -> Optional[Dict]:
+    def export_trace(self, trace_id: str) -> Optional[dict]:
         """Export a trace as a dictionary for serialization"""
         trace = self.traces.get(trace_id)
         if not trace:
@@ -1029,14 +1056,14 @@ Respond in JSON:
                     "thought": s.thought,
                     "action": s.action,
                     "observation": s.observation,
-                    "confidence": s.confidence
+                    "confidence": s.confidence,
                 }
                 for s in trace.steps
             ],
             "final_answer": trace.final_answer,
             "total_confidence": trace.total_confidence,
             "metadata": trace.metadata,
-            "created_at": trace.created_at
+            "created_at": trace.created_at,
         }
 
 
