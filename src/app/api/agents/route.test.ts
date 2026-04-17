@@ -239,8 +239,8 @@ describe('agents route', () => {
     expect(body[0]).toMatchObject({
       type: 'folder',
       files: folderFiles,
-      config: folderFiles,
     });
+    expect(body[0].config).toBeUndefined();
   });
 
   it('omits files field for folder agents in redacted GET', async () => {

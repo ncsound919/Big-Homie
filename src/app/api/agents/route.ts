@@ -64,6 +64,8 @@ function serializeAgent(
   agent: Awaited<ReturnType<typeof db.agent.findMany>>[number],
   includeSensitive: boolean,
 ) {
+  const isFolder = agent.type === 'folder';
+
   return {
     id: agent.id,
     name: agent.name,
@@ -72,8 +74,8 @@ function serializeAgent(
     securityTier: agent.securityTier,
     enabled: agent.enabled,
     addedAt: agent.addedAt.toISOString(),
-    ...(includeSensitive ? { config: agent.config, code: agent.code } : {}),
-    ...(includeSensitive && agent.type === 'folder' ? { files: agent.config } : {}),
+    ...(includeSensitive && !isFolder ? { config: agent.config, code: agent.code } : {}),
+    ...(includeSensitive && isFolder ? { files: agent.config } : {}),
   };
 }
 
