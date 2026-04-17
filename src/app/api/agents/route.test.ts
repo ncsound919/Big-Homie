@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 
 const { dbMock } = vi.hoisted(() => ({
   dbMock: {
@@ -167,7 +168,7 @@ describe('agents route', () => {
         data: expect.objectContaining({
           type: 'code',
           code: 'export const agent = true;',
-          config: null,
+          config: Prisma.JsonNull,
         }),
       }),
     );
@@ -208,7 +209,41 @@ describe('agents route', () => {
     );
   });
 
-  it('returns files field for folder agents in GET', async () => {
+  it('returns files field for folder agents in sensitive GET', async () => {
+    process.env.BIG_HOMIE_AGENT_API_KEY = 'agent-secret';
+    const folderFiles = { 'main.py': 'print("hello")' };
+    dbMock.agent.findMany.mockResolvedValue([
+      {
+        id: 'folder-1',
+        name: 'My Folder Agent',
+        description: 'desc',
+        type: 'folder',
+        config: folderFiles,
+        code: null,
+        securityTier: 'full',
+        enabled: true,
+        addedAt: new Date('2026-04-16T00:00:00.000Z'),
+      },
+    ]);
+
+    const response = await GET(
+      new Request('http://localhost/api/agents?includeSensitive=1', {
+        headers: {
+          Authorization: 'Bearer agent-secret',
+        },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body[0]).toMatchObject({
+      type: 'folder',
+      files: folderFiles,
+      config: folderFiles,
+    });
+  });
+
+  it('omits files field for folder agents in redacted GET', async () => {
     const folderFiles = { 'main.py': 'print("hello")' };
     dbMock.agent.findMany.mockResolvedValue([
       {
@@ -232,10 +267,9 @@ describe('agents route', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body[0]).toMatchObject({
-      type: 'folder',
-      files: folderFiles,
-    });
+    expect(body[0].type).toBe('folder');
+    expect(body[0].files).toBeUndefined();
+    expect(body[0].config).toBeUndefined();
   });
 
   it('rejects DELETE without an id', async () => {

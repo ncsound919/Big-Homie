@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 
 function getAgentApiKey(): string {
@@ -72,7 +73,7 @@ function serializeAgent(
     enabled: agent.enabled,
     addedAt: agent.addedAt.toISOString(),
     ...(includeSensitive ? { config: agent.config, code: agent.code } : {}),
-    ...(agent.type === 'folder' ? { files: agent.config } : {}),
+    ...(includeSensitive && agent.type === 'folder' ? { files: agent.config } : {}),
   };
 }
 
@@ -103,12 +104,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
 
-  const configData =
-    body.type === 'config'
-      ? body.config
-      : body.type === 'folder'
-        ? (body.files ?? null)
-        : null;
+  let configData: Prisma.InputJsonValue | typeof Prisma.JsonNull = Prisma.JsonNull;
+  if (body.type === 'config') {
+    configData = body.config;
+  } else if (body.type === 'folder') {
+    configData = body.files ?? Prisma.JsonNull;
+  }
 
   const updateData = {
     name: body.name,
