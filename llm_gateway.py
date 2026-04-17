@@ -103,10 +103,10 @@ class LLMGateway:
             return Provider.ANTHROPIC
         if model_lower.startswith("gpt-"):
             return Provider.OPENAI
-        if model_lower.startswith("llama") or model_lower.startswith("mixtral"):
-            return Provider.GROQ
         if ":" in model:
             return Provider.OLLAMA
+        if model_lower.startswith("llama") or model_lower.startswith("mixtral"):
+            return Provider.GROQ
 
         return None
 
