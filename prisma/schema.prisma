@@ -35,7 +35,7 @@ model Agent {
   id           String   @id @default(cuid())
   name         String
   description  String?
-  type         String   // 'config' or 'code'
+  type         String   // 'config', 'code', or 'folder'
   config       Json?
   code         String?
   securityTier String   @default("full")

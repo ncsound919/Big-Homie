@@ -173,6 +173,71 @@ describe('agents route', () => {
     );
   });
 
+  it('creates folder agents and stores files in config field', async () => {
+    dbMock.agent.create.mockResolvedValue({ id: 'folder-agent' });
+
+    const folderFiles = { 'src/index.ts': 'console.log("hi")', 'package.json': '{}' };
+
+    const response = await POST(
+      new Request('http://localhost/api/agents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...LOCAL_HEADERS,
+        },
+        body: JSON.stringify({
+          name: 'My CLI',
+          description: 'A CLI project',
+          type: 'folder',
+          files: folderFiles,
+          securityTier: 'reduced',
+          enabled: true,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(dbMock.agent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'folder',
+          config: folderFiles,
+          code: null,
+        }),
+      }),
+    );
+  });
+
+  it('returns files field for folder agents in GET', async () => {
+    const folderFiles = { 'main.py': 'print("hello")' };
+    dbMock.agent.findMany.mockResolvedValue([
+      {
+        id: 'folder-1',
+        name: 'My Folder Agent',
+        description: 'desc',
+        type: 'folder',
+        config: folderFiles,
+        code: null,
+        securityTier: 'full',
+        enabled: true,
+        addedAt: new Date('2026-04-16T00:00:00.000Z'),
+      },
+    ]);
+
+    const response = await GET(
+      new Request('http://localhost/api/agents', {
+        headers: LOCAL_HEADERS,
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body[0]).toMatchObject({
+      type: 'folder',
+      files: folderFiles,
+    });
+  });
+
   it('rejects DELETE without an id', async () => {
     const response = await DELETE(
       new Request('http://localhost/api/agents', {
