@@ -16,13 +16,16 @@ const TEXT_EXTENSIONS = new Set([
   '.dockerfile', '.gitignore', '.editorconfig', '.prettierrc', '.eslintrc',
 ]);
 
+const EXTENSIONLESS_TEXT_FILES = new Set([
+  'makefile', 'dockerfile', 'procfile', 'gemfile', 'rakefile', 'license', 'readme',
+]);
+
 function isTextFile(name: string): boolean {
   const lower = name.toLowerCase();
   const dot = lower.lastIndexOf('.');
   if (dot === -1) {
-    // Extensionless files often found in projects (Makefile, Dockerfile, etc.)
     const base = lower.split('/').pop() ?? '';
-    return ['makefile', 'dockerfile', 'procfile', 'gemfile', 'rakefile', 'license', 'readme'].includes(base);
+    return EXTENSIONLESS_TEXT_FILES.has(base);
   }
   return TEXT_EXTENSIONS.has(lower.substring(dot));
 }
@@ -111,7 +114,12 @@ export default function AgentUploadModal({ onUpload, onClose }: AgentUploadModal
       const filesMap: Record<string, string> = {};
       for (const f of folderFiles) {
         const relativePath = f.webkitRelativePath || f.name;
-        filesMap[relativePath] = await f.text();
+        try {
+          filesMap[relativePath] = await f.text();
+        } catch {
+          setError(`Failed to read file: ${relativePath}`);
+          return;
+        }
       }
 
       const agent: CustomAgent = {
@@ -264,7 +272,6 @@ export default function AgentUploadModal({ onUpload, onClose }: AgentUploadModal
                   type="file"
                   /* @ts-expect-error webkitdirectory is a non-standard but widely supported attribute */
                   webkitdirectory=""
-                  directory=""
                   multiple
                   onChange={handleFolderChange}
                   className="w-full px-3 py-2 rounded-lg border border-border/30 bg-background/20 text-sm text-foreground file:mr-2 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
