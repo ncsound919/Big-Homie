@@ -747,7 +747,7 @@ Proposed answer:
 {trace.final_answer}
 
 Reasoning steps taken:
-{json.dumps([{"step": s.step_number, "thought": s.thought[:300]} for s in trace.steps], indent=2)}
+{json.dumps([{"step": s.step_number, "thought": s.thought[:800]} for s in trace.steps], indent=2)}
 
 Your job:
 1. Identify logical errors, unsupported assumptions, or factual mistakes.
@@ -777,7 +777,7 @@ Respond in JSON:
             }
 
             if parsed:
-                skeptic_confidence = float(parsed.get("confidence_in_original", 0.8))
+                skeptic_confidence = float(parsed.get("confidence_in_original", 0.5))
                 issues = parsed.get("issues", [])
                 suggested_correction = parsed.get("suggested_correction", "")
 
@@ -814,9 +814,10 @@ Respond in JSON:
                     context=correction_context,
                 )
 
-                # Carry forward reflection history
-                corrected_trace.metadata["reflections"] = trace.metadata.get("reflections", [])
-                corrected_trace.metadata["reflections"].append(reflection_meta)
+                # Carry forward reflection history (copy to avoid duplication)
+                prior_reflections = list(trace.metadata.get("reflections", []))
+                prior_reflections.append(reflection_meta)
+                corrected_trace.metadata["reflections"] = prior_reflections
                 corrected_trace.metadata["original_trace_id"] = trace.trace_id
                 trace = corrected_trace
             else:
@@ -864,10 +865,12 @@ Respond in JSON:
         karpathy_meta: Dict[str, Any] = {}
 
         # --- Karpathy pre-reasoning: temperature calibration ---
+        calibrated_temp: Optional[float] = None
         if use_karpathy:
             engine = self._get_karpathy_engine()
             calibrated_temp = engine.temperature.get_temperature(query)
             karpathy_meta["calibrated_temperature"] = calibrated_temp
+            kwargs.setdefault("temperature", calibrated_temp)
             logger.info(f"Karpathy temperature calibration: {calibrated_temp}")
 
         # --- High-stakes: run self-play debate instead of normal strategy ---
@@ -906,7 +909,11 @@ Respond in JSON:
                     karpathy_meta["prm_overall_score"] = prm_result.overall_score
                     karpathy_meta["prm_passed"] = prm_result.passed_threshold
                     if prm_result.weakest_step:
-                        karpathy_meta["prm_weakest_step"] = prm_result.weakest_step.step_number
+                        karpathy_meta["prm_weakest_step"] = {
+                            "step_number": prm_result.weakest_step.step_number,
+                            "score": prm_result.weakest_step.score,
+                            "critique": prm_result.weakest_step.critique[:300],
+                        }
                     logger.info(
                         f"Karpathy PRM score: {prm_result.overall_score:.2f}, "
                         f"passed={prm_result.passed_threshold}"
