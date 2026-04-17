@@ -2,14 +2,15 @@
 Skill Library Widget
 Browse, execute, create, and schedule skills from the SkillRegistry.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import uuid
 from datetime import datetime
-from typing import Optional
 
+from loguru import logger
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -25,18 +26,17 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QTextEdit,
     QVBoxLayout,
     QWidget,
-    QSplitter,
 )
-from loguru import logger
 
 
 class CreateSkillDialog(QDialog):
     """Dialog for creating a new skill."""
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("Create New Skill")
         self.setMinimumWidth(500)
@@ -53,10 +53,19 @@ class CreateSkillDialog(QDialog):
 
         self._category = QComboBox()
         self._category.setEditable(True)
-        self._category.addItems([
-            "research", "coding", "analytics", "writing", "automation",
-            "finance", "marketing", "outreach", "data",
-        ])
+        self._category.addItems(
+            [
+                "research",
+                "coding",
+                "analytics",
+                "writing",
+                "automation",
+                "finance",
+                "marketing",
+                "outreach",
+                "data",
+            ]
+        )
         form.addRow("Category:", self._category)
 
         self._description = QLineEdit()
@@ -100,7 +109,7 @@ class CreateSkillDialog(QDialog):
         self.accept()
 
     def _parse_workflow(self) -> list:
-        lines = [l.strip() for l in self._workflow.toPlainText().splitlines() if l.strip()]
+        lines = [line.strip() for line in self._workflow.toPlainText().splitlines() if line.strip()]
         if not lines:
             raise ValueError("At least one workflow step is required.")
         steps = []
@@ -127,7 +136,7 @@ class CreateSkillDialog(QDialog):
 class ExecuteSkillDialog(QDialog):
     """Simple dialog for entering skill parameters."""
 
-    def __init__(self, skill_name: str, parent: Optional[QWidget] = None):
+    def __init__(self, skill_name: str, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle(f"Execute: {skill_name}")
         self.setMinimumWidth(420)
@@ -167,12 +176,12 @@ class ExecuteSkillDialog(QDialog):
             QMessageBox.warning(
                 self,
                 "Invalid Parameters",
-                "Parameters must be a JSON object (e.g. {\"key\": \"value\"}).",
+                'Parameters must be a JSON object (e.g. {"key": "value"}).',
             )
             return
         self.accept()
 
-    def get_params(self) -> Optional[dict]:
+    def get_params(self) -> dict | None:
         text = self._params.toPlainText().strip()
         if not text:
             return None
@@ -195,7 +204,7 @@ class SkillLibraryWidget(QWidget):
 
     skill_scheduled = pyqtSignal(str)  # skill name to schedule
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._registry = None
         self._build_ui()
@@ -208,6 +217,7 @@ class SkillLibraryWidget(QWidget):
         if self._registry is None:
             try:
                 from skill_acquisition import skill_registry
+
                 self._registry = skill_registry
             except Exception as e:
                 logger.warning(f"Could not load skill registry: {e}")
@@ -239,8 +249,18 @@ class SkillLibraryWidget(QWidget):
 
         self._cat_filter = QComboBox()
         self._cat_filter.addItem("All categories")
-        for cat in ["research", "coding", "analytics", "writing", "automation",
-                    "finance", "marketing", "outreach", "data", "learned"]:
+        for cat in [
+            "research",
+            "coding",
+            "analytics",
+            "writing",
+            "automation",
+            "finance",
+            "marketing",
+            "outreach",
+            "data",
+            "learned",
+        ]:
             self._cat_filter.addItem(cat)
         self._cat_filter.currentIndexChanged.connect(self._refresh_list)
         filter_row.addWidget(self._cat_filter)
@@ -352,7 +372,9 @@ class SkillLibraryWidget(QWidget):
         self._list.clear()
         for skill in skills:
             item = QListWidgetItem(
-                f"{skill.name}  [{skill.category}]  ✓{int(skill.success_rate * 100)}%  ×{skill.usage_count}"
+                f"{skill.name}  [{skill.category}]  "
+                f"✓{int(skill.success_rate * 100)}%  "
+                f"×{skill.usage_count}"
             )
             item.setData(Qt.ItemDataRole.UserRole, skill.skill_id)
             self._list.addItem(item)
@@ -386,9 +408,7 @@ class SkillLibraryWidget(QWidget):
         self._detail_success.setText(f"{int(skill.success_rate * 100)}%")
         last = skill.last_used or "never"
         self._detail_last.setText(last[:19] if len(last) > 19 else last)
-        self._detail_workflow.setPlainText(
-            json.dumps(skill.workflow, indent=2)
-        )
+        self._detail_workflow.setPlainText(json.dumps(skill.workflow, indent=2))
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
@@ -469,8 +489,10 @@ class SkillLibraryWidget(QWidget):
             return
         self.skill_scheduled.emit(skill.name)
         QMessageBox.information(
-            self, "Schedule Skill",
-            f"Skill '{skill.name}' sent to Cron Manager.\nOpen the ⏰ Cron Jobs tab to set the schedule."
+            self,
+            "Schedule Skill",
+            f"Skill '{skill.name}' sent to Cron Manager.\n"
+            "Open the ⏰ Cron Jobs tab to set the schedule.",
         )
 
     def _create_skill(self):
@@ -486,6 +508,7 @@ class SkillLibraryWidget(QWidget):
 
         try:
             from skill_acquisition import SkillDefinition
+
             skill = SkillDefinition(
                 skill_id=str(uuid.uuid4()),
                 name=vals["name"],
@@ -496,7 +519,9 @@ class SkillLibraryWidget(QWidget):
                 author="custom",
             )
             registry.register_skill(skill)
-            self._output.append(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Skill '{skill.name}' created.")
+            self._output.append(
+                f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Skill '{skill.name}' created."
+            )
             self._refresh_list()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
@@ -506,7 +531,8 @@ class SkillLibraryWidget(QWidget):
         if not skill:
             return
         reply = QMessageBox.question(
-            self, "Delete Skill",
+            self,
+            "Delete Skill",
             f"Delete skill '{skill.name}'?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
@@ -514,5 +540,7 @@ class SkillLibraryWidget(QWidget):
             registry = self._get_registry()
             if registry and skill.skill_id in registry.skills:
                 del registry.skills[skill.skill_id]
-                self._output.append(f"[{datetime.now().strftime('%H:%M:%S')}] 🗑 Deleted: {skill.name}")
+                self._output.append(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] 🗑 Deleted: {skill.name}"
+                )
                 self._refresh_list()

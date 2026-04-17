@@ -2,30 +2,50 @@
 Fact Checker & Metadata Tagging for Big Homie
 Self-reflection and automatic log categorization
 """
+
 import re
-from typing import Dict, List, Optional, Set
 from datetime import datetime
-from loguru import logger
-from config import settings
+
 
 class FactChecker:
     """Self-reflection system to identify uncertain claims"""
 
     # Uncertainty markers in text
     UNCERTAINTY_MARKERS = [
-        "might", "maybe", "possibly", "probably", "likely", "could be",
-        "i think", "i believe", "it seems", "appears to", "may",
-        "approximately", "roughly", "about", "around", "~"
+        "might",
+        "maybe",
+        "possibly",
+        "probably",
+        "likely",
+        "could be",
+        "i think",
+        "i believe",
+        "it seems",
+        "appears to",
+        "may",
+        "approximately",
+        "roughly",
+        "about",
+        "around",
+        "~",
     ]
 
     # High confidence markers
     CONFIDENCE_MARKERS = [
-        "definitely", "certainly", "always", "never", "must",
-        "will", "guaranteed", "proven", "confirmed", "verified"
+        "definitely",
+        "certainly",
+        "always",
+        "never",
+        "must",
+        "will",
+        "guaranteed",
+        "proven",
+        "confirmed",
+        "verified",
     ]
 
     @staticmethod
-    def analyze_confidence(text: str) -> Dict:
+    def analyze_confidence(text: str) -> dict:
         """
         Analyze a response for confidence level
 
@@ -37,7 +57,7 @@ class FactChecker:
                 "flagged_sections": List[Dict]
             }
         """
-        text_lower = text.lower()
+        text.lower()
         sentences = FactChecker._split_sentences(text)
 
         uncertainty_count = 0
@@ -57,11 +77,13 @@ class FactChecker:
 
             if uncertainty_found:
                 uncertain_claims.append(sentence.strip())
-                flagged_sections.append({
-                    "text": sentence.strip(),
-                    "reason": f"Contains uncertainty markers: {', '.join(uncertainty_found)}",
-                    "confidence": "low"
-                })
+                flagged_sections.append(
+                    {
+                        "text": sentence.strip(),
+                        "reason": f"Contains uncertainty markers: {', '.join(uncertainty_found)}",
+                        "confidence": "low",
+                    }
+                )
 
             # Check for high confidence markers (might be overconfident)
             for marker in FactChecker.CONFIDENCE_MARKERS:
@@ -77,33 +99,35 @@ class FactChecker:
 
         # Flag if too uncertain (< 60%)
         if confidence_score < 0.6:
-            flagged_sections.append({
-                "text": "[Overall Response]",
-                "reason": f"Low confidence score: {int(confidence_score * 100)}%",
-                "confidence": "low"
-            })
+            flagged_sections.append(
+                {
+                    "text": "[Overall Response]",
+                    "reason": f"Low confidence score: {int(confidence_score * 100)}%",
+                    "confidence": "low",
+                }
+            )
 
         return {
             "confidence_score": confidence_score,
             "uncertain_claims": uncertain_claims,
             "uncertainty_marker_count": uncertainty_count,
             "flagged_sections": flagged_sections,
-            "needs_verification": len(flagged_sections) > 0
+            "needs_verification": len(flagged_sections) > 0,
         }
 
     @staticmethod
-    def _split_sentences(text: str) -> List[str]:
+    def _split_sentences(text: str) -> list[str]:
         """Split text into sentences"""
         # Simple sentence splitting
-        sentences = re.split(r'[.!?]+', text)
+        sentences = re.split(r"[.!?]+", text)
         return [s.strip() for s in sentences if s.strip()]
 
     @staticmethod
-    def format_fact_check_report(analysis: Dict) -> str:
+    def format_fact_check_report(analysis: dict) -> str:
         """Format fact-checking results as a readable report"""
         confidence_pct = int(analysis["confidence_score"] * 100)
 
-        report = f"## Fact-Check Report\n\n"
+        report = "## Fact-Check Report\n\n"
         report += f"**Overall Confidence**: {confidence_pct}%\n\n"
 
         if not analysis["needs_verification"]:
@@ -125,40 +149,104 @@ class MetadataTagger:
     # Category keywords
     CATEGORY_KEYWORDS = {
         "coding": [
-            "code", "function", "class", "method", "bug", "debug",
-            "implementation", "algorithm", "python", "javascript",
-            "api", "database", "sql", "git", "repository"
+            "code",
+            "function",
+            "class",
+            "method",
+            "bug",
+            "debug",
+            "implementation",
+            "algorithm",
+            "python",
+            "javascript",
+            "api",
+            "database",
+            "sql",
+            "git",
+            "repository",
         ],
         "research": [
-            "research", "analyze", "study", "investigate", "explore",
-            "find", "search", "compare", "evaluate", "review",
-            "article", "paper", "data", "statistics"
+            "research",
+            "analyze",
+            "study",
+            "investigate",
+            "explore",
+            "find",
+            "search",
+            "compare",
+            "evaluate",
+            "review",
+            "article",
+            "paper",
+            "data",
+            "statistics",
         ],
         "finance": [
-            "stock", "trading", "portfolio", "investment", "market",
-            "price", "ticker", "financial", "crypto", "bitcoin",
-            "dividend", "return", "risk"
+            "stock",
+            "trading",
+            "portfolio",
+            "investment",
+            "market",
+            "price",
+            "ticker",
+            "financial",
+            "crypto",
+            "bitcoin",
+            "dividend",
+            "return",
+            "risk",
         ],
         "marketing": [
-            "marketing", "campaign", "content", "social media", "seo",
-            "advertising", "brand", "customer", "audience", "engagement"
+            "marketing",
+            "campaign",
+            "content",
+            "social media",
+            "seo",
+            "advertising",
+            "brand",
+            "customer",
+            "audience",
+            "engagement",
         ],
         "web": [
-            "website", "scraping", "browser", "html", "css", "dom",
-            "webpage", "url", "http", "screenshot"
+            "website",
+            "scraping",
+            "browser",
+            "html",
+            "css",
+            "dom",
+            "webpage",
+            "url",
+            "http",
+            "screenshot",
         ],
         "data": [
-            "dataset", "analytics", "visualization", "chart", "graph",
-            "statistics", "metrics", "dataframe", "csv", "analysis"
+            "dataset",
+            "analytics",
+            "visualization",
+            "chart",
+            "graph",
+            "statistics",
+            "metrics",
+            "dataframe",
+            "csv",
+            "analysis",
         ],
         "system": [
-            "error", "warning", "critical", "log", "exception",
-            "crash", "failure", "timeout", "performance"
-        ]
+            "error",
+            "warning",
+            "critical",
+            "log",
+            "exception",
+            "crash",
+            "failure",
+            "timeout",
+            "performance",
+        ],
     }
 
     @staticmethod
-    def tag_content(content: str) -> Set[str]:
+    def tag_content(content: str) -> set[str]:
         """
         Automatically tag content based on keywords
 
@@ -186,7 +274,7 @@ class MetadataTagger:
         return tags
 
     @staticmethod
-    def tag_log_entry(log_text: str, level: str) -> Dict:
+    def tag_log_entry(log_text: str, level: str) -> dict:
         """
         Tag a log entry with metadata
 
@@ -204,7 +292,7 @@ class MetadataTagger:
             "level": level,
             "timestamp": datetime.now().isoformat(),
             "length": len(log_text),
-            "has_stacktrace": "Traceback" in log_text or "Error:" in log_text
+            "has_stacktrace": "Traceback" in log_text or "Error:" in log_text,
         }
 
         # Add primary category (most relevant)
@@ -221,7 +309,7 @@ class MetadataTagger:
         return metadata
 
     @staticmethod
-    def filter_logs_by_tags(logs: List[Dict], required_tags: Set[str]) -> List[Dict]:
+    def filter_logs_by_tags(logs: list[dict], required_tags: set[str]) -> list[dict]:
         """Filter logs that contain any of the required tags"""
         filtered = []
         for log in logs:

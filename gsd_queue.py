@@ -19,13 +19,12 @@ Usage:
     q.run_pipeline()   # clarify → organize → engage next item
 """
 
-import os
-import json
-import time
-import logging
-import sqlite3
 import asyncio
-from dataclasses import dataclass, field, asdict
+import json
+import logging
+import os
+import sqlite3
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
@@ -36,23 +35,23 @@ DB_PATH = os.getenv("GSD_DB", "data/gsd_queue.db")
 
 
 class Stage(str, Enum):
-    CAPTURE  = "capture"
-    CLARIFY  = "clarify"
+    CAPTURE = "capture"
+    CLARIFY = "clarify"
     ORGANIZE = "organize"
-    REFLECT  = "reflect"
-    ENGAGE   = "engage"
-    DONE     = "done"
-    TRASH    = "trash"
+    REFLECT = "reflect"
+    ENGAGE = "engage"
+    DONE = "done"
+    TRASH = "trash"
 
 
 class Context(str, Enum):
-    CODE     = "@code"
+    CODE = "@code"
     RESEARCH = "@research"
-    REVENUE  = "@revenue"
-    DEPLOY   = "@deploy"
-    COMMS    = "@comms"
-    SOMEDAY  = "@someday"
-    NONE     = "@none"
+    REVENUE = "@revenue"
+    DEPLOY = "@deploy"
+    COMMS = "@comms"
+    SOMEDAY = "@someday"
+    NONE = "@none"
 
 
 @dataclass
@@ -60,14 +59,14 @@ class GSDItem:
     id: Optional[int] = None
     title: str = ""
     body: str = ""
-    source: str = "user"          # heartbeat | user | swarm | revenue_engine
+    source: str = "user"  # heartbeat | user | swarm | revenue_engine
     stage: str = Stage.CAPTURE
     context: str = Context.NONE
-    priority: int = 5             # 1 (highest) – 10 (lowest)
+    priority: int = 5  # 1 (highest) – 10 (lowest)
     actionable: Optional[bool] = None
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    meta: str = "{}"              # JSON blob for extra data
+    meta: str = "{}"  # JSON blob for extra data
 
 
 class GSDQueue:
@@ -106,18 +105,41 @@ class GSDQueue:
         with self._conn() as c:
             if item.id is None:
                 cur = c.execute(
-                    "INSERT INTO gsd_items (title,body,source,stage,context,priority,actionable,created_at,updated_at,meta) "
+                    "INSERT INTO gsd_items "
+                    "(title,body,source,stage,context,"
+                    "priority,actionable,"
+                    "created_at,updated_at,meta) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    (item.title, item.body, item.source, item.stage, item.context,
-                     item.priority, item.actionable, item.created_at, item.updated_at, item.meta),
+                    (
+                        item.title,
+                        item.body,
+                        item.source,
+                        item.stage,
+                        item.context,
+                        item.priority,
+                        item.actionable,
+                        item.created_at,
+                        item.updated_at,
+                        item.meta,
+                    ),
                 )
                 item.id = cur.lastrowid
             else:
                 c.execute(
                     "UPDATE gsd_items SET title=?,body=?,source=?,stage=?,context=?,priority=?,"
                     "actionable=?,updated_at=?,meta=? WHERE id=?",
-                    (item.title, item.body, item.source, item.stage, item.context,
-                     item.priority, item.actionable, item.updated_at, item.meta, item.id),
+                    (
+                        item.title,
+                        item.body,
+                        item.source,
+                        item.stage,
+                        item.context,
+                        item.priority,
+                        item.actionable,
+                        item.updated_at,
+                        item.meta,
+                        item.id,
+                    ),
                 )
             c.commit()
         return item.id
@@ -125,20 +147,32 @@ class GSDQueue:
     def _load(self, stage: Optional[str] = None, limit: int = 50) -> list[GSDItem]:
         with self._conn() as c:
             if stage:
-                rows = c.execute("SELECT * FROM gsd_items WHERE stage=? ORDER BY priority,created_at LIMIT ?",
-                                 (stage, limit)).fetchall()
+                rows = c.execute(
+                    "SELECT * FROM gsd_items WHERE stage=? ORDER BY priority,created_at LIMIT ?",
+                    (stage, limit),
+                ).fetchall()
             else:
-                rows = c.execute("SELECT * FROM gsd_items ORDER BY priority,created_at LIMIT ?",
-                                 (limit,)).fetchall()
+                rows = c.execute(
+                    "SELECT * FROM gsd_items ORDER BY priority,created_at LIMIT ?", (limit,)
+                ).fetchall()
         return [GSDItem(**dict(r)) for r in rows]
 
     # ── Stage 1: CAPTURE ─────────────────────────────────────────────────────
-    def capture(self, title: str, body: str = "", source: str = "user",
-                priority: int = 5, meta: dict | None = None) -> GSDItem:
+    def capture(
+        self,
+        title: str,
+        body: str = "",
+        source: str = "user",
+        priority: int = 5,
+        meta: dict | None = None,
+    ) -> GSDItem:
         """Drop anything into the inbox. Fast — no classification yet."""
         item = GSDItem(
-            title=title, body=body, source=source,
-            stage=Stage.CAPTURE, priority=priority,
+            title=title,
+            body=body,
+            source=source,
+            stage=Stage.CAPTURE,
+            priority=priority,
             meta=json.dumps(meta or {}),
         )
         self._save(item)
@@ -153,6 +187,7 @@ class GSDQueue:
         """
         try:
             from cognitive_core import CognitiveCore  # type: ignore
+
             core = CognitiveCore()
             result = core.classify_task(item.title + " " + item.body)
             item.actionable = result.get("actionable", True)
@@ -181,25 +216,30 @@ class GSDQueue:
         Falls back to keyword matching.
         """
         context_map = {
-            "code":     Context.CODE,
+            "code": Context.CODE,
             "scaffold": Context.CODE,
-            "debug":    Context.CODE,
+            "debug": Context.CODE,
             "research": Context.RESEARCH,
-            "search":   Context.RESEARCH,
-            "revenue":  Context.REVENUE,
-            "stripe":   Context.REVENUE,
-            "income":   Context.REVENUE,
-            "deploy":   Context.DEPLOY,
+            "search": Context.RESEARCH,
+            "revenue": Context.REVENUE,
+            "stripe": Context.REVENUE,
+            "income": Context.REVENUE,
+            "deploy": Context.DEPLOY,
             "cloudflare": Context.DEPLOY,
-            "email":    Context.COMMS,
-            "message":  Context.COMMS,
+            "email": Context.COMMS,
+            "message": Context.COMMS,
         }
         text = (item.title + " " + item.body).lower()
         assigned = Context.NONE
         try:
             from router import classify_task_context  # type: ignore
+
             assigned_str = classify_task_context(text)
-            assigned = Context(assigned_str) if assigned_str in Context._value2member_map_ else Context.NONE
+            assigned = (
+                Context(assigned_str)
+                if assigned_str in Context._value2member_map_
+                else Context.NONE
+            )
         except Exception:
             for keyword, ctx in context_map.items():
                 if keyword in text:
@@ -224,7 +264,9 @@ class GSDQueue:
         for r in rows:
             item = GSDItem(**dict(r))
             updated = datetime.fromisoformat(item.updated_at)
-            age_hours = (datetime.now(timezone.utc) - updated.replace(tzinfo=timezone.utc)).total_seconds() / 3600
+            age_hours = (
+                datetime.now(timezone.utc) - updated.replace(tzinfo=timezone.utc)
+            ).total_seconds() / 3600
             if age_hours > stale_hours:
                 stale.append(item)
                 logger.info(f"[GSD REFLECT] #{item.id} stale ({age_hours:.0f}h) — needs review")
@@ -243,6 +285,7 @@ class GSDQueue:
         logger.info(f"[GSD ENGAGE] executing #{item.id} [{item.context}] — {item.title}")
         try:
             from sub_agents import SubAgentManager  # type: ignore
+
             mgr = SubAgentManager()
             mgr.execute_task(
                 task_type=item.context.lstrip("@"),
@@ -300,14 +343,20 @@ async def push_gsd_step(
 
         def _insert_step():
             db = get_supabase()
-            return db.table("bm_mission_steps").insert({
-                "objective_id": objective_id,
-                "step_order": order,
-                "action": action,
-                "tool": tool,
-                "params": params,
-                "status": "pending",
-            }).execute()
+            return (
+                db.table("bm_mission_steps")
+                .insert(
+                    {
+                        "objective_id": objective_id,
+                        "step_order": order,
+                        "action": action,
+                        "tool": tool,
+                        "params": params,
+                        "status": "pending",
+                    }
+                )
+                .execute()
+            )
 
         await asyncio.to_thread(_insert_step)
     except Exception as e:

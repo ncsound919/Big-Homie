@@ -16,13 +16,13 @@ Usage:
   print(result["video_url"])
 """
 
-import os
 import asyncio
-import uuid
 import logging
+import os
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -30,24 +30,34 @@ OUTPUT_DIR = Path(os.getenv("MEDIA_OUTPUT_DIR", "~/.big_homie/media_outputs")).e
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 RAP_STYLES = {
-    "trap":       {"beat_prompt": "hard trap beat, 808 bass, hi-hats, dark synths, 140 BPM",
-                   "vocal_tone": "deep, melodic trap rap delivery"},
-    "boom_bap":   {"beat_prompt": "classic boom bap hip hop, punchy snare, jazz samples, 90 BPM",
-                   "vocal_tone": "lyrical, rhythmic, East Coast delivery"},
-    "drill":      {"beat_prompt": "UK/Chicago drill beat, sliding 808s, dark melody, 140 BPM",
-                   "vocal_tone": "aggressive, rhythmic drill cadence"},
-    "lo_fi_rap":  {"beat_prompt": "lo-fi hip hop instrumental, dusty samples, vinyl crackle, 85 BPM",
-                   "vocal_tone": "calm, introspective rap delivery"},
-    "afrobeats":  {"beat_prompt": "afrobeats fusion, talking drums, melodic guitar, 100 BPM",
-                   "vocal_tone": "melodic, soulful afro rap"},
+    "trap": {
+        "beat_prompt": "hard trap beat, 808 bass, hi-hats, dark synths, 140 BPM",
+        "vocal_tone": "deep, melodic trap rap delivery",
+    },
+    "boom_bap": {
+        "beat_prompt": "classic boom bap hip hop, punchy snare, jazz samples, 90 BPM",
+        "vocal_tone": "lyrical, rhythmic, East Coast delivery",
+    },
+    "drill": {
+        "beat_prompt": "UK/Chicago drill beat, sliding 808s, dark melody, 140 BPM",
+        "vocal_tone": "aggressive, rhythmic drill cadence",
+    },
+    "lo_fi_rap": {
+        "beat_prompt": "lo-fi hip hop instrumental, dusty samples, vinyl crackle, 85 BPM",
+        "vocal_tone": "calm, introspective rap delivery",
+    },
+    "afrobeats": {
+        "beat_prompt": "afrobeats fusion, talking drums, melodic guitar, 100 BPM",
+        "vocal_tone": "melodic, soulful afro rap",
+    },
 }
 
 VISUAL_MOODS = {
-    "trap":       "cinematic nighttime city streets, neon lights, luxury cars, slow motion",
-    "boom_bap":   "black and white New York City borough scenes, graffiti, vintage aesthetic",
-    "drill":      "dark urban environment, dramatic lighting, fast cuts, moody atmosphere",
-    "lo_fi_rap":  "cozy studio apartment, warm lighting, rain on window, chill atmosphere",
-    "afrobeats":  "vibrant African cityscape, colorful fashion, golden hour lighting, energy",
+    "trap": "cinematic nighttime city streets, neon lights, luxury cars, slow motion",
+    "boom_bap": "black and white New York City borough scenes, graffiti, vintage aesthetic",
+    "drill": "dark urban environment, dramatic lighting, fast cuts, moody atmosphere",
+    "lo_fi_rap": "cozy studio apartment, warm lighting, rain on window, chill atmosphere",
+    "afrobeats": "vibrant African cityscape, colorful fashion, golden hour lighting, energy",
 }
 
 
@@ -114,7 +124,9 @@ class RapVideoEngine:
             # ── Step 1: Generate Lyrics ───────────────────────────────────────────
             if custom_lyrics:
                 lyrics = custom_lyrics
-                logger.info(f"[RapVideo:{job_id}] Using custom lyrics ({len(lyrics.split())} words)")
+                logger.info(
+                    f"[RapVideo:{job_id}] Using custom lyrics ({len(lyrics.split())} words)"
+                )
             else:
                 lyrics = await self._generate_lyrics(theme, style, bars, style_data["vocal_tone"])
                 logger.info(f"[RapVideo:{job_id}] Lyrics generated ({bars} bars)")
@@ -141,9 +153,7 @@ class RapVideoEngine:
             logger.info(f"[RapVideo:{job_id}] {len(clip_paths)} visual clips generated")
 
             # ── Step 5: Stitch with FFmpeg ────────────────────────────────────────
-            video_path = await self._stitch_video(
-                job_id, beat_path, vocal_path, clip_paths
-            )
+            video_path = await self._stitch_video(job_id, beat_path, vocal_path, clip_paths)
             logger.info(f"[RapVideo:{job_id}] Video stitched: {video_path}")
 
             # ── Step 6: Upload to R2 (optional) ───────────────────────────────────
@@ -179,7 +189,8 @@ class RapVideoEngine:
     async def _generate_lyrics(self, theme: str, style: str, bars: int, vocal_tone: str) -> str:
         """Generate rap lyrics via LLM (routes through router.py)"""
         try:
-            from llm_gateway import llm, TaskType
+            from llm_gateway import TaskType, llm
+
             prompt = f"""Write {bars} bars of original rap lyrics.
 
 Theme: {theme}
@@ -194,12 +205,16 @@ Make it authentic, vivid, and specific. No generic filler lines."""
             )
             return response.content if hasattr(response, "content") else str(response)
         except ImportError:
-            return f"Big Homie on the beat, {theme} is the theme, building an empire chasing the dream."
+            return (
+                f"Big Homie on the beat, {theme} is the theme, "
+                "building an empire chasing the dream."
+            )
 
     async def _generate_beat(self, job_id: str, beat_prompt: str) -> tuple[str, float]:
         """Generate instrumental beat via media_generation.py (MiniMax or Google Lyria)"""
         try:
-            from media_generation import media_manager, MediaType
+            from media_generation import MediaType, media_manager
+
             result = await media_manager.generate_media(
                 media_type=MediaType.MUSIC,
                 prompt=beat_prompt,
@@ -224,13 +239,13 @@ Make it authentic, vivid, and specific. No generic filler lines."""
     async def _synthesize_vocals(self, job_id: str, lyrics: str) -> str:
         """Synthesize rap vocals via Bark TTS (local, free)"""
         try:
-            from bark import SAMPLE_RATE, generate_audio, preload_models
-            import soundfile as sf
             import numpy as np
+            import soundfile as sf
+            from bark import SAMPLE_RATE, generate_audio, preload_models
 
             preload_models()
             # Split lyrics into chunks (Bark handles ~250 chars max cleanly)
-            chunks = [lyrics[i:i+200] for i in range(0, len(lyrics), 200)]
+            chunks = [lyrics[i : i + 200] for i in range(0, len(lyrics), 200)]
             audio_arrays = []
             for chunk in chunks:
                 audio = generate_audio(f"[rap voice, rhythmic]{chunk}")
@@ -247,15 +262,18 @@ Make it authentic, vivid, and specific. No generic filler lines."""
             logger.warning(f"[RapVideo:{job_id}] Bark synthesis failed: {e}")
             return ""
 
-    async def _generate_visuals(self, job_id: str, theme: str, visual_mood: str, count: int) -> tuple[list, float]:
+    async def _generate_visuals(
+        self, job_id: str, theme: str, visual_mood: str, count: int
+    ) -> tuple[list, float]:
         """Generate video scene clips in parallel via MiniMax"""
         try:
-            from media_generation import media_manager, MediaType
-            from sub_agents import orchestrator
+            from media_generation import MediaType, media_manager
 
             prompts = [
-                f"Cinematic rap video scene {i+1} of {count}: {theme}. Visual style: {visual_mood}. "
-                f"Smooth camera movement, professional cinematography, 5 seconds."
+                f"Cinematic rap video scene {i + 1} of {count}: "
+                f"{theme}. Visual style: {visual_mood}. "
+                f"Smooth camera movement, professional "
+                f"cinematography, 5 seconds."
                 for i in range(count)
             ]
 
@@ -288,13 +306,16 @@ Make it authentic, vivid, and specific. No generic filler lines."""
             logger.warning(f"[RapVideo:{job_id}] Visual generation failed: {e}")
             return [], 0.0
 
-    async def _stitch_video(self, job_id: str, beat_path: str, vocal_path: str, clip_paths: list) -> str:
+    async def _stitch_video(
+        self, job_id: str, beat_path: str, vocal_path: str, clip_paths: list
+    ) -> str:
         """Stitch clips + audio with FFmpeg via persistent_shell.py"""
         if not clip_paths:
             logger.warning(f"[RapVideo:{job_id}] No clips to stitch")
             return ""
         try:
             from persistent_shell import shell
+
             output_path = str(OUTPUT_DIR / f"rap_video_{job_id}.mp4")
 
             # Build FFmpeg concat file
@@ -305,7 +326,7 @@ Make it authentic, vivid, and specific. No generic filler lines."""
 
             # Determine audio: prefer mixed vocals+beat, fallback to beat only
             if vocal_path and beat_path:
-                audio_filter = f'-filter_complex "[0:a][1:a]amix=inputs=2:duration=longest" '
+                audio_filter = '-filter_complex "[0:a][1:a]amix=inputs=2:duration=longest" '
                 audio_input = f'-i "{beat_path}" -i "{vocal_path}" '
             elif beat_path:
                 audio_input = f'-i "{beat_path}" '
@@ -315,11 +336,11 @@ Make it authentic, vivid, and specific. No generic filler lines."""
                 audio_filter = ""
 
             cmd = (
-                f'{self.ffmpeg_path} -y '
+                f"{self.ffmpeg_path} -y "
                 f'-f concat -safe 0 -i "{concat_file}" '
-                f'{audio_input}'
-                f'{audio_filter}'
-                f'-c:v libx264 -c:a aac -shortest '
+                f"{audio_input}"
+                f"{audio_filter}"
+                f"-c:v libx264 -c:a aac -shortest "
                 f'"{output_path}"'
             )
             result = await shell.run(cmd)
@@ -336,6 +357,7 @@ Make it authentic, vivid, and specific. No generic filler lines."""
         """Upload finished video to Cloudflare R2 and return public URL"""
         try:
             import boto3
+
             s3 = boto3.client(
                 "s3",
                 endpoint_url=f"https://{os.getenv('CF_ACCOUNT_ID')}.r2.cloudflarestorage.com",
@@ -356,6 +378,7 @@ Make it authentic, vivid, and specific. No generic filler lines."""
 # ─────────────────────────────────────────────────────────────────────────────
 
 _engine = RapVideoEngine()
+
 
 async def generate_rap_video(
     theme: str,

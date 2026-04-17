@@ -5,19 +5,22 @@ Usage:
     from gsd_router import gsd_router
     result = await gsd_router.dispatch("@rap make a trap video about hustling")
 """
+
 from __future__ import annotations
-import asyncio, re
-from typing import Any, Dict, Optional
+
+import asyncio
+import re
+from typing import Any
+
 from loguru import logger
 
-
 CONTEXT_PATTERNS = {
-    "@rap":      r"@rap|rap video|make.*video|generate.*video|music video",
-    "@content":  r"@content|write.*post|blog|thread|tiktok|script|newsletter|caption",
-    "@site":     r"@site|build.*site|create.*website|website|landing page",
-    "@code":     r"@code|write.*code|build.*app|implement|debug|opencode",
+    "@rap": r"@rap|rap video|make.*video|generate.*video|music video",
+    "@content": r"@content|write.*post|blog|thread|tiktok|script|newsletter|caption",
+    "@site": r"@site|build.*site|create.*website|website|landing page",
+    "@code": r"@code|write.*code|build.*app|implement|debug|opencode",
     "@research": r"@research|research|find|search|look up|analyse|report on",
-    "@revenue":  r"@revenue|earn|monetise|sell|billing|stripe|invoice",
+    "@revenue": r"@revenue|earn|monetise|sell|billing|stripe|invoice",
 }
 
 
@@ -34,21 +37,23 @@ class GSDRouter:
                 return ctx
         return "@general"
 
-    async def dispatch(self, task: str,
-                        brief_dict: Optional[Dict] = None) -> Dict[str, Any]:
+    async def dispatch(self, task: str, brief_dict: dict | None = None) -> dict[str, Any]:
         ctx = self.detect_context(task)
         logger.info(f"[GSDRouter] detected context={ctx} for task='{task[:80]}'")
 
         if ctx == "@rap":
             from rap_video_engine import handle_rap_request
+
             return await handle_rap_request(task)
 
         elif ctx == "@content":
             from content_factory import handle_content_request
+
             return await handle_content_request(task)
 
         elif ctx == "@site":
             from site_builder import handle_site_request
+
             return await handle_site_request(task, brief_dict)
 
         elif ctx == "@code":
@@ -63,34 +68,38 @@ class GSDRouter:
         else:
             return await self._handle_general(task)
 
-    async def _handle_code(self, task: str) -> Dict:
+    async def _handle_code(self, task: str) -> dict:
         try:
             from sub_agents import orchestrator
+
             result = await orchestrator.execute_task_with_sub_agents(task=task, parallel=False)
             return {"context": "@code", "result": result}
         except ImportError:
             return {"context": "@code", "result": f"[code stub for: {task}]"}
 
-    async def _handle_research(self, task: str) -> Dict:
+    async def _handle_research(self, task: str) -> dict:
         try:
             from sub_agents import orchestrator
+
             result = await orchestrator.execute_task_with_sub_agents(task=task, parallel=True)
             return {"context": "@research", "result": result}
         except ImportError:
             return {"context": "@research", "result": f"[research stub for: {task}]"}
 
-    async def _handle_revenue(self, task: str) -> Dict:
+    async def _handle_revenue(self, task: str) -> dict:
         try:
             from revenue_engine import RevenueEngine
+
             engine = RevenueEngine()
             report = engine.get_daily_report()
             return {"context": "@revenue", "report": str(report)}
         except ImportError:
             return {"context": "@revenue", "result": "[revenue stub]"}
 
-    async def _handle_general(self, task: str) -> Dict:
+    async def _handle_general(self, task: str) -> dict:
         try:
             from sub_agents import orchestrator
+
             result = await orchestrator.execute_task_with_sub_agents(task=task)
             return {"context": "@general", "result": result}
         except ImportError:
@@ -121,10 +130,13 @@ async def process_gsd_queue(queue_items: list) -> list:
 
 if __name__ == "__main__":
     import sys
+
     async def _run():
         task = " ".join(sys.argv[1:]) or "@content write a tiktok script about AI beats"
         print(f"\nDispatching: '{task}'\n")
         result = await gsd_router.dispatch(task)
         import json
+
         print(json.dumps(result, indent=2, default=str))
+
     asyncio.run(_run())

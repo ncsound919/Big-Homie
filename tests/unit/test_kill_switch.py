@@ -4,10 +4,10 @@ Unit tests for KillSwitch - Claw Protect crown jewel.
 Covers: trigger, recover, state capture, cascade halt.
 This module requires 100% branch coverage.
 """
+
 from __future__ import annotations
 
 import json
-import pytest
 
 
 class TestKillSwitch:
@@ -58,19 +58,19 @@ class TestKillSwitch:
 
     def test_kill_switch_with_cascade_stops_sub_processes(self, kill_switch):
         """Cascade halt should be callable without raising."""
-        if hasattr(kill_switch, 'trigger_cascade'):
+        if hasattr(kill_switch, "trigger_cascade"):
             kill_switch.trigger_cascade(reason="cascade_test")
             assert kill_switch.is_active() is False
 
     def test_status_method_exists(self, kill_switch):
         """KillSwitch must expose its current status."""
-        assert hasattr(kill_switch, 'is_active') or hasattr(kill_switch, 'status')
+        assert hasattr(kill_switch, "is_active") or hasattr(kill_switch, "status")
 
     def test_get_trigger_history(self, kill_switch):
         """Should be able to retrieve trigger history."""
         kill_switch.trigger(reason="history_1")
         kill_switch.recover()
         kill_switch.trigger(reason="history_2")
-        if hasattr(kill_switch, 'get_history'):
+        if hasattr(kill_switch, "get_history"):
             history = kill_switch.get_history()
             assert len(history) >= 2

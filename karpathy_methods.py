@@ -11,37 +11,41 @@ Implements Andrej Karpathy's key insights on LLM operational excellence:
 7. Constitutional Reviewer  – check outputs against a configurable principle set
 8. KarpathyEngine           – unified interface combining all techniques
 """
+
 import asyncio
 import json
 import uuid
-from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any, Optional
+
 from loguru import logger
 
 from config import settings
-
 
 # ============================================================
 # Data Classes
 # ============================================================
 
+
 class TaskNature(str, Enum):
     """Nature of a task, used for temperature calibration."""
-    FACTUAL = "factual"         # Deterministic: exact answers, maths, facts → T≈0
+
+    FACTUAL = "factual"  # Deterministic: exact answers, maths, facts → T≈0
     ANALYTICAL = "analytical"  # Structured: code, logic, planning → T≈0.2
-    BALANCED = "balanced"       # Mixed: summarisation, Q&A → T≈0.5
-    CREATIVE = "creative"       # Open-ended: brainstorm, stories, design → T≈0.9
-    EXPLORATORY = "exploratory" # Max diversity wanted → T≈1.0
+    BALANCED = "balanced"  # Mixed: summarisation, Q&A → T≈0.5
+    CREATIVE = "creative"  # Open-ended: brainstorm, stories, design → T≈0.9
+    EXPLORATORY = "exploratory"  # Max diversity wanted → T≈1.0
 
 
 @dataclass
 class ScratchpadResult:
     """Result from scratchpad reasoning."""
+
     trace_id: str
     query: str
-    scratchpad: str          # Private thinking (not shown to user by default)
+    scratchpad: str  # Private thinking (not shown to user by default)
     final_answer: str
     confidence: float
     model: str = ""
@@ -52,6 +56,7 @@ class ScratchpadResult:
 @dataclass
 class DraftCandidate:
     """A single candidate produced by Best-of-N sampling."""
+
     draft_id: str
     content: str
     score: float = 0.0
@@ -62,9 +67,10 @@ class DraftCandidate:
 @dataclass
 class BestOfNResult:
     """Result from Best-of-N sampling."""
+
     query: str
     best_draft: DraftCandidate
-    all_drafts: List[DraftCandidate]
+    all_drafts: list[DraftCandidate]
     n: int
     cost: float = 0.0
 
@@ -72,11 +78,12 @@ class BestOfNResult:
 @dataclass
 class FewShotExample:
     """A single few-shot example in the library."""
+
     example_id: str
     task_type: str
     input_text: str
     output_text: str
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     quality_score: float = 1.0
     usage_count: int = 0
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -85,9 +92,10 @@ class FewShotExample:
 @dataclass
 class StepScore:
     """Score for a single reasoning step from the Process Reward Model."""
+
     step_number: int
     step_text: str
-    score: float          # 0.0 – 1.0
+    score: float  # 0.0 – 1.0
     is_valid: bool
     critique: str = ""
 
@@ -95,8 +103,9 @@ class StepScore:
 @dataclass
 class PRMResult:
     """Result from the Process Reward Model."""
+
     query: str
-    step_scores: List[StepScore]
+    step_scores: list[StepScore]
     overall_score: float
     weakest_step: Optional[StepScore] = None
     passed_threshold: bool = False
@@ -105,6 +114,7 @@ class PRMResult:
 @dataclass
 class DebateRound:
     """One round of a self-play debate."""
+
     round_number: int
     proposition: str
     critique: str
@@ -114,8 +124,9 @@ class DebateRound:
 @dataclass
 class DebateResult:
     """Result of a self-play debate."""
+
     topic: str
-    rounds: List[DebateRound]
+    rounds: list[DebateRound]
     final_verdict: str
     confidence: float
     cost: float = 0.0
@@ -124,6 +135,7 @@ class DebateResult:
 @dataclass
 class ConstitutionalCheck:
     """Result of a single constitutional principle check."""
+
     principle: str
     passed: bool
     violation_description: str = ""
@@ -133,9 +145,10 @@ class ConstitutionalCheck:
 @dataclass
 class ConstitutionalResult:
     """Result from the Constitutional Reviewer."""
+
     original_output: str
     final_output: str
-    checks: List[ConstitutionalCheck]
+    checks: list[ConstitutionalCheck]
     revision_count: int
     all_passed: bool
     cost: float = 0.0
@@ -144,6 +157,7 @@ class ConstitutionalResult:
 # ============================================================
 # 1. Temperature Calibrator
 # ============================================================
+
 
 class TemperatureCalibrator:
     """
@@ -155,33 +169,76 @@ class TemperatureCalibrator:
     """
 
     # Keywords that hint at each nature
-    NATURE_KEYWORDS: Dict[TaskNature, List[str]] = {
+    NATURE_KEYWORDS: dict[TaskNature, list[str]] = {
         TaskNature.FACTUAL: [
-            "what is", "when did", "how many", "calculate", "compute",
-            "fact", "true or false", "definition", "formula", "convert",
-            "exact", "precisely"
+            "what is",
+            "when did",
+            "how many",
+            "calculate",
+            "compute",
+            "fact",
+            "true or false",
+            "definition",
+            "formula",
+            "convert",
+            "exact",
+            "precisely",
         ],
         TaskNature.ANALYTICAL: [
-            "code", "implement", "debug", "fix", "analyse", "analyze",
-            "compare", "evaluate", "plan", "design", "algorithm",
-            "logic", "explain why", "reasoning"
+            "code",
+            "implement",
+            "debug",
+            "fix",
+            "analyse",
+            "analyze",
+            "compare",
+            "evaluate",
+            "plan",
+            "design",
+            "algorithm",
+            "logic",
+            "explain why",
+            "reasoning",
         ],
         TaskNature.BALANCED: [
-            "summarise", "summarize", "explain", "describe", "review",
-            "translate", "rewrite", "list", "what are the", "pros and cons"
+            "summarise",
+            "summarize",
+            "explain",
+            "describe",
+            "review",
+            "translate",
+            "rewrite",
+            "list",
+            "what are the",
+            "pros and cons",
         ],
         TaskNature.CREATIVE: [
-            "brainstorm", "generate ideas", "creative", "imagine", "story",
-            "write a", "compose", "invent", "suggest alternatives", "possibilities"
+            "brainstorm",
+            "generate ideas",
+            "creative",
+            "imagine",
+            "story",
+            "write a",
+            "compose",
+            "invent",
+            "suggest alternatives",
+            "possibilities",
         ],
         TaskNature.EXPLORATORY: [
-            "explore", "what if", "hypothetically", "speculate", "unconventional",
-            "diverse", "varied", "many different", "unexpected"
+            "explore",
+            "what if",
+            "hypothetically",
+            "speculate",
+            "unconventional",
+            "diverse",
+            "varied",
+            "many different",
+            "unexpected",
         ],
     }
 
     @property
-    def TEMPERATURE_MAP(self) -> Dict[TaskNature, float]:
+    def TEMPERATURE_MAP(self) -> dict[TaskNature, float]:  # noqa: N802
         """Temperature map populated from settings, with hard-coded fallbacks."""
         return {
             TaskNature.FACTUAL: getattr(settings, "karpathy_temp_factual", 0.0),
@@ -194,7 +251,7 @@ class TemperatureCalibrator:
     def classify_task(self, task: str) -> TaskNature:
         """Classify a task into a nature category by keyword heuristics."""
         task_lower = task.lower()
-        scores: Dict[TaskNature, int] = {n: 0 for n in TaskNature}
+        scores: dict[TaskNature, int] = dict.fromkeys(TaskNature, 0)
 
         for nature, keywords in self.NATURE_KEYWORDS.items():
             for kw in keywords:
@@ -207,11 +264,7 @@ class TemperatureCalibrator:
 
         return best
 
-    def get_temperature(
-        self,
-        task: str,
-        override_nature: Optional[TaskNature] = None
-    ) -> float:
+    def get_temperature(self, task: str, override_nature: Optional[TaskNature] = None) -> float:
         """Return the calibrated temperature for a given task."""
         nature = override_nature or self.classify_task(task)
         base_temp = self.TEMPERATURE_MAP[nature]
@@ -226,11 +279,11 @@ class TemperatureCalibrator:
     def get_temperature_for_role(self, role: str) -> float:
         """Return temperature appropriate for an agent role."""
         role_temps = {
-            "architect": 0.2,    # Structured planning
-            "worker": 0.0,       # Deterministic execution
-            "coder": 0.1,        # Mostly deterministic code
-            "researcher": 0.4,   # Some exploration
-            "creative": 0.9,     # Maximum creativity
+            "architect": 0.2,  # Structured planning
+            "worker": 0.0,  # Deterministic execution
+            "coder": 0.1,  # Mostly deterministic code
+            "researcher": 0.4,  # Some exploration
+            "creative": 0.9,  # Maximum creativity
         }
         return role_temps.get(role.lower(), settings.temperature)
 
@@ -238,6 +291,7 @@ class TemperatureCalibrator:
 # ============================================================
 # 2. Scratchpad Reasoner
 # ============================================================
+
 
 class ScratchpadReasoner:
     """
@@ -274,14 +328,12 @@ Always respond in this JSON format:
     def _get_router(self):
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
     async def think(
-        self,
-        query: str,
-        context: Optional[Dict] = None,
-        temperature: Optional[float] = None
+        self, query: str, context: Optional[dict] = None, temperature: Optional[float] = None
     ) -> ScratchpadResult:
         """
         Reason about a query using a private scratchpad.
@@ -306,7 +358,7 @@ Use your scratchpad to reason carefully before answering."""
         decision, result = await self._get_router().execute_with_routing(
             task=prompt,
             context={"requires_reasoning": True, "system_override": self.SCRATCHPAD_SYSTEM},
-            temperature=temp
+            temperature=temp,
         )
 
         content = result.get("content", "")
@@ -334,10 +386,10 @@ Use your scratchpad to reason carefully before answering."""
             final_answer=final_answer,
             confidence=confidence,
             model=decision.model,
-            cost=decision.estimated_cost
+            cost=decision.estimated_cost,
         )
 
-    def _parse_json(self, content: str) -> Optional[Dict]:
+    def _parse_json(self, content: str) -> Optional[dict]:
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -353,6 +405,7 @@ Use your scratchpad to reason carefully before answering."""
 # ============================================================
 # 3. Best-of-N Sampler
 # ============================================================
+
 
 class BestOfNSampler:
     """
@@ -371,6 +424,7 @@ class BestOfNSampler:
     def _get_router(self):
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
@@ -379,8 +433,8 @@ class BestOfNSampler:
         query: str,
         n: Optional[int] = None,
         temperature: float = 0.7,
-        context: Optional[Dict] = None,
-        scoring_criteria: Optional[List[str]] = None
+        context: Optional[dict] = None,
+        scoring_criteria: Optional[list[str]] = None,
     ) -> BestOfNResult:
         """
         Generate N drafts and return the best-scoring one.
@@ -400,24 +454,21 @@ class BestOfNSampler:
             "Accuracy and correctness",
             "Clarity and completeness",
             "Addresses all parts of the question",
-            "No unnecessary hedging or verbosity"
+            "No unnecessary hedging or verbosity",
         ]
 
         logger.info(f"Best-of-N sampling: generating {n} drafts at T={temperature}")
 
         # Generate N drafts concurrently
-        draft_tasks = [
-            self._generate_draft(query, temperature, context, i)
-            for i in range(n)
-        ]
+        draft_tasks = [self._generate_draft(query, temperature, context, i) for i in range(n)]
         raw_drafts = await asyncio.gather(*draft_tasks, return_exceptions=True)
 
-        drafts: List[DraftCandidate] = []
+        drafts: list[DraftCandidate] = []
         total_cost = 0.0
 
         for i, draft in enumerate(raw_drafts):
             if isinstance(draft, Exception):
-                logger.warning(f"Draft {i+1} failed: {draft}")
+                logger.warning(f"Draft {i + 1} failed: {draft}")
                 continue
             drafts.append(draft)
 
@@ -427,8 +478,7 @@ class BestOfNSampler:
         # Accumulate successful draft-generation costs
         total_cost = sum(float(getattr(d, "cost", 0.0) or 0.0) for d in drafts)
         draft_cost_by_id = {
-            getattr(d, "id", i): float(getattr(d, "cost", 0.0) or 0.0)
-            for i, d in enumerate(drafts)
+            getattr(d, "id", i): float(getattr(d, "cost", 0.0) or 0.0) for i, d in enumerate(drafts)
         }
 
         # Score all drafts
@@ -448,43 +498,30 @@ class BestOfNSampler:
 
         logger.info(
             f"Best-of-N complete: best score={best.score:.2f} "
-            f"(avg={sum(d.score for d in scored_drafts)/len(scored_drafts):.2f})"
+            f"(avg={sum(d.score for d in scored_drafts) / len(scored_drafts):.2f})"
         )
 
         return BestOfNResult(
-            query=query,
-            best_draft=best,
-            all_drafts=scored_drafts,
-            n=n,
-            cost=total_cost
+            query=query, best_draft=best, all_drafts=scored_drafts, n=n, cost=total_cost
         )
 
     async def _generate_draft(
-        self,
-        query: str,
-        temperature: float,
-        context: Optional[Dict],
-        draft_index: int
+        self, query: str, temperature: float, context: Optional[dict], draft_index: int
     ) -> DraftCandidate:
         """Generate a single draft."""
         decision, result = await self._get_router().execute_with_routing(
-            task=query,
-            context=context,
-            temperature=temperature
+            task=query, context=context, temperature=temperature
         )
 
         return DraftCandidate(
             draft_id=str(uuid.uuid4()),
             content=result.get("content", ""),
-            temperature_used=temperature
+            temperature_used=temperature,
         )
 
     async def _score_drafts(
-        self,
-        query: str,
-        drafts: List[DraftCandidate],
-        criteria: List[str]
-    ) -> List[DraftCandidate]:
+        self, query: str, drafts: list[DraftCandidate], criteria: list[str]
+    ) -> list[DraftCandidate]:
         """Score all drafts using an LLM judge."""
         if len(drafts) == 1:
             drafts[0].score = 1.0
@@ -492,11 +529,13 @@ class BestOfNSampler:
             return drafts
 
         drafts_text = "\n\n".join(
-            f"=== Draft {i+1} ===\n{d.content}"
-            for i, d in enumerate(drafts)
+            f"=== Draft {i + 1} ===\n{d.content}" for i, d in enumerate(drafts)
         )
 
-        scoring_prompt = f"""You are a strict judge. Score these {len(drafts)} responses to the question below.
+        n_drafts = len(drafts)
+        scoring_prompt = f"""\
+You are a strict judge. Score these \
+{n_drafts} responses to the question below.
 
 Question: {query}
 
@@ -517,8 +556,7 @@ Respond in JSON:
 }}"""
 
         _, judge_result = await self._get_router().execute_with_routing(
-            task=scoring_prompt,
-            context={"requires_reasoning": True}
+            task=scoring_prompt, context={"requires_reasoning": True}
         )
 
         parsed = self._parse_json(judge_result.get("content", ""))
@@ -535,7 +573,7 @@ Respond in JSON:
 
         return drafts
 
-    def _parse_json(self, content: str) -> Optional[Dict]:
+    def _parse_json(self, content: str) -> Optional[dict]:
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -552,6 +590,7 @@ Respond in JSON:
 # 4. Few-Shot Library
 # ============================================================
 
+
 class FewShotLibrary:
     """
     Karpathy insight: "Few-shot prompting is enormously powerful because
@@ -564,71 +603,104 @@ class FewShotLibrary:
     """
 
     # Built-in seed examples
-    SEED_EXAMPLES: List[Dict] = [
+    SEED_EXAMPLES: list[dict] = [
         {
             "task_type": "code_review",
             "input": "Review this Python function for bugs:\ndef divide(a, b):\n    return a / b",
-            "output": "Issue: Division by zero not handled. Fix:\ndef divide(a, b):\n    if b == 0:\n        raise ValueError('Division by zero')\n    return a / b",
-            "tags": ["code", "review", "python", "bug"]
+            "output": (
+                "Issue: Division by zero not handled. Fix:\n"
+                "def divide(a, b):\n"
+                "    if b == 0:\n"
+                "        raise ValueError('Division by zero')\n"
+                "    return a / b"
+            ),
+            "tags": ["code", "review", "python", "bug"],
         },
         {
             "task_type": "summarization",
-            "input": "Summarize: The Federal Reserve raised interest rates by 0.25% in a unanimous vote, citing continued inflation pressures above the 2% target.",
+            "input": (
+                "Summarize: The Federal Reserve raised"
+                " interest rates by 0.25% in a unanimous"
+                " vote, citing continued inflation"
+                " pressures above the 2% target."
+            ),
             "output": "The Fed raised rates by 0.25% due to persistent above-target inflation.",
-            "tags": ["summarize", "finance", "concise"]
+            "tags": ["summarize", "finance", "concise"],
         },
         {
             "task_type": "reasoning",
-            "input": "If all Bloops are Razzies and all Razzies are Lazzies, are all Bloops definitely Lazzies?",
-            "output": "Yes. By transitivity: Bloop → Razzie → Lazzie. Therefore all Bloops are Lazzies.",
-            "tags": ["logic", "reasoning", "syllogism"]
+            "input": (
+                "If all Bloops are Razzies and all"
+                " Razzies are Lazzies, are all"
+                " Bloops definitely Lazzies?"
+            ),
+            "output": (
+                "Yes. By transitivity: Bloop → Razzie → Lazzie. Therefore all Bloops are Lazzies."
+            ),
+            "tags": ["logic", "reasoning", "syllogism"],
         },
         {
             "task_type": "data_extraction",
-            "input": "Extract name and email: 'Contact John Smith at john@example.com for more info.'",
+            "input": (
+                "Extract name and email: 'Contact John Smith at john@example.com for more info.'"
+            ),
             "output": '{"name": "John Smith", "email": "john@example.com"}',
-            "tags": ["extraction", "structured", "json"]
+            "tags": ["extraction", "structured", "json"],
         },
         {
             "task_type": "planning",
             "input": "Plan a task: Deploy a new API to production.",
-            "output": "1. Code review & tests pass\n2. Staging deploy & smoke test\n3. Feature flag rollout (10% → 50% → 100%)\n4. Monitor error rates\n5. Rollback plan ready",
-            "tags": ["planning", "deployment", "steps"]
+            "output": (
+                "1. Code review & tests pass\n"
+                "2. Staging deploy & smoke test\n"
+                "3. Feature flag rollout"
+                " (10% → 50% → 100%)\n"
+                "4. Monitor error rates\n"
+                "5. Rollback plan ready"
+            ),
+            "tags": ["planning", "deployment", "steps"],
         },
         {
             "task_type": "classification",
-            "input": "Classify sentiment: 'The product was absolutely terrible and broke after one day.'",
+            "input": (
+                "Classify sentiment: 'The product was absolutely terrible and broke after one day.'"
+            ),
             "output": '{"sentiment": "negative", "intensity": "strong", "confidence": 0.97}',
-            "tags": ["classification", "sentiment", "json"]
+            "tags": ["classification", "sentiment", "json"],
         },
     ]
 
     def __init__(self):
-        self._examples: List[FewShotExample] = []
+        self._examples: list[FewShotExample] = []
         self._embedder = None
-        self._embeddings: List[Any] = []
+        self._embeddings: list[Any] = []
         self._load_seeds()
 
     def _load_seeds(self):
         for seed in self.SEED_EXAMPLES:
-            self._examples.append(FewShotExample(
-                example_id=str(uuid.uuid4()),
-                task_type=seed["task_type"],
-                input_text=seed["input"],
-                output_text=seed["output"],
-                tags=seed.get("tags", [])
-            ))
+            self._examples.append(
+                FewShotExample(
+                    example_id=str(uuid.uuid4()),
+                    task_type=seed["task_type"],
+                    input_text=seed["input"],
+                    output_text=seed["output"],
+                    tags=seed.get("tags", []),
+                )
+            )
 
     def _get_embedder(self):
         if self._embedder is None:
             try:
                 from sentence_transformers import SentenceTransformer
+
                 self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
                 # Pre-compute embeddings for seed examples
                 texts = [f"{e.task_type} {e.input_text}" for e in self._examples]
                 self._embeddings = self._embedder.encode(texts).tolist()
             except ImportError:
-                logger.warning("sentence-transformers not available; few-shot uses keyword matching")
+                logger.warning(
+                    "sentence-transformers not available; few-shot uses keyword matching"
+                )
         return self._embedder
 
     def add_example(
@@ -636,8 +708,8 @@ class FewShotLibrary:
         task_type: str,
         input_text: str,
         output_text: str,
-        tags: Optional[List[str]] = None,
-        quality_score: float = 1.0
+        tags: Optional[list[str]] = None,
+        quality_score: float = 1.0,
     ) -> str:
         """Add a new example to the library."""
         example = FewShotExample(
@@ -646,25 +718,20 @@ class FewShotLibrary:
             input_text=input_text,
             output_text=output_text,
             tags=tags or [],
-            quality_score=quality_score
+            quality_score=quality_score,
         )
         self._examples.append(example)
 
         # Re-embed if embedder is active
         if self._embedder:
-            new_emb = self._embedder.encode(
-                [f"{task_type} {input_text}"]
-            ).tolist()
+            new_emb = self._embedder.encode([f"{task_type} {input_text}"]).tolist()
             self._embeddings.append(new_emb[0])
 
         return example.example_id
 
     def retrieve(
-        self,
-        query: str,
-        k: int = 3,
-        task_type: Optional[str] = None
-    ) -> List[FewShotExample]:
+        self, query: str, k: int = 3, task_type: Optional[str] = None
+    ) -> list[FewShotExample]:
         """
         Retrieve the k most relevant examples for a query.
 
@@ -684,22 +751,21 @@ class FewShotLibrary:
             # Vector similarity retrieval
             query_emb = embedder.encode([query])[0]
             import numpy as np
+
             query_vec = np.array(query_emb)
 
             # Build an index from example → its embedding position in self._embeddings
-            example_index: Dict[int, int] = {
-                id(ex): i for i, ex in enumerate(self._examples)
-            }
+            example_index: dict[int, int] = {id(ex): i for i, ex in enumerate(self._examples)}
 
-            scored: List[Tuple[float, FewShotExample]] = []
+            scored: list[tuple[float, FewShotExample]] = []
             for example in candidates:
                 emb_pos = example_index.get(id(example))
                 if emb_pos is None:
                     continue
                 emb_vec = np.array(self._embeddings[emb_pos])
                 sim = float(
-                    np.dot(query_vec, emb_vec) /
-                    (np.linalg.norm(query_vec) * np.linalg.norm(emb_vec) + 1e-8)
+                    np.dot(query_vec, emb_vec)
+                    / (np.linalg.norm(query_vec) * np.linalg.norm(emb_vec) + 1e-8)
                 )
                 scored.append((sim * example.quality_score, example))
 
@@ -721,7 +787,7 @@ class FewShotLibrary:
         query: str,
         k: int = 3,
         task_type: Optional[str] = None,
-        format_fn: Optional[Any] = None
+        format_fn: Optional[Any] = None,
     ) -> str:
         """
         Retrieve examples and format them as a few-shot block for insertion
@@ -757,6 +823,7 @@ class FewShotLibrary:
 # 5. Process Reward Model (PRM)
 # ============================================================
 
+
 class ProcessRewardModel:
     """
     Karpathy insight (from o1 / AlphaCode discussion):
@@ -775,14 +842,12 @@ class ProcessRewardModel:
     def _get_router(self):
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
     async def score_steps(
-        self,
-        query: str,
-        steps: List[str],
-        threshold: Optional[float] = None
+        self, query: str, steps: list[str], threshold: Optional[float] = None
     ) -> PRMResult:
         """
         Score a list of reasoning steps for logical validity.
@@ -797,9 +862,7 @@ class ProcessRewardModel:
         """
         thresh = threshold or getattr(settings, "karpathy_prm_threshold", self.DEFAULT_THRESHOLD)
 
-        steps_text = "\n".join(
-            f"Step {i+1}: {s}" for i, s in enumerate(steps)
-        )
+        steps_text = "\n".join(f"Step {i + 1}: {s}" for i, s in enumerate(steps))
 
         scoring_prompt = f"""You are a process reward model. Evaluate each reasoning step for:
 1. Logical validity – does it follow from previous steps?
@@ -817,42 +880,41 @@ Respond in JSON:
 {{
     "step_scores": [
         {{"step": 1, "score": 0.95, "is_valid": true, "critique": "Correct and clear"}},
-        {{"step": 2, "score": 0.42, "is_valid": false, "critique": "This step makes an unwarranted assumption..."}}
+        {{"step": 2, "score": 0.42, "is_valid": false, \
+"critique": "This step makes an unwarranted assumption..."}}
     ],
     "overall_score": 0.78
 }}"""
 
         _, result = await self._get_router().execute_with_routing(
-            task=scoring_prompt,
-            context={"requires_reasoning": True}
+            task=scoring_prompt, context={"requires_reasoning": True}
         )
 
         content = result.get("content", "")
         parsed = self._parse_json(content)
 
-        step_scores: List[StepScore] = []
+        step_scores: list[StepScore] = []
 
         if parsed:
             for ss in parsed.get("step_scores", []):
                 step_num = ss.get("step", 0) - 1
                 step_text = steps[step_num] if 0 <= step_num < len(steps) else ""
-                step_scores.append(StepScore(
-                    step_number=ss.get("step", step_num + 1),
-                    step_text=step_text,
-                    score=float(ss.get("score", 0.5)),
-                    is_valid=bool(ss.get("is_valid", True)),
-                    critique=ss.get("critique", "")
-                ))
+                step_scores.append(
+                    StepScore(
+                        step_number=ss.get("step", step_num + 1),
+                        step_text=step_text,
+                        score=float(ss.get("score", 0.5)),
+                        is_valid=bool(ss.get("is_valid", True)),
+                        critique=ss.get("critique", ""),
+                    )
+                )
             overall_score = float(parsed.get("overall_score", 0.5))
         else:
             # Fallback: score everything as neutral
             for i, s in enumerate(steps):
-                step_scores.append(StepScore(
-                    step_number=i + 1,
-                    step_text=s,
-                    score=0.5,
-                    is_valid=True
-                ))
+                step_scores.append(
+                    StepScore(step_number=i + 1, step_text=s, score=0.5, is_valid=True)
+                )
             overall_score = 0.5
 
         weakest = min(step_scores, key=lambda s: s.score) if step_scores else None
@@ -863,10 +925,10 @@ Respond in JSON:
             step_scores=step_scores,
             overall_score=overall_score,
             weakest_step=weakest,
-            passed_threshold=passed
+            passed_threshold=passed,
         )
 
-    def _parse_json(self, content: str) -> Optional[Dict]:
+    def _parse_json(self, content: str) -> Optional[dict]:
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -882,6 +944,7 @@ Respond in JSON:
 # ============================================================
 # 6. Self-Play Debate
 # ============================================================
+
 
 class SelfPlayDebate:
     """
@@ -901,14 +964,12 @@ class SelfPlayDebate:
     def _get_router(self):
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
     async def debate(
-        self,
-        topic: str,
-        rounds: Optional[int] = None,
-        context: Optional[Dict] = None
+        self, topic: str, rounds: Optional[int] = None, context: Optional[dict] = None
     ) -> DebateResult:
         """
         Run a structured debate on a topic to arrive at a well-reasoned answer.
@@ -922,7 +983,7 @@ class SelfPlayDebate:
             DebateResult with full debate transcript and final verdict
         """
         num_rounds = rounds or getattr(settings, "karpathy_debate_rounds", self.DEFAULT_ROUNDS)
-        debate_rounds: List[DebateRound] = []
+        debate_rounds: list[DebateRound] = []
         total_cost = 0.0
 
         context_str = f"\n\nContext: {json.dumps(context)}" if context else ""
@@ -936,8 +997,7 @@ State your position clearly and provide your strongest arguments in support.
 Be specific, use evidence and logical reasoning."""
 
         _, prop_result = await self._get_router().execute_with_routing(
-            task=prop_prompt,
-            context={"requires_reasoning": True}
+            task=prop_prompt, context={"requires_reasoning": True}
         )
         proposition = prop_result.get("content", "")
 
@@ -954,8 +1014,7 @@ Your role: Identify weaknesses, logical flaws, missing evidence, or alternative 
 Be rigorous and specific. This is round {round_num} of {num_rounds}."""
 
             _, crit_result = await self._get_router().execute_with_routing(
-                task=crit_prompt,
-                context={"requires_reasoning": True}
+                task=crit_prompt, context={"requires_reasoning": True}
             )
             critique = crit_result.get("content", "")
 
@@ -968,8 +1027,7 @@ Defend your position, concede valid points, and strengthen your argument.
 Topic: {topic}"""
 
             _, rebut_result = await self._get_router().execute_with_routing(
-                task=rebut_prompt,
-                context={"requires_reasoning": True}
+                task=rebut_prompt, context={"requires_reasoning": True}
             )
             rebuttal = rebut_result.get("content", "")
 
@@ -977,12 +1035,14 @@ Topic: {topic}"""
             round_proposition = proposition
             proposition = rebuttal  # Updated position for next round
 
-            debate_rounds.append(DebateRound(
-                round_number=round_num,
-                proposition=round_proposition,
-                critique=critique,
-                rebuttal=rebuttal
-            ))
+            debate_rounds.append(
+                DebateRound(
+                    round_number=round_num,
+                    proposition=round_proposition,
+                    critique=critique,
+                    rebuttal=rebuttal,
+                )
+            )
 
         # Judge delivers verdict
         debate_transcript = "\n\n".join(
@@ -1013,8 +1073,7 @@ Respond in JSON:
 }}"""
 
         _, judge_result = await self._get_router().execute_with_routing(
-            task=judge_prompt,
-            context={"requires_reasoning": True}
+            task=judge_prompt, context={"requires_reasoning": True}
         )
 
         judge_content = judge_result.get("content", "")
@@ -1032,10 +1091,10 @@ Respond in JSON:
             rounds=debate_rounds,
             final_verdict=verdict,
             confidence=confidence,
-            cost=total_cost
+            cost=total_cost,
         )
 
-    def _parse_json(self, content: str) -> Optional[Dict]:
+    def _parse_json(self, content: str) -> Optional[dict]:
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -1051,6 +1110,7 @@ Respond in JSON:
 # ============================================================
 # 7. Constitutional Reviewer
 # ============================================================
+
 
 class ConstitutionalReviewer:
     """
@@ -1071,13 +1131,14 @@ class ConstitutionalReviewer:
         "The response acknowledges uncertainty when applicable.",
     ]
 
-    def __init__(self, principles: Optional[List[str]] = None):
+    def __init__(self, principles: Optional[list[str]] = None):
         self.principles = principles or self.DEFAULT_PRINCIPLES
         self._router = None
 
     def _get_router(self):
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
@@ -1092,7 +1153,7 @@ class ConstitutionalReviewer:
         output: str,
         original_query: str,
         max_revisions: int = 2,
-        custom_principles: Optional[List[str]] = None
+        custom_principles: Optional[list[str]] = None,
     ) -> ConstitutionalResult:
         """
         Review output against the constitution and revise if needed.
@@ -1108,13 +1169,15 @@ class ConstitutionalReviewer:
         """
         active_principles = custom_principles or self.principles
         current_output = output
-        all_checks: List[ConstitutionalCheck] = []
+        all_checks: list[ConstitutionalCheck] = []
         revision_count = 0
         total_cost = 0.0
 
         for _revision in range(max_revisions + 1):
             # Check each principle
-            check_prompt = f"""You are a constitutional reviewer. Check this response against each principle.
+            check_prompt = f"""\
+You are a constitutional reviewer. \
+Check this response against each principle.
 
 Original query: {original_query}
 
@@ -1140,14 +1203,13 @@ Respond in JSON:
 }}"""
 
             _, check_result = await self._get_router().execute_with_routing(
-                task=check_prompt,
-                context={"requires_reasoning": True}
+                task=check_prompt, context={"requires_reasoning": True}
             )
 
             content = check_result.get("content", "")
             parsed = self._parse_json(content)
 
-            cycle_checks: List[ConstitutionalCheck] = []
+            cycle_checks: list[ConstitutionalCheck] = []
             all_passed = True
 
             if parsed:
@@ -1155,12 +1217,14 @@ Respond in JSON:
                     passed = bool(check_data.get("passed", True))
                     if not passed:
                         all_passed = False
-                    cycle_checks.append(ConstitutionalCheck(
-                        principle=check_data.get("principle", ""),
-                        passed=passed,
-                        violation_description=check_data.get("violation", ""),
-                        revised_output=check_data.get("suggested_revision", "")
-                    ))
+                    cycle_checks.append(
+                        ConstitutionalCheck(
+                            principle=check_data.get("principle", ""),
+                            passed=passed,
+                            violation_description=check_data.get("violation", ""),
+                            revised_output=check_data.get("suggested_revision", ""),
+                        )
+                    )
                 all_passed = parsed.get("all_passed", all_passed)
             else:
                 # Assume passed if we can't parse
@@ -1174,6 +1238,13 @@ Respond in JSON:
 
             # Revise the output
             failures = [c for c in cycle_checks if not c.passed]
+            violations = json.dumps(
+                [
+                    {"principle": c.principle, "violation": c.violation_description}
+                    for c in failures
+                ],
+                indent=2,
+            )
             revise_prompt = f"""Revise this response to comply with these principles:
 
 Original query: {original_query}
@@ -1182,13 +1253,12 @@ Current response:
 {current_output}
 
 Violations to fix:
-{json.dumps([{"principle": c.principle, "violation": c.violation_description} for c in failures], indent=2)}
+{violations}
 
 Produce an improved response that satisfies all principles while remaining helpful."""
 
             _, revise_result = await self._get_router().execute_with_routing(
-                task=revise_prompt,
-                context={"requires_reasoning": True}
+                task=revise_prompt, context={"requires_reasoning": True}
             )
             current_output = revise_result.get("content", current_output)
             revision_count += 1
@@ -1201,10 +1271,10 @@ Produce an improved response that satisfies all principles while remaining helpf
             checks=all_checks,
             revision_count=revision_count,
             all_passed=final_all_passed,
-            cost=total_cost
+            cost=total_cost,
         )
 
-    def _parse_json(self, content: str) -> Optional[Dict]:
+    def _parse_json(self, content: str) -> Optional[dict]:
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -1220,6 +1290,7 @@ Produce an improved response that satisfies all principles while remaining helpf
 # ============================================================
 # 8. Unified KarpathyEngine
 # ============================================================
+
 
 class KarpathyEngine:
     """
@@ -1266,11 +1337,8 @@ class KarpathyEngine:
     # ----- High-level API -----
 
     async def auto(
-        self,
-        query: str,
-        context: Optional[Dict] = None,
-        quality_mode: bool = False
-    ) -> Dict[str, Any]:
+        self, query: str, context: Optional[dict] = None, quality_mode: bool = False
+    ) -> dict[str, Any]:
         """
         Automatically select the best Karpathy technique for the task.
 
@@ -1310,10 +1378,7 @@ class KarpathyEngine:
             raw_answer = bon.best_draft.content
 
             # Constitutional review
-            cr = await self.constitutional_reviewer.review(
-                output=raw_answer,
-                original_query=query
-            )
+            cr = await self.constitutional_reviewer.review(output=raw_answer, original_query=query)
             total_cost += cr.cost
             final_answer = cr.final_output
 
@@ -1326,7 +1391,7 @@ class KarpathyEngine:
                 "revisions": cr.revision_count,
                 "confidence": scratch.confidence,
                 "cost": total_cost,
-                "nature": nature.value
+                "nature": nature.value,
             }
 
         elif nature in (TaskNature.CREATIVE, TaskNature.EXPLORATORY):
@@ -1340,7 +1405,7 @@ class KarpathyEngine:
                 "confidence": debate.confidence,
                 "debate_rounds": len(debate.rounds),
                 "cost": total_cost,
-                "nature": nature.value
+                "nature": nature.value,
             }
 
         else:
@@ -1350,9 +1415,7 @@ class KarpathyEngine:
             total_cost += scratch.cost
 
             cr = await self.constitutional_reviewer.review(
-                output=scratch.final_answer,
-                original_query=query,
-                max_revisions=1
+                output=scratch.final_answer, original_query=query, max_revisions=1
             )
             total_cost += cr.cost
 
@@ -1363,74 +1426,48 @@ class KarpathyEngine:
                 "constitutional_passed": cr.all_passed,
                 "confidence": scratch.confidence,
                 "cost": total_cost,
-                "nature": nature.value
+                "nature": nature.value,
             }
 
-    async def scratchpad(
-        self,
-        query: str,
-        context: Optional[Dict] = None
-    ) -> ScratchpadResult:
+    async def scratchpad(self, query: str, context: Optional[dict] = None) -> ScratchpadResult:
         """Run scratchpad reasoning on a query."""
         return await self.scratchpad_reasoner.think(query, context)
 
     async def best_of_n(
-        self,
-        query: str,
-        n: int = 3,
-        context: Optional[Dict] = None
+        self, query: str, n: int = 3, context: Optional[dict] = None
     ) -> BestOfNResult:
         """Generate n drafts and return the best-scoring one."""
         return await self.best_of_n_sampler.sample(query, n=n, context=context)
 
     async def debate(
-        self,
-        topic: str,
-        rounds: int = 2,
-        context: Optional[Dict] = None
+        self, topic: str, rounds: int = 2, context: Optional[dict] = None
     ) -> DebateResult:
         """Run a self-play debate on a topic."""
         return await self.self_play_debate.debate(topic, rounds=rounds, context=context)
 
     async def constitutional(
-        self,
-        output: str,
-        query: str,
-        principles: Optional[List[str]] = None
+        self, output: str, query: str, principles: Optional[list[str]] = None
     ) -> ConstitutionalResult:
         """Apply constitutional review to an output."""
         return await self.constitutional_reviewer.review(
-            output=output,
-            original_query=query,
-            custom_principles=principles
+            output=output, original_query=query, custom_principles=principles
         )
 
-    async def verify_reasoning(
-        self,
-        query: str,
-        steps: List[str]
-    ) -> PRMResult:
+    async def verify_reasoning(self, query: str, steps: list[str]) -> PRMResult:
         """Score reasoning steps using the process reward model."""
         return await self.process_reward_model.score_steps(query, steps)
 
-    def augment_with_examples(
-        self,
-        query: str,
-        task_type: Optional[str] = None,
-        k: int = 3
-    ) -> str:
+    def augment_with_examples(self, query: str, task_type: Optional[str] = None, k: int = 3) -> str:
         """
         Return a query augmented with k retrieved few-shot examples.
         Useful for inline prompt enhancement.
         """
-        block = self.few_shot_library.build_few_shot_block(
-            query, k=k, task_type=task_type
-        )
+        block = self.few_shot_library.build_few_shot_block(query, k=k, task_type=task_type)
         if not block:
             return query
         return f"{block}\n\nNow handle this task:\n{query}"
 
-    def get_capabilities_summary(self) -> Dict[str, str]:
+    def get_capabilities_summary(self) -> dict[str, str]:
         """Return a summary of all available Karpathy methods."""
         return {
             "temperature_calibration": (

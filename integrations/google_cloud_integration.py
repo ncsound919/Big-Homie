@@ -2,27 +2,33 @@
 Google Cloud Platform Integration
 Extends existing Google integrations with Cloud Storage, BigQuery, Cloud Functions
 """
+
 import asyncio
-import httpx
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from typing import Any, Optional
+
 from loguru import logger
+
 from config import settings
 
 try:
-    from google.cloud import storage, bigquery
+    from google.cloud import bigquery, storage
     from google.oauth2 import service_account
+
     GOOGLE_CLOUD_AVAILABLE = True
 except ImportError:
     GOOGLE_CLOUD_AVAILABLE = False
     logger.warning("google-cloud libraries not installed. GCP integration limited.")
 
+
 @dataclass
 class GoogleCloudResult:
     """Result of a Google Cloud operation"""
+
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
+
 
 class GoogleCloudIntegration:
     """
@@ -48,12 +54,10 @@ class GoogleCloudIntegration:
                         settings.google_service_account_key_path
                     )
                     self.storage_client = storage.Client(
-                        credentials=self.credentials,
-                        project=settings.google_cloud_project_id
+                        credentials=self.credentials, project=settings.google_cloud_project_id
                     )
                     self.bigquery_client = bigquery.Client(
-                        credentials=self.credentials,
-                        project=settings.google_cloud_project_id
+                        credentials=self.credentials, project=settings.google_cloud_project_id
                     )
             except Exception as e:
                 logger.error(f"Failed to initialize Google Cloud: {e}")
@@ -73,10 +77,7 @@ class GoogleCloudIntegration:
 
     # Cloud Storage Operations
     async def storage_upload_file(
-        self,
-        bucket_name: str,
-        source_file_path: str,
-        destination_blob_name: str
+        self, bucket_name: str, source_file_path: str, destination_blob_name: str
     ) -> GoogleCloudResult:
         """Upload a file to Cloud Storage"""
         if not self.storage_client:
@@ -92,18 +93,15 @@ class GoogleCloudIntegration:
                 data={
                     "bucket": bucket_name,
                     "blob": destination_blob_name,
-                    "public_url": blob.public_url
-                }
+                    "public_url": blob.public_url,
+                },
             )
         except Exception as e:
             logger.error(f"Storage upload failed: {e}")
             return GoogleCloudResult(success=False, error=str(e))
 
     async def storage_download_file(
-        self,
-        bucket_name: str,
-        source_blob_name: str,
-        destination_file_path: str
+        self, bucket_name: str, source_blob_name: str, destination_file_path: str
     ) -> GoogleCloudResult:
         """Download a file from Cloud Storage"""
         if not self.storage_client:
@@ -119,14 +117,16 @@ class GoogleCloudIntegration:
                 data={
                     "bucket": bucket_name,
                     "blob": source_blob_name,
-                    "local_path": destination_file_path
-                }
+                    "local_path": destination_file_path,
+                },
             )
         except Exception as e:
             logger.error(f"Storage download failed: {e}")
             return GoogleCloudResult(success=False, error=str(e))
 
-    async def storage_list_blobs(self, bucket_name: str, prefix: Optional[str] = None) -> GoogleCloudResult:
+    async def storage_list_blobs(
+        self, bucket_name: str, prefix: Optional[str] = None
+    ) -> GoogleCloudResult:
         """List files in a Cloud Storage bucket"""
         if not self.storage_client:
             return GoogleCloudResult(success=False, error="Google Cloud Storage not enabled")
@@ -141,10 +141,10 @@ class GoogleCloudIntegration:
                     {
                         "name": blob.name,
                         "size": blob.size,
-                        "updated": blob.updated.isoformat() if blob.updated else None
+                        "updated": blob.updated.isoformat() if blob.updated else None,
                     }
                     for blob in blobs
-                ]
+                ],
             )
         except Exception as e:
             logger.error(f"Storage list blobs failed: {e}")
@@ -157,6 +157,7 @@ class GoogleCloudIntegration:
             return GoogleCloudResult(success=False, error="Google BigQuery not enabled")
 
         try:
+
             def _run_query():
                 query_job = self.bigquery_client.query(query)
                 results = query_job.result()
@@ -170,11 +171,8 @@ class GoogleCloudIntegration:
                 data={
                     "rows": rows,
                     "total_rows": total_rows,
-                    "schema": [
-                        {"name": field.name, "type": field.field_type}
-                        for field in schema
-                    ]
-                }
+                    "schema": [{"name": field.name, "type": field.field_type} for field in schema],
+                },
             )
         except Exception as e:
             logger.error(f"BigQuery query failed: {e}")
@@ -194,10 +192,10 @@ class GoogleCloudIntegration:
                     {
                         "dataset_id": dataset.dataset_id,
                         "full_dataset_id": dataset.full_dataset_id,
-                        "project": dataset.project
+                        "project": dataset.project,
                     }
                     for dataset in datasets
-                ]
+                ],
             )
         except Exception as e:
             logger.error(f"BigQuery list datasets failed: {e}")
@@ -209,7 +207,9 @@ class GoogleCloudIntegration:
             return GoogleCloudResult(success=False, error="Google BigQuery not enabled")
 
         try:
-            tables = await asyncio.to_thread(lambda: list(self.bigquery_client.list_tables(dataset_id)))
+            tables = await asyncio.to_thread(
+                lambda: list(self.bigquery_client.list_tables(dataset_id))
+            )
 
             return GoogleCloudResult(
                 success=True,
@@ -217,14 +217,15 @@ class GoogleCloudIntegration:
                     {
                         "table_id": table.table_id,
                         "full_table_id": table.full_table_id,
-                        "table_type": table.table_type
+                        "table_type": table.table_type,
                     }
                     for table in tables
-                ]
+                ],
             )
         except Exception as e:
             logger.error(f"BigQuery list tables failed: {e}")
             return GoogleCloudResult(success=False, error=str(e))
+
 
 # Global instance
 google_cloud = GoogleCloudIntegration()

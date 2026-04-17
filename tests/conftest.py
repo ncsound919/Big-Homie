@@ -2,11 +2,13 @@
 Shared pytest fixtures for Big Homie test suite.
 Covers governance, memory, cost guards, and agent lifecycle.
 """
+
 from __future__ import annotations
 
 import os
 import sys
 import tempfile
+
 import pytest
 
 # Make root modules importable from tests
@@ -41,6 +43,7 @@ def mock_env(monkeypatch):
 def audit_trail(tmp_path):
     """Return a fresh AuditTrail instance backed by a temp file."""
     from governance import AuditTrail
+
     log_file = str(tmp_path / "audit.jsonl")
     return AuditTrail(log_file=log_file)
 
@@ -49,6 +52,7 @@ def audit_trail(tmp_path):
 def kill_switch(tmp_path):
     """Return a fresh KillSwitch instance."""
     from governance import KillSwitch
+
     state_file = str(tmp_path / "kill_state.json")
     return KillSwitch(state_file=state_file)
 
@@ -56,7 +60,8 @@ def kill_switch(tmp_path):
 @pytest.fixture
 def sandbox():
     """Return a SandboxedExecution instance with default config."""
-    from governance import SandboxedExecution, SandboxConfig
+    from governance import SandboxConfig, SandboxedExecution
+
     return SandboxedExecution(config=SandboxConfig())
 
 
@@ -64,4 +69,5 @@ def sandbox():
 def human_gate():
     """Return a HumanInTheLoop instance."""
     from governance import HumanInTheLoop
+
     return HumanInTheLoop(auto_approve_low_risk=True)

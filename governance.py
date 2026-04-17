@@ -3,45 +3,53 @@ Safety & Governance - Tier 7
 Human-in-the-Loop Gates, Observability & Audit Trail,
 Sandboxed Execution, Kill Switch Protocol
 """
+
 import asyncio
+import hashlib
 import json
 import os
-import hashlib
-import signal
 import sqlite3
 import sys
-import time
 import threading
-from typing import Dict, List, Any, Optional, Callable
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from enum import Enum
-from loguru import logger
-from config import settings
+from pathlib import Path
+from typing import Any, Callable, Optional
 
+from loguru import logger
+
+from config import settings
 
 # ===================================================================
 # Human-in-the-Loop Gates
 # ===================================================================
 
+
 class ActionRiskLevel(str, Enum):
     """Risk levels for agent actions"""
-    LOW = "low"          # Auto-approve
-    MEDIUM = "medium"    # Notify user
-    HIGH = "high"        # Require approval
+
+    LOW = "low"  # Auto-approve
+    MEDIUM = "medium"  # Notify user
+    HIGH = "high"  # Require approval
     CRITICAL = "critical"  # Require explicit confirmation
+
+
+# Alias for test compatibility
+RiskLevel = ActionRiskLevel
 
 
 @dataclass
 class ApprovalRequest:
     """A request for human approval"""
+
     request_id: str
     action: str
     risk_level: ActionRiskLevel
     description: str
     estimated_impact: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     approved: Optional[bool] = None
     approver: Optional[str] = None
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -60,14 +68,14 @@ class HumanInTheLoop:
     - CRITICAL: Requires confirmation dialog (deleting data, deployments)
     """
 
-    def __init__(self):
-        self.pending_requests: Dict[str, ApprovalRequest] = {}
-        self.approval_history: List[ApprovalRequest] = []
+    def __init__(self, auto_approve_low_risk: bool = True):
+        self.pending_requests: dict[str, ApprovalRequest] = {}
+        self.approval_history: list[ApprovalRequest] = []
         self.approval_callback: Optional[Callable] = None
-        self.auto_approve_low: bool = True
+        self.auto_approve_low: bool = auto_approve_low_risk
 
         # Risk classification rules
-        self.risk_rules: Dict[str, ActionRiskLevel] = {
+        self.risk_rules: dict[str, ActionRiskLevel] = {
             # Low risk
             "search": ActionRiskLevel.LOW,
             "read": ActionRiskLevel.LOW,
@@ -89,9 +97,10 @@ class HumanInTheLoop:
             "system_modification": ActionRiskLevel.CRITICAL,
         }
 
-    def classify_risk(self, action: str) -> ActionRiskLevel:
+    def classify_risk(self, action: str, context: Optional[dict] = None) -> ActionRiskLevel:
         """Classify the risk level of an action"""
         action_lower = action.lower()
+        ctx = context or {}
 
         # Check explicit rules first
         for pattern, level in self.risk_rules.items():
@@ -99,9 +108,34 @@ class HumanInTheLoop:
                 return level
 
         # Heuristic classification
-        high_risk_keywords = ["delete", "remove", "payment", "send", "deploy", "drop", "truncate"]
+        critical_keywords = [
+            "delete_all",
+            "drop_all",
+            "truncate_all",
+            "destroy",
+            "format",
+        ]
+        high_risk_keywords = [
+            "delete",
+            "remove",
+            "payment",
+            "send",
+            "deploy",
+            "drop",
+            "truncate",
+            "transfer",
+            "funds",
+        ]
         medium_risk_keywords = ["write", "create", "update", "modify", "install"]
 
+        # Escalate to CRITICAL when context indicates production or large scope
+        scope = str(ctx.get("scope", "")).lower()
+        if scope in ("production", "prod", "all"):
+            if any(kw in action_lower for kw in high_risk_keywords + critical_keywords):
+                return ActionRiskLevel.CRITICAL
+
+        if any(kw in action_lower for kw in critical_keywords):
+            return ActionRiskLevel.CRITICAL
         if any(kw in action_lower for kw in high_risk_keywords):
             return ActionRiskLevel.HIGH
         elif any(kw in action_lower for kw in medium_risk_keywords):
@@ -109,17 +143,17 @@ class HumanInTheLoop:
 
         return ActionRiskLevel.LOW
 
-    async def request_approval(
+    async def async_request_approval(
         self,
         action: str,
         description: str,
         estimated_impact: str = "",
         risk_level: Optional[ActionRiskLevel] = None,
-        metadata: Optional[Dict] = None,
-        timeout: float = 300.0
+        metadata: Optional[dict] = None,
+        timeout: float = 300.0,
     ) -> bool:
         """
-        Request human approval for an action.
+        Request human approval for an action (async version).
 
         Returns True if approved, False if denied or timed out.
         """
@@ -139,24 +173,21 @@ class HumanInTheLoop:
             risk_level=risk_level,
             description=description,
             estimated_impact=estimated_impact,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         self.pending_requests[request.request_id] = request
 
         logger.info(
-            f"🔒 Approval requested [{risk_level.value}]: {action}\n"
-            f"   Description: {description}"
+            f"🔒 Approval requested [{risk_level.value}]: {action}\n   Description: {description}"
         )
 
         # If callback is set, use it for approval
         if self.approval_callback:
             try:
                 approved = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
-                        None, self.approval_callback, request
-                    ),
-                    timeout=timeout
+                    asyncio.get_event_loop().run_in_executor(None, self.approval_callback, request),
+                    timeout=timeout,
                 )
             except asyncio.TimeoutError:
                 logger.warning(f"Approval timed out for: {action}")
@@ -178,6 +209,47 @@ class HumanInTheLoop:
 
         return False
 
+    def request_approval(
+        self,
+        action: str,
+        description: str = "",
+        estimated_impact: str = "",
+        risk_level: Optional[ActionRiskLevel] = None,
+        metadata: Optional[dict] = None,
+        context: Optional[dict] = None,
+        timeout: float = 300.0,
+    ) -> bool:
+        """Synchronous approval request (delegates to async version when needed)."""
+        if context is not None and not description:
+            description = json.dumps(context)
+        if context is not None and metadata is None:
+            metadata = context
+
+        if risk_level is None:
+            risk_level = self.classify_risk(action)
+
+        if risk_level == ActionRiskLevel.LOW and self.auto_approve_low:
+            return True
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            return False
+
+        return asyncio.run(
+            self.async_request_approval(
+                action=action,
+                description=description,
+                estimated_impact=estimated_impact,
+                risk_level=risk_level,
+                metadata=metadata,
+                timeout=timeout,
+            )
+        )
+
     def add_risk_rule(self, pattern: str, level: ActionRiskLevel):
         """Add a custom risk classification rule"""
         self.risk_rules[pattern] = level
@@ -187,16 +259,18 @@ class HumanInTheLoop:
 # Observability & Audit Trail
 # ===================================================================
 
+
 @dataclass
 class AuditEntry:
     """An immutable audit log entry"""
+
     entry_id: str
     timestamp: str
     event_type: str
     actor: str
     action: str
     target: str
-    details: Dict[str, Any]
+    details: dict[str, Any]
     hash: str  # SHA-256 hash for integrity verification
     previous_hash: str  # Chain to previous entry
 
@@ -209,11 +283,18 @@ class AuditTrail:
     with timestamps, full context, and cryptographic integrity.
     """
 
-    def __init__(self):
-        self.db_path = Path(settings.data_dir) / "audit_trail.db"
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
-        self._last_hash = self._get_last_hash()
+    def __init__(self, log_file: Optional[str] = None):
+        self._log_file = log_file
+        if log_file is not None:
+            self._last_hash = "GENESIS"
+            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+            if Path(log_file).exists():
+                self._last_hash = self._jsonl_get_last_hash()
+        else:
+            self.db_path = Path(settings.data_dir) / "audit_trail.db"
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._init_db()
+            self._last_hash = self._get_last_hash()
 
     def _conn(self):
         return sqlite3.connect(str(self.db_path))
@@ -262,11 +343,11 @@ class AuditTrail:
 
     def log(
         self,
-        event_type: str,
-        actor: str,
-        action: str,
+        event_type: str = "action",
+        actor: str = "agent",
+        action: str = "",
         target: str = "",
-        details: Optional[Dict] = None
+        details: Optional[dict] = None,
     ) -> AuditEntry:
         """
         Log an auditable event.
@@ -288,7 +369,8 @@ class AuditTrail:
         details = details or {}
 
         # Create hash for integrity
-        entry_data = f"{timestamp}:{event_type}:{actor}:{action}:{target}:{json.dumps(details, sort_keys=True)}"
+        details_json = json.dumps(details, sort_keys=True)
+        entry_data = f"{timestamp}:{event_type}:{actor}:{action}:{target}:{details_json}"
         entry_hash = self._compute_hash(entry_data, self._last_hash)
 
         entry = AuditEntry(
@@ -300,35 +382,114 @@ class AuditTrail:
             target=target,
             details=details,
             hash=entry_hash,
-            previous_hash=self._last_hash
+            previous_hash=self._last_hash,
         )
 
-        # Persist
-        with self._conn() as db:
-            db.execute(
-                """INSERT INTO audit_log
-                   (entry_id, timestamp, event_type, actor, action, target, details, hash, previous_hash)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (entry.entry_id, entry.timestamp, entry.event_type,
-                 entry.actor, entry.action, entry.target,
-                 json.dumps(entry.details), entry.hash, entry.previous_hash)
-            )
-            db.commit()
+        if self._log_file is not None:
+            self._jsonl_append(entry)
+        else:
+            with self._conn() as db:
+                db.execute(
+                    """INSERT INTO audit_log
+                       (entry_id, timestamp, event_type,
+                        actor, action, target, details,
+                        hash, previous_hash)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        entry.entry_id,
+                        entry.timestamp,
+                        entry.event_type,
+                        entry.actor,
+                        entry.action,
+                        entry.target,
+                        json.dumps(entry.details),
+                        entry.hash,
+                        entry.previous_hash,
+                    ),
+                )
+                db.commit()
 
         self._last_hash = entry_hash
 
         return entry
 
-    def verify_integrity(self) -> Dict[str, Any]:
+    # ------------------------------------------------------------------
+    # JSONL file-based backend helpers
+    # ------------------------------------------------------------------
+
+    def _jsonl_append(self, entry: AuditEntry) -> None:
+        record = {
+            "entry_id": entry.entry_id,
+            "timestamp": entry.timestamp,
+            "event_type": entry.event_type,
+            "actor": entry.actor,
+            "action": entry.action,
+            "target": entry.target,
+            "details": entry.details,
+            "hash": entry.hash,
+            "previous_hash": entry.previous_hash,
+        }
+        with open(self._log_file, "a", encoding="utf-8") as fh:  # noqa: PTH123
+            fh.write(json.dumps(record) + "\n")
+
+    def _jsonl_get_last_hash(self) -> str:
+        try:
+            with open(self._log_file, encoding="utf-8") as fh:  # noqa: PTH123
+                lines = [ln for ln in fh.read().splitlines() if ln.strip()]
+            if lines:
+                return json.loads(lines[-1])["hash"]
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            pass
+        return "GENESIS"
+
+    def _jsonl_read_entries(self) -> list[dict]:
+        try:
+            with open(self._log_file, encoding="utf-8") as fh:  # noqa: PTH123
+                return [json.loads(ln) for ln in fh.read().splitlines() if ln.strip()]
+        except FileNotFoundError:
+            return []
+
+    def get_entries(self) -> list[dict]:
+        """Return all audit entries (JSONL or SQLite)."""
+        if self._log_file is not None:
+            return self._jsonl_read_entries()
+        return self.query(limit=10_000)
+
+    def _jsonl_verify_integrity(self) -> bool:
+        entries = self._jsonl_read_entries()
+        if not entries:
+            return True
+        expected_prev = "GENESIS"
+        for entry in entries:
+            details_json = json.dumps(entry.get("details", {}), sort_keys=True)
+            entry_data = (
+                f"{entry['timestamp']}:{entry.get('event_type', 'action')}"
+                f":{entry.get('actor', 'agent')}:{entry['action']}"
+                f":{entry.get('target', '')}:{details_json}"
+            )
+            expected_hash = self._compute_hash(entry_data, expected_prev)
+            if entry.get("previous_hash") != expected_prev:
+                return False
+            if entry.get("hash") != expected_hash:
+                return False
+            expected_prev = entry["hash"]
+        return True
+
+    def verify_integrity(self):
         """
         Verify the integrity of the entire audit trail.
 
-        Checks that the hash chain is unbroken — any tampering
-        would break the chain.
+        When backed by a JSONL file, returns ``True`` / ``False``.
+        When backed by SQLite, returns a dict with details.
         """
+        if self._log_file is not None:
+            return self._jsonl_verify_integrity()
+
         with self._conn() as db:
             rows = db.execute(
-                "SELECT entry_id, timestamp, event_type, actor, action, target, details, hash, previous_hash "
+                "SELECT entry_id, timestamp, event_type,"
+                " actor, action, target, details,"
+                " hash, previous_hash "
                 "FROM audit_log ORDER BY timestamp"
             ).fetchall()
 
@@ -344,10 +505,7 @@ class AuditTrail:
             except (TypeError, json.JSONDecodeError):
                 canonical_details = row[6]
 
-            entry_data = (
-                f"{row[1]}:{row[2]}:{row[3]}:{row[4]}:{row[5]}:"
-                f"{canonical_details}"
-            )
+            entry_data = f"{row[1]}:{row[2]}:{row[3]}:{row[4]}:{row[5]}:{canonical_details}"
             expected_hash = self._compute_hash(entry_data, expected_prev)
 
             if row[8] != expected_prev:
@@ -364,8 +522,9 @@ class AuditTrail:
             "valid": broken_at is None,
             "entries": len(rows),
             "broken_at_index": broken_at,
-            "message": "Integrity verified" if broken_at is None
-                       else f"Chain broken at entry {broken_at}"
+            "message": "Integrity verified"
+            if broken_at is None
+            else f"Chain broken at entry {broken_at}",
         }
 
     def query(
@@ -373,8 +532,8 @@ class AuditTrail:
         event_type: Optional[str] = None,
         actor: Optional[str] = None,
         since: Optional[str] = None,
-        limit: int = 100
-    ) -> List[Dict]:
+        limit: int = 100,
+    ) -> list[dict]:
         """Query the audit trail"""
         conditions = []
         params = []
@@ -392,7 +551,7 @@ class AuditTrail:
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
         # Use parameterized query for limit as well
-        query = f"SELECT * FROM audit_log {where} ORDER BY timestamp DESC LIMIT ?"
+        query = f"SELECT * FROM audit_log {where} ORDER BY timestamp DESC LIMIT ?"  # noqa: S608
         params.append(limit)
 
         with self._conn() as db:
@@ -407,29 +566,32 @@ class AuditTrail:
                 "action": r[4],
                 "target": r[5],
                 "details": json.loads(r[6]) if r[6] else {},
-                "hash": r[7]
+                "hash": r[7],
             }
             for r in rows
         ]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get audit trail statistics"""
         with self._conn() as db:
             total = db.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
             types = db.execute(
-                "SELECT event_type, COUNT(*) FROM audit_log GROUP BY event_type ORDER BY COUNT(*) DESC"
+                "SELECT event_type, COUNT(*) FROM audit_log"
+                " GROUP BY event_type"
+                " ORDER BY COUNT(*) DESC"
             ).fetchall()
 
         return {
             "total_entries": total,
             "by_type": {r[0]: r[1] for r in types},
-            "integrity": self.verify_integrity()
+            "integrity": self.verify_integrity(),
         }
 
 
 # ===================================================================
 # Sandboxed Execution
 # ===================================================================
+
 
 @dataclass(init=False)
 class SandboxConfig:
@@ -442,13 +604,14 @@ class SandboxConfig:
         underlying execution backend explicitly enforces them. The local
         executor should not treat them as strict security boundaries.
     """
+
     timeout_seconds: int = 30
     requested_max_memory_mb: int = 512
     max_output_size: int = 100000
-    allowed_imports: Optional[List[str]] = None
-    blocked_imports: List[str] = field(default_factory=lambda: [
-        "subprocess", "shutil", "ctypes", "importlib"
-    ])
+    allowed_imports: Optional[list[str]] = None
+    blocked_imports: list[str] = field(
+        default_factory=lambda: ["subprocess", "shutil", "ctypes", "importlib"]
+    )
     requested_network_access: bool = False
     requested_filesystem_read: bool = True
     filesystem_write: bool = False
@@ -458,8 +621,8 @@ class SandboxConfig:
         timeout_seconds: int = 30,
         requested_max_memory_mb: int = 512,
         max_output_size: int = 100000,
-        allowed_imports: Optional[List[str]] = None,
-        blocked_imports: Optional[List[str]] = None,
+        allowed_imports: Optional[list[str]] = None,
+        blocked_imports: Optional[list[str]] = None,
         requested_network_access: bool = False,
         requested_filesystem_read: bool = True,
         filesystem_write: bool = False,
@@ -485,6 +648,12 @@ class SandboxConfig:
             requested_filesystem_read if filesystem_read is None else filesystem_read
         )
         self.filesystem_write = filesystem_write
+        self.blocked_commands: list[str] = [
+            "rm -rf",
+            "mkfs",
+            "dd if=",
+            "chmod 777",
+        ]
 
     @property
     def max_memory_mb(self) -> int:
@@ -512,9 +681,12 @@ class SandboxConfig:
     @filesystem_read.setter
     def filesystem_read(self, value: bool) -> None:
         self.requested_filesystem_read = value
+
+
 @dataclass
 class SandboxResult:
     """Result of sandboxed execution"""
+
     success: bool
     output: str = ""
     error: Optional[str] = None
@@ -546,9 +718,7 @@ class SandboxedExecution:
         return self._audit
 
     async def execute_python(
-        self,
-        code: str,
-        config: Optional[SandboxConfig] = None
+        self, code: str, config: Optional[SandboxConfig] = None
     ) -> SandboxResult:
         """
         Execute Python code in a sandboxed environment.
@@ -569,7 +739,7 @@ class SandboxedExecution:
             actor="sandbox",
             action="execute_python",
             target="python_code",
-            details={"code_length": len(code)}
+            details={"code_length": len(code)},
         )
 
         # Safety: check for blocked imports
@@ -578,7 +748,7 @@ class SandboxedExecution:
                 return SandboxResult(
                     success=False,
                     error=f"Blocked import: {blocked}",
-                    execution_time_ms=(time.time() - start) * 1000
+                    execution_time_ms=(time.time() - start) * 1000,
                 )
 
         # Execute in subprocess with timeout
@@ -587,16 +757,17 @@ class SandboxedExecution:
             wrapper = self._create_sandbox_wrapper(code, cfg)
 
             process = await asyncio.create_subprocess_exec(
-                sys.executable, "-c", wrapper,
+                sys.executable,
+                "-c",
+                wrapper,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=self._get_restricted_env()
+                env=self._get_restricted_env(),
             )
 
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=cfg.timeout_seconds
+                    process.communicate(), timeout=cfg.timeout_seconds
                 )
             except asyncio.TimeoutError:
                 process.kill()
@@ -604,7 +775,7 @@ class SandboxedExecution:
                 return SandboxResult(
                     success=False,
                     error=f"Execution timed out after {cfg.timeout_seconds}s",
-                    execution_time_ms=(time.time() - start) * 1000
+                    execution_time_ms=(time.time() - start) * 1000,
                 )
 
             output = stdout.decode("utf-8", errors="replace")
@@ -612,20 +783,18 @@ class SandboxedExecution:
 
             # Truncate large outputs
             if len(output) > cfg.max_output_size:
-                output = output[:cfg.max_output_size] + "\n... [truncated]"
+                output = output[: cfg.max_output_size] + "\n... [truncated]"
 
             return SandboxResult(
                 success=process.returncode == 0,
                 output=output,
                 error=errors if errors else None,
-                execution_time_ms=(time.time() - start) * 1000
+                execution_time_ms=(time.time() - start) * 1000,
             )
 
         except Exception as e:
             return SandboxResult(
-                success=False,
-                error=str(e),
-                execution_time_ms=(time.time() - start) * 1000
+                success=False, error=str(e), execution_time_ms=(time.time() - start) * 1000
             )
 
     def _create_sandbox_wrapper(self, code: str, config: SandboxConfig) -> str:
@@ -647,8 +816,12 @@ class SandboxedExecution:
             )
             restrictions.append(
                 "import pathlib\n"
-                "def _block_write_text(self, *a, **kw): raise PermissionError('Write access denied in sandbox')\n"
-                "def _block_write_bytes(self, *a, **kw): raise PermissionError('Write access denied in sandbox')\n"
+                "def _block_write_text(self, *a, **kw):"
+                " raise PermissionError("
+                "'Write access denied in sandbox')\n"
+                "def _block_write_bytes(self, *a, **kw):"
+                " raise PermissionError("
+                "'Write access denied in sandbox')\n"
                 "pathlib.Path.write_text = _block_write_text\n"
                 "pathlib.Path.write_bytes = _block_write_bytes"
             )
@@ -672,28 +845,33 @@ import builtins
 {chr(10).join(restrictions)}
 {import_checks}
 try:
-{chr(10).join('    ' + line for line in code.splitlines())}
+{chr(10).join("    " + line for line in code.splitlines())}
 except Exception as e:
     print(f"Error: {{type(e).__name__}}: {{e}}", file=sys.stderr)
     sys.exit(1)
 """
         return wrapper
 
-    def _get_restricted_env(self) -> Dict[str, str]:
+    def _get_restricted_env(self) -> dict[str, str]:
         """Get restricted environment variables for sandbox"""
         # Start with minimal environment
         env = {
             "PATH": "/usr/bin:/bin",
-            "HOME": "/tmp",
+            "HOME": "/tmp",  # noqa: S108
             "LANG": "en_US.UTF-8",
             "PYTHONDONTWRITEBYTECODE": "1",
         }
 
         # Never pass through sensitive variables
         sensitive = {
-            "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
-            "STRIPE_API_KEY", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY",
-            "DATABASE_URL", "POSTGRES_URL"
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENROUTER_API_KEY",
+            "STRIPE_API_KEY",
+            "GITHUB_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "DATABASE_URL",
+            "POSTGRES_URL",
         }
 
         for key, value in os.environ.items():
@@ -706,16 +884,40 @@ except Exception as e:
 
     # Allowlisted shell commands that can be executed
     ALLOWED_COMMANDS = {
-        "ls", "cat", "head", "tail", "grep", "find", "wc", "sort", "uniq",
-        "echo", "date", "pwd", "whoami", "env", "which", "file", "stat",
-        "diff", "tr", "cut", "awk", "sed", "python3", "python", "pip",
-        "node", "npm", "git", "curl", "wget",
+        "ls",
+        "cat",
+        "head",
+        "tail",
+        "grep",
+        "find",
+        "wc",
+        "sort",
+        "uniq",
+        "echo",
+        "date",
+        "pwd",
+        "whoami",
+        "env",
+        "which",
+        "file",
+        "stat",
+        "diff",
+        "tr",
+        "cut",
+        "awk",
+        "sed",
+        "python3",
+        "python",
+        "pip",
+        "node",
+        "npm",
+        "git",
+        "curl",
+        "wget",
     }
 
     async def execute_shell(
-        self,
-        command: str,
-        config: Optional[SandboxConfig] = None
+        self, command: str, config: Optional[SandboxConfig] = None
     ) -> SandboxResult:
         """
         Execute a shell command with sandbox restrictions.
@@ -732,26 +934,24 @@ except Exception as e:
         for pattern in dangerous:
             if pattern in command:
                 return SandboxResult(
-                    success=False,
-                    error=f"Blocked dangerous command pattern: {pattern}"
+                    success=False, error=f"Blocked dangerous command pattern: {pattern}"
                 )
 
         # Parse command into executable + args
         import shlex
+
         try:
             parts = shlex.split(command)
         except ValueError as e:
             return SandboxResult(
                 success=False,
                 error=f"Failed to parse command: {e}",
-                execution_time_ms=(time.time() - start) * 1000
+                execution_time_ms=(time.time() - start) * 1000,
             )
 
         if not parts:
             return SandboxResult(
-                success=False,
-                error="Empty command",
-                execution_time_ms=(time.time() - start) * 1000
+                success=False, error="Empty command", execution_time_ms=(time.time() - start) * 1000
             )
 
         base_cmd = os.path.basename(parts[0])
@@ -760,15 +960,15 @@ except Exception as e:
             return SandboxResult(
                 success=False,
                 error=f"Path-based commands not allowed in sandbox: {parts[0]!r}. "
-                      f"Use bare command names only.",
-                execution_time_ms=(time.time() - start) * 1000
+                f"Use bare command names only.",
+                execution_time_ms=(time.time() - start) * 1000,
             )
         if base_cmd not in self.ALLOWED_COMMANDS:
             return SandboxResult(
                 success=False,
                 error=f"Command not in allowlist: {base_cmd!r}. "
-                      f"Allowed: {', '.join(sorted(self.ALLOWED_COMMANDS))}",
-                execution_time_ms=(time.time() - start) * 1000
+                f"Allowed: {', '.join(sorted(self.ALLOWED_COMMANDS))}",
+                execution_time_ms=(time.time() - start) * 1000,
             )
 
         self._get_audit().log(
@@ -776,7 +976,7 @@ except Exception as e:
             actor="sandbox",
             action="execute_shell",
             target="shell_command",
-            details={"command": command[:200]}
+            details={"command": command[:200]},
         )
 
         try:
@@ -784,20 +984,18 @@ except Exception as e:
                 *parts,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=self._get_restricted_env()
+                env=self._get_restricted_env(),
             )
 
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=cfg.timeout_seconds
+                    process.communicate(), timeout=cfg.timeout_seconds
                 )
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()
                 return SandboxResult(
-                    success=False,
-                    error=f"Command timed out after {cfg.timeout_seconds}s"
+                    success=False, error=f"Command timed out after {cfg.timeout_seconds}s"
                 )
 
             output = stdout.decode("utf-8", errors="replace")
@@ -805,40 +1003,79 @@ except Exception as e:
 
             return SandboxResult(
                 success=process.returncode == 0,
-                output=output[:cfg.max_output_size],
+                output=output[: cfg.max_output_size],
                 error=errors if errors else None,
-                execution_time_ms=(time.time() - start) * 1000
+                execution_time_ms=(time.time() - start) * 1000,
             )
 
         except Exception as e:
             return SandboxResult(
-                success=False,
-                error=str(e),
-                execution_time_ms=(time.time() - start) * 1000
+                success=False, error=str(e), execution_time_ms=(time.time() - start) * 1000
             )
 
+    # ------------------------------------------------------------------
+    # Synchronous convenience wrappers
+    # ------------------------------------------------------------------
 
-# ===================================================================
-# Kill Switch Protocol
-# ===================================================================
+    def get_safe_env(self) -> dict[str, str]:
+        """Return a restricted environment (alias for ``_get_restricted_env``)."""
+        return self._get_restricted_env()
+
+    def execute(self, command: str) -> SandboxResult:
+        """Run a shell command synchronously; raises on blocked commands."""
+        dangerous = ["rm -rf", "mkfs", "dd if=", "> /dev/", "chmod 777", ":(){ :|:& };:"]
+        for pattern in dangerous:
+            if pattern in command:
+                raise RuntimeError(f"Blocked dangerous command pattern: {pattern}")
+
+        import shlex
+
+        parts = shlex.split(command)
+        if not parts:
+            raise ValueError("Empty command")
+        base_cmd = os.path.basename(parts[0])
+        if os.sep in parts[0] or "/" in parts[0]:
+            raise RuntimeError(f"Path-based commands not allowed: {parts[0]!r}")
+        if base_cmd not in self.ALLOWED_COMMANDS:
+            raise RuntimeError(f"Command not in allowlist: {base_cmd!r}")
+
+        result = asyncio.run(self.execute_shell(command))
+        if not result.success and result.error:
+            raise RuntimeError(result.error)
+        return result
+
+    def execute_code(self, code: str) -> SandboxResult:
+        """Run Python code synchronously; raises on blocked imports."""
+        cfg = self.config
+        for blocked in cfg.blocked_imports:
+            if f"import {blocked}" in code or f"from {blocked}" in code:
+                raise RuntimeError(f"Blocked import: {blocked}")
+
+        result = asyncio.run(self.execute_python(code))
+        if not result.success and result.error:
+            raise RuntimeError(result.error)
+        return result
+
 
 class KillSwitchState(str, Enum):
     """Kill switch states"""
-    ARMED = "armed"        # Ready to trigger
+
+    ARMED = "armed"  # Ready to trigger
     TRIGGERED = "triggered"  # Kill switch activated
     RECOVERING = "recovering"  # Restoring state
-    NORMAL = "normal"      # Normal operation
+    NORMAL = "normal"  # Normal operation
 
 
 @dataclass
 class AgentState:
     """Snapshot of agent state for recovery"""
+
     state_id: str
     timestamp: str
-    active_tasks: List[Dict] = field(default_factory=list)
-    pending_operations: List[Dict] = field(default_factory=list)
-    sub_agents: List[Dict] = field(default_factory=list)
-    memory_snapshot: Dict[str, Any] = field(default_factory=dict)
+    active_tasks: list[dict] = field(default_factory=list)
+    pending_operations: list[dict] = field(default_factory=list)
+    sub_agents: list[dict] = field(default_factory=list)
+    memory_snapshot: dict[str, Any] = field(default_factory=dict)
 
 
 class KillSwitch:
@@ -857,10 +1094,11 @@ class KillSwitch:
     PREF_KEY_HEARTBEAT = "last_heartbeat_time"
     PREF_KEY_LOG_REVIEW = "last_log_review"
 
-    def __init__(self):
+    def __init__(self, state_file: Optional[str] = None):
+        self._state_file = state_file
         self.state = KillSwitchState.ARMED
-        self._saved_states: List[AgentState] = []
-        self._shutdown_callbacks: List[Callable] = []
+        self._saved_states: list[AgentState] = []
+        self._shutdown_callbacks: list[Callable] = []
         self._lock = threading.Lock()
 
     def trigger(self, reason: str = "Manual trigger") -> AgentState:
@@ -875,8 +1113,10 @@ class KillSwitch:
         with self._lock:
             if self.state == KillSwitchState.TRIGGERED:
                 logger.warning("Kill switch already triggered")
-                return self._saved_states[-1] if self._saved_states else AgentState(
-                    state_id="none", timestamp=datetime.now().isoformat()
+                return (
+                    self._saved_states[-1]
+                    if self._saved_states
+                    else AgentState(state_id="none", timestamp=datetime.now().isoformat())
                 )
 
             self.state = KillSwitchState.TRIGGERED
@@ -896,6 +1136,7 @@ class KillSwitch:
             # 3. Halt heartbeat
             try:
                 from heartbeat import heartbeat
+
                 heartbeat.stop()
                 logger.info("Heartbeat stopped")
             except Exception as e:
@@ -908,49 +1149,69 @@ class KillSwitch:
                     actor="kill_switch",
                     action="triggered",
                     target="all_systems",
-                    details={"reason": reason}
+                    details={"reason": reason},
                 )
             except Exception:
-                pass
+                logger.debug("Failed to log kill switch event to audit trail")
 
             logger.critical("🚨 All systems halted. State preserved.")
+
+            # 5. Persist state to file if configured
+            if self._state_file:
+                try:
+                    state_data = {
+                        "active": False,
+                        "triggered_at": state.timestamp,
+                        "reason": reason,
+                        "state_id": state.state_id,
+                    }
+                    with open(self._state_file, "w", encoding="utf-8") as fh:  # noqa: PTH123
+                        json.dump(state_data, fh, indent=2)
+                except Exception as exc:
+                    logger.error(f"Failed to write kill-switch state file: {exc}")
 
             return state
 
     def _capture_state(self) -> AgentState:
         """Capture current agent state for recovery"""
         import uuid
-        state = AgentState(
-            state_id=str(uuid.uuid4()),
-            timestamp=datetime.now().isoformat()
-        )
+
+        state = AgentState(state_id=str(uuid.uuid4()), timestamp=datetime.now().isoformat())
 
         # Capture active tasks from sub-agent orchestrator
         try:
             from sub_agents import orchestrator
+
             for wf_id, wf in orchestrator.active_workflows.items():
-                state.active_tasks.append({
-                    "workflow_id": wf_id,
-                    "description": wf.description,
-                    "task_count": len(wf.tasks),
-                    "completed": len([t for t in wf.tasks if t.status.value == "completed"])
-                })
+                state.active_tasks.append(
+                    {
+                        "workflow_id": wf_id,
+                        "description": wf.description,
+                        "task_count": len(wf.tasks),
+                        "completed": len([t for t in wf.tasks if t.status.value == "completed"]),
+                    }
+                )
         except Exception as e:
             logger.warning(f"Failed to capture sub-agent state: {e}")
 
         # Capture memory snapshot
         try:
             from memory import memory
+
             state.memory_snapshot = {
                 "preferences": {
                     "last_heartbeat": memory.get_preference(self.PREF_KEY_HEARTBEAT),
-                    "last_log_review": memory.get_preference(self.PREF_KEY_LOG_REVIEW)
+                    "last_log_review": memory.get_preference(self.PREF_KEY_LOG_REVIEW),
                 }
             }
         except Exception as e:
             logger.warning(f"Failed to capture memory state: {e}")
 
         return state
+
+    def is_active(self) -> bool:
+        """Return ``True`` when the switch has *not* been triggered."""
+        return self.state != KillSwitchState.TRIGGERED
 
     def recover(self) -> Optional[AgentState]:
         """
@@ -972,19 +1233,28 @@ class KillSwitch:
             self.state = KillSwitchState.ARMED
             logger.info("✅ Recovery complete. Kill switch re-armed.")
 
+            # Update state file
+            if self._state_file:
+                try:
+                    state_data = {"active": True, "recovered_at": datetime.now().isoformat()}
+                    with open(self._state_file, "w", encoding="utf-8") as fh:  # noqa: PTH123
+                        json.dump(state_data, fh, indent=2)
+                except Exception as exc:
+                    logger.error(f"Failed to update kill-switch state file: {exc}")
+
             return last_state
 
     def on_shutdown(self, callback: Callable):
         """Register a shutdown callback"""
         self._shutdown_callbacks.append(callback)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get kill switch status"""
         return {
             "state": self.state.value,
             "saved_states": len(self._saved_states),
             "shutdown_callbacks": len(self._shutdown_callbacks),
-            "last_trigger": self._saved_states[-1].timestamp if self._saved_states else None
+            "last_trigger": self._saved_states[-1].timestamp if self._saved_states else None,
         }
 
 

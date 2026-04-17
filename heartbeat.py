@@ -2,26 +2,32 @@
 Autonomous Heartbeat System
 Periodic wake-up for proactive task execution and self-improvement
 """
+
 import asyncio
 import threading
-from datetime import datetime, time, timedelta
-from typing import List, Dict, Any, Callable, Optional
 from dataclasses import dataclass, field
+from datetime import datetime, time
 from enum import Enum
+from typing import Any, Callable, Optional
+
 from loguru import logger
+
 from config import settings
-from memory import memory
-from router import router, AgentRole
 from log_review import log_reviewer
+from memory import memory
+from router import router
+
 
 class HeartbeatState(str, Enum):
     RUNNING = "running"
     PAUSED = "paused"
     STOPPED = "stopped"
 
+
 @dataclass
 class HeartbeatConfig:
     """Configuration for heartbeat system"""
+
     enabled: bool = True
     interval_minutes: int = 45
     quiet_hours_start: time = time(23, 0)
@@ -30,17 +36,20 @@ class HeartbeatConfig:
     active_hours_only: bool = True
     notification_callback: Optional[Callable] = None
 
+
 @dataclass
 class HeartbeatResult:
     """Result of a heartbeat cycle"""
+
     timestamp: datetime
     duration_seconds: float
-    system_health: Dict[str, Any]
-    action_items_found: List[Dict]
-    autonomous_actions: List[Dict]
-    notifications: List[str]
+    system_health: dict[str, Any]
+    action_items_found: list[dict]
+    autonomous_actions: list[dict]
+    notifications: list[str]
     cost_incurred: float
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
 
 class HeartbeatSystem:
     """
@@ -70,6 +79,7 @@ class HeartbeatSystem:
         """Load SOUL.md for persistent identity"""
         try:
             from pathlib import Path
+
             soul_path = Path(__file__).parent / "SOUL.md"
             if soul_path.exists():
                 with open(soul_path) as f:
@@ -193,13 +203,14 @@ class HeartbeatSystem:
             action_items_found=[],
             autonomous_actions=[],
             notifications=[],
-            cost_incurred=0
+            cost_incurred=0,
         )
 
         # Open a Draymond session for this heartbeat cycle
         session_id: Optional[str] = None
         try:
-            from autonomous_loop import start_session, close_session
+            from autonomous_loop import close_session, start_session
+
             session_id = await start_session("big-homie", trigger="heartbeat")
         except Exception as e:
             logger.debug(f"Draymond session open skipped: {e}")
@@ -260,11 +271,14 @@ class HeartbeatSystem:
             try:
                 total = len(result.autonomous_actions)
                 success = len([a for a in result.autonomous_actions if "error" not in a])
-                await close_session(session_id, {
-                    "total": total,
-                    "success": success,
-                    "failed": total - success,
-                })
+                await close_session(
+                    session_id,
+                    {
+                        "total": total,
+                        "success": success,
+                        "failed": total - success,
+                    },
+                )
             except Exception as e:
                 logger.debug(f"Draymond session close skipped: {e}")
 
@@ -275,7 +289,7 @@ class HeartbeatSystem:
 
         return result
 
-    async def _check_system_health(self) -> Dict[str, Any]:
+    async def _check_system_health(self) -> dict[str, Any]:
         """Check system health and return status"""
         health = {
             "status": "healthy",
@@ -294,9 +308,7 @@ class HeartbeatSystem:
             health["active_skills"] = len(skills)
 
             # Check cost budget
-            health["cost_budget_remaining"] = (
-                self.config.max_autonomous_cost - self.daily_cost
-            )
+            health["cost_budget_remaining"] = self.config.max_autonomous_cost - self.daily_cost
 
             # All checks passed
             health["status"] = "healthy"
@@ -308,7 +320,7 @@ class HeartbeatSystem:
 
         return health
 
-    async def _scan_action_items(self) -> List[Dict]:
+    async def _scan_action_items(self) -> list[dict]:
         """Scan for action items requiring attention"""
         action_items = []
 
@@ -316,19 +328,15 @@ class HeartbeatSystem:
             # Check for pending tasks in memory
             pending_tasks = memory.get_preference("pending_tasks", [])
             if pending_tasks:
-                action_items.extend([
-                    {"type": "pending_task", "data": task}
-                    for task in pending_tasks
-                ])
+                action_items.extend(
+                    [{"type": "pending_task", "data": task} for task in pending_tasks]
+                )
 
             # Check for high-priority memories
             important_memories = memory.search_memory(limit=5)
             for mem in important_memories:
                 if mem.get("importance", 0) >= 8:
-                    action_items.append({
-                        "type": "important_memory",
-                        "data": mem
-                    })
+                    action_items.append({"type": "important_memory", "data": mem})
 
             # Could add more sources:
             # - Email scanning (if configured)
@@ -341,7 +349,7 @@ class HeartbeatSystem:
 
         return action_items
 
-    async def _execute_autonomous_tasks(self, action_items: List[Dict]) -> List[Dict]:
+    async def _execute_autonomous_tasks(self, action_items: list[dict]) -> list[dict]:
         """Execute autonomous tasks based on action items"""
         actions_taken = []
 
@@ -353,15 +361,17 @@ class HeartbeatSystem:
                 decision, result = await router.execute_with_routing(
                     task=task_description,
                     context={"autonomous": True, "action_item": item},
-                    prefer_cost=True  # Prefer cheaper models for autonomous tasks
+                    prefer_cost=True,  # Prefer cheaper models for autonomous tasks
                 )
 
-                actions_taken.append({
-                    "item": item,
-                    "result": result.get("content", ""),
-                    "cost": decision.estimated_cost,
-                    "model": decision.model
-                })
+                actions_taken.append(
+                    {
+                        "item": item,
+                        "result": result.get("content", ""),
+                        "cost": decision.estimated_cost,
+                        "model": decision.model,
+                    }
+                )
 
             except Exception as e:
                 logger.error(f"Autonomous task execution failed: {e}")
@@ -375,10 +385,11 @@ class HeartbeatSystem:
                         # Analyze screenshot with vision if captured
                         if screenshot_path:
                             from vision_analysis import vision_analyzer
+
                             analysis = await vision_analyzer.analyze_screenshot_error(
                                 screenshot_path=screenshot_path,
                                 error_message=str(e),
-                                context={"action_item": item}
+                                context={"action_item": item},
                             )
 
                             if analysis.success:
@@ -387,11 +398,7 @@ class HeartbeatSystem:
                     except Exception as vision_error:
                         logger.warning(f"Screenshot/vision analysis failed: {vision_error}")
 
-                actions_taken.append({
-                    "item": item,
-                    "error": str(e),
-                    "screenshot": screenshot_path
-                })
+                actions_taken.append({"item": item, "error": str(e), "screenshot": screenshot_path})
 
         return actions_taken
 
@@ -399,6 +406,7 @@ class HeartbeatSystem:
         """Capture screenshot when error occurs"""
         try:
             from datetime import datetime
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             screenshot_dir = settings.data_dir / "screenshots"
             screenshot_dir.mkdir(exist_ok=True)
@@ -407,6 +415,7 @@ class HeartbeatSystem:
 
             # Try to capture browser screenshot if browser is active
             from browser_skill import browser_skill
+
             if browser_skill.page:
                 path = await browser_skill.screenshot(str(screenshot_path))
                 logger.info(f"Error screenshot saved: {path}")
@@ -435,7 +444,7 @@ class HeartbeatSystem:
             analysis = log_reviewer.perform_daily_review()
 
             # Export analysis report
-            report_path = log_reviewer.export_analysis(analysis)
+            log_reviewer.export_analysis(analysis)
 
             # If there are critical patterns, use Architect to propose fixes
             if analysis.error_patterns:
@@ -449,8 +458,7 @@ class HeartbeatSystem:
 Provide specific code changes or configuration updates to resolve these issues."""
 
                     decision, result = await router.execute_with_routing(
-                        task=fix_task,
-                        context={"requires_reasoning": True}
+                        task=fix_task, context={"requires_reasoning": True}
                     )
 
                     # Store fix suggestions
@@ -458,15 +466,20 @@ Provide specific code changes or configuration updates to resolve these issues."
                         key=f"critical_fixes_{datetime.now().date()}",
                         value=result.get("content", ""),
                         category="self_improvement",
-                        importance=9
+                        importance=9,
                     )
 
             # Store analysis summary
             memory.store(
                 key=f"log_review_{datetime.now().date()}",
-                value=f"Review complete. Errors: {analysis.total_errors}, Success Rate: {analysis.success_metrics['success_rate']}%",
+                value=(
+                    f"Review complete. Errors: "
+                    f"{analysis.total_errors}, "
+                    f"Success Rate: "
+                    f"{analysis.success_metrics['success_rate']}%"
+                ),
                 category="self_improvement",
-                importance=7
+                importance=7,
             )
 
             memory.set_preference("last_log_review", datetime.now().isoformat())
@@ -474,7 +487,7 @@ Provide specific code changes or configuration updates to resolve these issues."
         except Exception as e:
             logger.error(f"Log review failed: {e}")
 
-    def _generate_notifications(self, result: HeartbeatResult) -> List[str]:
+    def _generate_notifications(self, result: HeartbeatResult) -> list[str]:
         """Generate user notifications based on heartbeat results"""
         notifications = []
 
@@ -486,24 +499,18 @@ Provide specific code changes or configuration updates to resolve these issues."
 
         # Action items found
         if len(result.action_items_found) > 0:
-            notifications.append(
-                f"📥 Found {len(result.action_items_found)} action items"
-            )
+            notifications.append(f"📥 Found {len(result.action_items_found)} action items")
 
         # Autonomous actions completed
         if len(result.autonomous_actions) > 0:
             successful = len([a for a in result.autonomous_actions if "error" not in a])
             if successful > 0:
-                notifications.append(
-                    f"✅ Completed {successful} autonomous tasks"
-                )
+                notifications.append(f"✅ Completed {successful} autonomous tasks")
 
         # Cost warnings
         remaining = self.config.max_autonomous_cost - self.daily_cost
         if remaining < 1.0:
-            notifications.append(
-                f"💰 Low autonomous budget: ${remaining:.2f} remaining"
-            )
+            notifications.append(f"💰 Low autonomous budget: ${remaining:.2f} remaining")
 
         return notifications
 
@@ -518,7 +525,7 @@ Provide specific code changes or configuration updates to resolve these issues."
                 return {
                     "dream_cycle_run": True,
                     "memories_processed": cycle.memories_processed,
-                    "memories_consolidated": cycle.memories_consolidated
+                    "memories_consolidated": cycle.memories_consolidated,
                 }
         except ImportError:
             pass
@@ -527,7 +534,7 @@ Provide specific code changes or configuration updates to resolve these issues."
 
         return {"dream_cycle_run": False}
 
-    async def _notify_kairos(self, action: str, data: Optional[Dict] = None):
+    async def _notify_kairos(self, action: str, data: Optional[dict] = None):
         """Notify KAIROS daemon of heartbeat events"""
         try:
             from kairos_daemon import kairos
@@ -584,6 +591,7 @@ def setup_realtime(agent_id: str):
     Call once at startup to enable event-driven wakeups for Big Homie.
     """
     from supabase_client import get_supabase
+
     db = get_supabase()
     if db is None:
         logger.warning("Supabase client not available - realtime subscription skipped")

@@ -2,23 +2,25 @@
 Environment Sensing - Tier 3 Perception
 Monitor system state, file changes, API responses, and runtime errors
 """
-import os
-import sys
-import time
+
 import asyncio
 import platform
+import sys
 import threading
-from typing import Dict, List, Any, Optional, Callable
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
+from typing import Any, Callable, Optional
+
 from loguru import logger
+
 from config import settings
 
 
 @dataclass
 class SystemMetrics:
     """Current system metrics snapshot"""
+
     timestamp: str
     cpu_percent: Optional[float] = None
     memory_percent: Optional[float] = None
@@ -34,20 +36,22 @@ class SystemMetrics:
 @dataclass
 class FileEvent:
     """A file system change event"""
+
     event_type: str  # created, modified, deleted, moved
     path: str
     timestamp: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class EnvironmentAlert:
     """An alert from the environment sensor"""
+
     level: str  # info, warning, critical
     source: str
     message: str
     timestamp: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class EnvironmentSensor:
@@ -64,11 +68,11 @@ class EnvironmentSensor:
 
     def __init__(self):
         self.start_time = time.time()
-        self.alerts: List[EnvironmentAlert] = []
-        self.file_events: List[FileEvent] = []
-        self.api_health: Dict[str, Dict] = {}
-        self._watchers: Dict[str, Any] = {}
-        self._alert_callbacks: List[Callable] = []
+        self.alerts: list[EnvironmentAlert] = []
+        self.file_events: list[FileEvent] = []
+        self.api_health: dict[str, dict] = {}
+        self._watchers: dict[str, Any] = {}
+        self._alert_callbacks: list[Callable] = []
         self._monitoring = False
         self._monitor_thread: Optional[threading.Thread] = None
 
@@ -80,11 +84,12 @@ class EnvironmentSensor:
             timestamp=datetime.now().isoformat(),
             python_version=sys.version.split()[0],
             platform=f"{platform.system()} {platform.release()}",
-            uptime_seconds=time.time() - self.start_time
+            uptime_seconds=time.time() - self.start_time,
         )
 
         try:
             import psutil
+
             metrics.cpu_percent = psutil.cpu_percent(interval=0.1)
             mem = psutil.virtual_memory()
             metrics.memory_percent = mem.percent
@@ -99,7 +104,7 @@ class EnvironmentSensor:
 
         return metrics
 
-    def check_system_health(self) -> Dict[str, Any]:
+    def check_system_health(self) -> dict[str, Any]:
         """Comprehensive system health check"""
         metrics = self.get_system_metrics()
 
@@ -110,10 +115,10 @@ class EnvironmentSensor:
                 "cpu_percent": metrics.cpu_percent,
                 "memory_percent": metrics.memory_percent,
                 "disk_percent": metrics.disk_percent,
-                "uptime_seconds": metrics.uptime_seconds
+                "uptime_seconds": metrics.uptime_seconds,
             },
             "warnings": [],
-            "errors": []
+            "errors": [],
         }
 
         # Check thresholds
@@ -139,13 +144,14 @@ class EnvironmentSensor:
 
         return health
 
-    def _check_critical_services(self) -> Dict[str, Dict]:
+    def _check_critical_services(self) -> dict[str, dict]:
         """Check availability of critical services"""
         services = {}
 
         # Check database
         try:
             from memory import memory
+
             memory.search_memory(limit=1)
             services["database"] = {"available": True, "latency_ms": 0}
         except Exception as e:
@@ -174,8 +180,8 @@ class EnvironmentSensor:
             callback: Optional callback for file events
         """
         try:
-            from watchdog.observers import Observer
             from watchdog.events import FileSystemEventHandler
+            from watchdog.observers import Observer
 
             class EventHandler(FileSystemEventHandler):
                 def __init__(self, sensor):
@@ -188,7 +194,7 @@ class EnvironmentSensor:
                     file_event = FileEvent(
                         event_type=event.event_type,
                         path=event.src_path,
-                        timestamp=datetime.now().isoformat()
+                        timestamp=datetime.now().isoformat(),
                     )
 
                     self.sensor.file_events.append(file_event)
@@ -208,7 +214,11 @@ class EnvironmentSensor:
             logger.info(f"Watching directory: {path}")
 
         except ImportError:
-            logger.warning("watchdog not installed - file monitoring unavailable. Install with: pip install watchdog")
+            logger.warning(
+                "watchdog not installed - file monitoring"
+                " unavailable. Install with:"
+                " pip install watchdog"
+            )
 
     def stop_watching(self, path: Optional[str] = None):
         """Stop watching a directory (or all directories)"""
@@ -218,18 +228,18 @@ class EnvironmentSensor:
                 observer.stop()
                 observer.join()
         else:
-            for obs_path, observer in self._watchers.items():
+            for _obs_path, observer in self._watchers.items():
                 observer.stop()
                 observer.join()
             self._watchers.clear()
 
-    def get_recent_file_events(self, limit: int = 50) -> List[FileEvent]:
+    def get_recent_file_events(self, limit: int = 50) -> list[FileEvent]:
         """Get recent file system events"""
         return self.file_events[-limit:]
 
     # ===== API Health Monitoring =====
 
-    async def check_api_health(self, name: str, url: str, timeout: float = 5.0) -> Dict:
+    async def check_api_health(self, name: str, url: str, timeout: float = 5.0) -> dict:
         """
         Check health of an external API endpoint.
 
@@ -250,7 +260,7 @@ class EnvironmentSensor:
             "available": False,
             "latency_ms": 0,
             "status_code": None,
-            "error": None
+            "error": None,
         }
 
         try:
@@ -273,12 +283,12 @@ class EnvironmentSensor:
             self._create_alert(
                 "warning",
                 f"api_health:{name}",
-                f"Service '{name}' is unavailable: {result.get('error', 'unknown error')}"
+                f"Service '{name}' is unavailable: {result.get('error', 'unknown error')}",
             )
 
         return result
 
-    async def check_all_apis(self) -> Dict[str, Dict]:
+    async def check_all_apis(self) -> dict[str, dict]:
         """Check health of all configured API endpoints"""
         endpoints = []
 
@@ -298,14 +308,14 @@ class EnvironmentSensor:
 
     # ===== Alert System =====
 
-    def _create_alert(self, level: str, source: str, message: str, metadata: Optional[Dict] = None):
+    def _create_alert(self, level: str, source: str, message: str, metadata: Optional[dict] = None):
         """Create an environment alert"""
         alert = EnvironmentAlert(
             level=level,
             source=source,
             message=message,
             timestamp=datetime.now().isoformat(),
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         self.alerts.append(alert)
@@ -322,11 +332,9 @@ class EnvironmentSensor:
                 logger.error(f"Alert callback failed: {e}")
 
         # Log the alert
-        log_func = {
-            "info": logger.info,
-            "warning": logger.warning,
-            "critical": logger.error
-        }.get(level, logger.info)
+        log_func = {"info": logger.info, "warning": logger.warning, "critical": logger.error}.get(
+            level, logger.info
+        )
 
         log_func(f"🔔 [{source}] {message}")
 
@@ -334,7 +342,9 @@ class EnvironmentSensor:
         """Register an alert callback"""
         self._alert_callbacks.append(callback)
 
-    def get_recent_alerts(self, limit: int = 20, level: Optional[str] = None) -> List[EnvironmentAlert]:
+    def get_recent_alerts(
+        self, limit: int = 20, level: Optional[str] = None
+    ) -> list[EnvironmentAlert]:
         """Get recent alerts, optionally filtered by level"""
         alerts = self.alerts
         if level:
@@ -343,16 +353,13 @@ class EnvironmentSensor:
 
     # ===== Runtime Error Tracking =====
 
-    def track_error(self, error: Exception, context: Optional[Dict] = None):
+    def track_error(self, error: Exception, context: Optional[dict] = None):
         """Track a runtime error"""
         self._create_alert(
             "warning",
             f"runtime_error:{type(error).__name__}",
             str(error),
-            metadata={
-                "error_type": type(error).__name__,
-                "context": context or {}
-            }
+            metadata={"error_type": type(error).__name__, "context": context or {}},
         )
 
     # ===== Continuous Monitoring =====
@@ -364,9 +371,7 @@ class EnvironmentSensor:
 
         self._monitoring = True
         self._monitor_thread = threading.Thread(
-            target=self._monitoring_loop,
-            args=(interval_seconds,),
-            daemon=True
+            target=self._monitoring_loop, args=(interval_seconds,), daemon=True
         )
         self._monitor_thread.start()
         logger.info(f"Environment monitoring started (interval: {interval_seconds}s)")
@@ -398,7 +403,7 @@ class EnvironmentSensor:
 
     # ===== Environment Summary =====
 
-    def get_environment_summary(self) -> Dict[str, Any]:
+    def get_environment_summary(self) -> dict[str, Any]:
         """Get comprehensive environment summary"""
         metrics = self.get_system_metrics()
 
@@ -409,13 +414,13 @@ class EnvironmentSensor:
                 "cpu_percent": metrics.cpu_percent,
                 "memory_percent": metrics.memory_percent,
                 "disk_percent": metrics.disk_percent,
-                "uptime_hours": round(metrics.uptime_seconds / 3600, 2)
+                "uptime_hours": round(metrics.uptime_seconds / 3600, 2),
             },
             "monitoring": {
                 "active": self._monitoring,
                 "watched_directories": list(self._watchers.keys()),
                 "recent_file_events": len(self.file_events),
-                "api_health_checks": len(self.api_health)
+                "api_health_checks": len(self.api_health),
             },
             "alerts": {
                 "total": len(self.alerts),
@@ -424,8 +429,8 @@ class EnvironmentSensor:
                 "recent": [
                     {"level": a.level, "message": a.message, "time": a.timestamp}
                     for a in self.alerts[-5:]
-                ]
-            }
+                ],
+            },
         }
 
 

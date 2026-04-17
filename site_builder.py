@@ -25,13 +25,11 @@ Usage:
   print(result["url"])  # → https://trapbeats-studio.pages.dev
 """
 
+import logging
 import os
 import uuid
-import asyncio
-import logging
-import tempfile
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -49,7 +47,7 @@ class SiteBrief:
     tagline: str = ""
     cta_text: str = "Get Started"
     stripe_price_id: str = ""  # Optional: inject Stripe buy button
-    custom_domain: str = ""    # Optional: map custom domain after deploy
+    custom_domain: str = ""  # Optional: map custom domain after deploy
 
 
 @dataclass
@@ -118,9 +116,15 @@ class SiteBuilder:
             pages = ["home", "about", "services", "contact"]
 
         brief = SiteBrief(
-            name=name, niche=niche, tone=tone, colors=colors,
-            pages=pages, tagline=tagline, cta_text=cta_text,
-            stripe_price_id=stripe_price_id, custom_domain=custom_domain,
+            name=name,
+            niche=niche,
+            tone=tone,
+            colors=colors,
+            pages=pages,
+            tagline=tagline,
+            cta_text=cta_text,
+            stripe_price_id=stripe_price_id,
+            custom_domain=custom_domain,
         )
         job_id = str(uuid.uuid4())[:8]
         logger.info(f"[SiteBuilder:{job_id}] Building '{name}' — niche='{niche}' pages={pages}")
@@ -167,9 +171,7 @@ class SiteBuilder:
 
         except Exception as e:
             logger.error(f"[SiteBuilder:{job_id}] Build failed: {e}")
-            return SiteBuildResult(
-                success=False, job_id=job_id, brief=brief, error=str(e)
-            )
+            return SiteBuildResult(success=False, job_id=job_id, brief=brief, error=str(e))
 
     def _active_backend(self) -> str:
         if self.cf_enabled and self.cf_api_token:
@@ -181,13 +183,15 @@ class SiteBuilder:
     async def _generate_hero(self, job_id: str, brief: SiteBrief) -> str:
         """Generate a hero image for the site via ComfyUI."""
         try:
-            from media_generation import media_manager, MediaType
+            from media_generation import MediaType, media_manager
+
             result = await media_manager.generate_media(
                 media_type=MediaType.IMAGE,
                 prompt=(
                     f"Professional hero banner for {brief.niche} website called '{brief.name}'. "
                     f"Color palette: {brief.colors}. Tone: {brief.tone}. "
-                    f"Wide 16:9 format, minimal text space on left, abstract/atmospheric background. "
+                    "Wide 16:9 format, minimal text space on "
+                    "left, abstract/atmospheric background. "
                     f"High quality, commercial photography style."
                 ),
                 provider="comfyui",
@@ -201,26 +205,26 @@ class SiteBuilder:
 
     async def _generate_site_code(self, job_id: str, brief: SiteBrief, hero_path: str) -> str:
         """Generate complete HTML/CSS/JS for the site."""
-        from llm_gateway import llm, TaskType
+        from llm_gateway import TaskType, llm
 
         hero_instruction = (
             f"Use this local hero image path as the background: {hero_path}"
-            if hero_path else
-            "Generate a CSS gradient hero background that matches the color scheme."
+            if hero_path
+            else "Generate a CSS gradient hero background that matches the color scheme."
         )
 
         pages_str = ", ".join(brief.pages)
         stripe_instruction = (
             f"Include a Stripe buy button with price ID: {brief.stripe_price_id}"
-            if brief.stripe_price_id else
-            "Include a contact form in the contact section."
+            if brief.stripe_price_id
+            else "Include a contact form in the contact section."
         )
 
         prompt = f"""Build a complete, single-file production-ready website.
 
 Business Name: {brief.name}
 Niche / Industry: {brief.niche}
-Tagline: {brief.tagline or f'The best {brief.niche} service'}
+Tagline: {brief.tagline or f"The best {brief.niche} service"}
 Brand Tone: {brief.tone}
 Color Scheme: {brief.colors}
 Pages / Sections: {pages_str}
@@ -273,7 +277,7 @@ Output ONLY the complete HTML. No explanation. No markdown fences."""
 <div id="stripe-cta" style="position:fixed;bottom:24px;right:24px;z-index:999;">
   <stripe-buy-button
     buy-button-id="buy_btn_{price_id}"
-    publishable-key="{os.getenv('STRIPE_PUBLISHABLE_KEY', 'pk_live_xxx')}"
+    publishable-key="{os.getenv("STRIPE_PUBLISHABLE_KEY", "pk_live_xxx")}"
   ></stripe-buy-button>
 </div>"""
         return html.replace("</body>", stripe_html + "\n</body>")
@@ -299,7 +303,10 @@ Output ONLY the complete HTML. No explanation. No markdown fences."""
             async with httpx.AsyncClient() as client:
                 create_resp = await client.post(
                     f"https://api.cloudflare.com/client/v4/accounts/{self.cf_account_id}/pages/projects",
-                    headers={"Authorization": f"Bearer {self.cf_api_token}", "Content-Type": "application/json"},
+                    headers={
+                        "Authorization": f"Bearer {self.cf_api_token}",
+                        "Content-Type": "application/json",
+                    },
                     json={"name": project_name, "production_branch": "main"},
                     timeout=30,
                 )
@@ -323,7 +330,9 @@ Output ONLY the complete HTML. No explanation. No markdown fences."""
                     url = data.get("result", {}).get("url", f"https://{project_name}.pages.dev")
                     return url
                 else:
-                    logger.warning(f"CF deploy failed: {upload_resp.status_code} {upload_resp.text[:200]}")
+                    logger.warning(
+                        f"CF deploy failed: {upload_resp.status_code} {upload_resp.text[:200]}"
+                    )
                     return f"https://{project_name}.pages.dev"
         except Exception as e:
             logger.warning(f"[SiteBuilder:{job_id}] CF deploy error: {e}")
@@ -332,27 +341,42 @@ Output ONLY the complete HTML. No explanation. No markdown fences."""
     async def _deploy_vercel(self, job_id: str, project_name: str, html_path: str) -> str:
         """Deploy HTML to Vercel via Files API."""
         try:
-            import httpx, hashlib
+            import hashlib
 
-            with open(html_path, "r", encoding="utf-8") as f:
+            import httpx
+
+            with open(html_path, encoding="utf-8") as f:
                 html_content = f.read()
 
-            file_sha = hashlib.sha1(html_content.encode()).hexdigest()
+            file_sha = hashlib.sha256(html_content.encode()).hexdigest()
 
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     "https://api.vercel.com/v13/deployments",
-                    headers={"Authorization": f"Bearer {self.vercel_token}", "Content-Type": "application/json"},
+                    headers={
+                        "Authorization": f"Bearer {self.vercel_token}",
+                        "Content-Type": "application/json",
+                    },
                     json={
                         "name": project_name,
-                        "files": [{"file": "index.html", "sha": file_sha, "size": len(html_content.encode())}],
+                        "files": [
+                            {
+                                "file": "index.html",
+                                "sha": file_sha,
+                                "size": len(html_content.encode()),
+                            }
+                        ],
                         "projectSettings": {"framework": None},
                     },
                     timeout=30,
                 )
                 data = resp.json()
                 deploy_id = data.get("id", "")
-                return f"https://{project_name}.vercel.app" if deploy_id else f"https://{project_name}.vercel.app"
+                return (
+                    f"https://{project_name}.vercel.app"
+                    if deploy_id
+                    else f"https://{project_name}.vercel.app"
+                )
         except Exception as e:
             logger.warning(f"[SiteBuilder:{job_id}] Vercel deploy error: {e}")
             return f"https://{project_name}.vercel.app"
@@ -361,10 +385,14 @@ Output ONLY the complete HTML. No explanation. No markdown fences."""
         """Map a custom domain to the Cloudflare Pages project."""
         try:
             import httpx
+
             async with httpx.AsyncClient() as client:
                 await client.post(
                     f"https://api.cloudflare.com/client/v4/accounts/{self.cf_account_id}/pages/projects/{project_name}/domains",
-                    headers={"Authorization": f"Bearer {self.cf_api_token}", "Content-Type": "application/json"},
+                    headers={
+                        "Authorization": f"Bearer {self.cf_api_token}",
+                        "Content-Type": "application/json",
+                    },
                     json={"name": domain},
                     timeout=30,
                 )
@@ -376,6 +404,7 @@ Output ONLY the complete HTML. No explanation. No markdown fences."""
 # ─── Convenience wrapper ──────────────────────────────────────────────────────
 
 _builder = SiteBuilder()
+
 
 async def build_and_deploy_site(
     name: str,
@@ -390,7 +419,13 @@ async def build_and_deploy_site(
 ) -> SiteBuildResult:
     """Top-level wrapper for direct import."""
     return await _builder.build(
-        name=name, niche=niche, tone=tone, colors=colors,
-        pages=pages, tagline=tagline, cta_text=cta_text,
-        stripe_price_id=stripe_price_id, custom_domain=custom_domain,
+        name=name,
+        niche=niche,
+        tone=tone,
+        colors=colors,
+        pages=pages,
+        tagline=tagline,
+        cta_text=cta_text,
+        stripe_price_id=stripe_price_id,
+        custom_domain=custom_domain,
     )

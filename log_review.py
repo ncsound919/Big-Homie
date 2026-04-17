@@ -2,37 +2,45 @@
 Self-Correction & Log Review System
 Enables Big Homie to analyze its own error logs and improve autonomously
 """
-import re
+
 import json
-from typing import List, Dict, Any, Optional
+import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from collections import Counter, defaultdict
+from typing import Any, Optional
+
 from loguru import logger
+
 from config import settings
+
 
 @dataclass
 class ErrorPattern:
     """An identified error pattern"""
+
     pattern: str
     count: int
     first_seen: datetime
     last_seen: datetime
     severity: str
     category: str
-    examples: List[str]
+    examples: list[str]
     suggested_fix: Optional[str] = None
+
 
 @dataclass
 class LogAnalysis:
     """Analysis results from log review"""
+
     total_errors: int
     total_warnings: int
-    error_patterns: List[ErrorPattern]
-    improvement_suggestions: List[str]
-    success_metrics: Dict[str, Any]
+    error_patterns: list[ErrorPattern]
+    improvement_suggestions: list[str]
+    success_metrics: dict[str, Any]
     timestamp: datetime
+
 
 class LogReviewSystem:
     """
@@ -51,18 +59,15 @@ class LogReviewSystem:
         self.log_dir = log_dir or settings.data_dir / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        self.analysis_history: List[LogAnalysis] = []
+        self.analysis_history: list[LogAnalysis] = []
 
     def get_log_file_path(self, log_type: str = "main") -> Path:
         """Get path to log file"""
         return self.log_dir / f"{log_type}.log"
 
     def read_logs(
-        self,
-        log_type: str = "main",
-        since: Optional[datetime] = None,
-        limit: int = 10000
-    ) -> List[str]:
+        self, log_type: str = "main", since: Optional[datetime] = None, limit: int = 10000
+    ) -> list[str]:
         """
         Read log entries
 
@@ -80,7 +85,7 @@ class LogReviewSystem:
             return []
 
         try:
-            with open(log_path, 'r') as f:
+            with open(log_path) as f:
                 lines = f.readlines()
 
             # Filter by time if requested
@@ -89,16 +94,17 @@ class LogReviewSystem:
                 for line in lines:
                     # Loguru default format: "YYYY-MM-DD HH:MM:SS.mmm | LEVEL | ..."
                     # Also accept plain "YYYY-MM-DD HH:MM:SS" without milliseconds.
-                    match = re.search(
-                        r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.\d+)?', line
-                    )
+                    match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.\d+)?", line)
                     if match:
                         try:
-                            timestamp = datetime.strptime(match.group(1), '%Y-%m-%d %H:%M:%S')
+                            timestamp = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S")
                             if timestamp >= since:
                                 filtered.append(line)
                         except ValueError:
-                            logger.debug(f"log_review: skipping line with unparseable timestamp: {line[:80]!r}")
+                            logger.debug(
+                                f"log_review: skipping line with "
+                                f"unparseable timestamp: {line[:80]!r}"
+                            )
                 lines = filtered
 
             return lines[-limit:] if len(lines) > limit else lines
@@ -107,11 +113,7 @@ class LogReviewSystem:
             logger.error(f"Failed to read logs: {e}")
             return []
 
-    def analyze_errors(
-        self,
-        lines: List[str],
-        min_pattern_count: int = 3
-    ) -> List[ErrorPattern]:
+    def analyze_errors(self, lines: list[str], min_pattern_count: int = 3) -> list[ErrorPattern]:
         """
         Analyze log lines to identify error patterns
 
@@ -127,9 +129,9 @@ class LogReviewSystem:
         warnings = []
 
         for line in lines:
-            if 'ERROR' in line:
+            if "ERROR" in line:
                 errors.append(line)
-            elif 'WARNING' in line:
+            elif "WARNING" in line:
                 warnings.append(line)
 
         # Identify patterns in errors
@@ -137,10 +139,14 @@ class LogReviewSystem:
 
         for error in errors:
             # Extract error signature (remove specific values like timestamps, IDs, paths)
-            signature = re.sub(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', 'TIMESTAMP', error)
-            signature = re.sub(r'\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b', 'UUID', signature)
-            signature = re.sub(r'/[\w/.-]+', 'PATH', signature)
-            signature = re.sub(r'\d+', 'NUM', signature)
+            signature = re.sub(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "TIMESTAMP", error)
+            signature = re.sub(
+                r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+                "UUID",
+                signature,
+            )
+            signature = re.sub(r"/[\w/.-]+", "PATH", signature)
+            signature = re.sub(r"\d+", "NUM", signature)
 
             error_signatures[signature].append(error)
 
@@ -159,16 +165,18 @@ class LogReviewSystem:
                 # Generate suggested fix
                 suggested_fix = self._suggest_fix(signature, category)
 
-                patterns.append(ErrorPattern(
-                    pattern=signature[:200],
-                    count=len(examples),
-                    first_seen=first_timestamp or datetime.now(),
-                    last_seen=last_timestamp or datetime.now(),
-                    severity=self._determine_severity(signature),
-                    category=category,
-                    examples=examples[:3],  # Keep first 3 examples
-                    suggested_fix=suggested_fix
-                ))
+                patterns.append(
+                    ErrorPattern(
+                        pattern=signature[:200],
+                        count=len(examples),
+                        first_seen=first_timestamp or datetime.now(),
+                        last_seen=last_timestamp or datetime.now(),
+                        severity=self._determine_severity(signature),
+                        category=category,
+                        examples=examples[:3],  # Keep first 3 examples
+                        suggested_fix=suggested_fix,
+                    )
+                )
 
         # Sort by count (most frequent first)
         patterns.sort(key=lambda p: p.count, reverse=True)
@@ -179,10 +187,10 @@ class LogReviewSystem:
         """Extract timestamp from log line"""
         # Match Loguru-style "YYYY-MM-DD HH:MM:SS" with optional ".mmm" milliseconds
         # Use re.search so leading metadata/level prefixes are ignored.
-        match = re.search(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.\d+)?', log_line)
+        match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.\d+)?", log_line)
         if match:
             try:
-                return datetime.strptime(match.group(1), '%Y-%m-%d %H:%M:%S')
+                return datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 pass
         return None
@@ -197,7 +205,7 @@ class LogReviewSystem:
             "network": ["connection", "timeout", "network", "socket"],
             "parsing": ["json", "parse", "decode", "format"],
             "config": ["config", "settings", "env", "key"],
-            "browser": ["playwright", "browser", "page", "selector"]
+            "browser": ["playwright", "browser", "page", "selector"],
         }
 
         error_lower = error_signature.lower()
@@ -225,22 +233,36 @@ class LogReviewSystem:
     def _suggest_fix(self, error_signature: str, category: str) -> str:
         """Generate suggested fix for error pattern"""
         fixes = {
-            "api": "Check API key configuration and rate limits. Add retry logic with exponential backoff.",
-            "llm": "Verify model availability and API key. Check token limits and request formatting.",
-            "memory": "Check database file permissions. Verify ChromaDB installation and storage path.",
-            "file": "Verify file paths exist. Add proper error handling for file operations.",
-            "network": "Add timeout and retry logic. Check network connectivity and firewall settings.",
-            "parsing": "Add JSON validation before parsing. Handle malformed responses gracefully.",
-            "config": "Verify .env file exists and contains required keys. Check settings validation.",
-            "browser": "Check Playwright installation. Add wait conditions before interacting with elements."
+            "api": (
+                "Check API key configuration and rate limits. "
+                "Add retry logic with exponential backoff."
+            ),
+            "llm": (
+                "Verify model availability and API key. Check token limits and request formatting."
+            ),
+            "memory": (
+                "Check database file permissions. Verify ChromaDB installation and storage path."
+            ),
+            "file": ("Verify file paths exist. Add proper error handling for file operations."),
+            "network": (
+                "Add timeout and retry logic. Check network connectivity and firewall settings."
+            ),
+            "parsing": (
+                "Add JSON validation before parsing. Handle malformed responses gracefully."
+            ),
+            "config": (
+                "Verify .env file exists and contains required keys. Check settings validation."
+            ),
+            "browser": (
+                "Check Playwright installation. "
+                "Add wait conditions before interacting "
+                "with elements."
+            ),
         }
 
         return fixes.get(category, "Review error context and add appropriate error handling.")
 
-    def calculate_success_metrics(
-        self,
-        lines: List[str]
-    ) -> Dict[str, Any]:
+    def calculate_success_metrics(self, lines: list[str]) -> dict[str, Any]:
         """
         Calculate success metrics from logs
 
@@ -253,15 +275,15 @@ class LogReviewSystem:
         total_cost = 0.0
 
         for line in lines:
-            if 'Task completed' in line:
+            if "Task completed" in line:
                 completed_tasks += 1
                 total_tasks += 1
-            elif 'Task failed' in line:
+            elif "Task failed" in line:
                 failed_tasks += 1
                 total_tasks += 1
 
             # Extract cost information
-            cost_match = re.search(r'\$(\d+\.\d+)', line)
+            cost_match = re.search(r"\$(\d+\.\d+)", line)
             if cost_match:
                 total_cost += float(cost_match.group(1))
 
@@ -273,14 +295,12 @@ class LogReviewSystem:
             "failed_tasks": failed_tasks,
             "success_rate": round(success_rate, 2),
             "total_cost": round(total_cost, 4),
-            "avg_cost_per_task": round(total_cost / total_tasks, 4) if total_tasks > 0 else 0
+            "avg_cost_per_task": round(total_cost / total_tasks, 4) if total_tasks > 0 else 0,
         }
 
     def generate_improvement_suggestions(
-        self,
-        patterns: List[ErrorPattern],
-        metrics: Dict[str, Any]
-    ) -> List[str]:
+        self, patterns: list[ErrorPattern], metrics: dict[str, Any]
+    ) -> list[str]:
         """
         Generate actionable improvement suggestions
 
@@ -345,8 +365,8 @@ class LogReviewSystem:
         lines = self.read_logs(since=since)
 
         # Count errors and warnings
-        total_errors = sum(1 for line in lines if 'ERROR' in line)
-        total_warnings = sum(1 for line in lines if 'WARNING' in line)
+        total_errors = sum(1 for line in lines if "ERROR" in line)
+        total_warnings = sum(1 for line in lines if "WARNING" in line)
 
         # Analyze error patterns
         patterns = self.analyze_errors(lines)
@@ -364,14 +384,14 @@ class LogReviewSystem:
             error_patterns=patterns,
             improvement_suggestions=suggestions,
             success_metrics=metrics,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
 
         # Store in history
         self.analysis_history.append(analysis)
 
         # Log summary
-        logger.info(f"Daily Review Complete:")
+        logger.info("Daily Review Complete:")
         logger.info(f"  Errors: {total_errors}, Warnings: {total_warnings}")
         logger.info(f"  Patterns identified: {len(patterns)}")
         logger.info(f"  Success rate: {metrics['success_rate']}%")
@@ -394,18 +414,19 @@ class LogReviewSystem:
                     "count": p.count,
                     "severity": p.severity,
                     "category": p.category,
-                    "suggested_fix": p.suggested_fix
+                    "suggested_fix": p.suggested_fix,
                 }
                 for p in analysis.error_patterns
             ],
             "improvement_suggestions": analysis.improvement_suggestions,
-            "success_metrics": analysis.success_metrics
+            "success_metrics": analysis.success_metrics,
         }
 
         path.write_text(json.dumps(data, indent=2))
         logger.info(f"Analysis exported to: {path}")
 
         return path
+
 
 # Global log review instance
 log_reviewer = LogReviewSystem()

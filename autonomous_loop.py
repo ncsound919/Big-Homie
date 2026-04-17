@@ -2,30 +2,40 @@
 Autonomous Loop & Evaluator-Optimizer - Tier 6 Self-Improvement
 Autonomous coding loop + self-critique refinement cycle
 """
+
 import asyncio
 import json
 import uuid
-from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from loguru import logger
+from typing import Any, Callable, Optional
 
+from loguru import logger
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Draymond session helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 async def start_session(agent_id: str, trigger: str = "heartbeat") -> str:
     """Open a Draymond session row and return its UUID."""
+
     def _insert():
         from supabase_client import get_supabase
+
         db = get_supabase()
-        return db.table("draymond_sessions").insert({
-            "agent_id": agent_id,
-            "trigger_source": trigger,
-            "is_active": True,
-        }).execute()
+        return (
+            db.table("draymond_sessions")
+            .insert(
+                {
+                    "agent_id": agent_id,
+                    "trigger_source": trigger,
+                    "is_active": True,
+                }
+            )
+            .execute()
+        )
 
     res = await asyncio.to_thread(_insert)
 
@@ -35,38 +45,39 @@ async def start_session(agent_id: str, trigger: str = "heartbeat") -> str:
 
     data = getattr(res, "data", None)
     if not data:
-        raise RuntimeError(
-            "Failed to start session in Supabase: insert returned no rows."
-        )
+        raise RuntimeError("Failed to start session in Supabase: insert returned no rows.")
 
     row = data[0]
     if "id" not in row:
-        raise RuntimeError(
-            f"Failed to start session in Supabase: inserted row missing 'id': {row}"
-        )
+        raise RuntimeError(f"Failed to start session in Supabase: inserted row missing 'id': {row}")
 
     return row["id"]
 
 
 async def close_session(session_id: str, stats: dict):
     """Close a Draymond session and write summary statistics."""
+
     def _update():
         from supabase_client import get_supabase
+
         db = get_supabase()
-        db.table("draymond_sessions").update({
-            "is_active": False,
-            "ended_at": datetime.now(timezone.utc).isoformat(),
-            "total_actions": stats.get("total", 0),
-            "successful_actions": stats.get("success", 0),
-            "failed_actions": stats.get("failed", 0),
-            "avg_confidence": stats.get("avg_confidence"),
-        }).eq("id", session_id).execute()
+        db.table("draymond_sessions").update(
+            {
+                "is_active": False,
+                "ended_at": datetime.now(timezone.utc).isoformat(),
+                "total_actions": stats.get("total", 0),
+                "successful_actions": stats.get("success", 0),
+                "failed_actions": stats.get("failed", 0),
+                "avg_confidence": stats.get("avg_confidence"),
+            }
+        ).eq("id", session_id).execute()
 
     await asyncio.to_thread(_update)
 
 
 class LoopStatus(str, Enum):
     """Status of an autonomous loop"""
+
     RUNNING = "running"
     PAUSED = "paused"
     COMPLETED = "completed"
@@ -77,12 +88,13 @@ class LoopStatus(str, Enum):
 @dataclass
 class LoopIteration:
     """A single iteration of the autonomous loop"""
+
     iteration: int
     action: str
     result: str
     tests_passed: Optional[bool] = None
-    errors: List[str] = field(default_factory=list)
-    improvements: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    improvements: list[str] = field(default_factory=list)
     cost: float = 0.0
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
@@ -90,19 +102,21 @@ class LoopIteration:
 @dataclass
 class AutonomousResult:
     """Result of an autonomous loop execution"""
+
     loop_id: str
     goal: str
     status: LoopStatus
-    iterations: List[LoopIteration] = field(default_factory=list)
+    iterations: list[LoopIteration] = field(default_factory=list)
     final_output: Optional[str] = None
     total_cost: float = 0.0
     total_time_seconds: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class EvalResult:
     """Result of an evaluation cycle"""
+
     original_output: str
     critique: str
     refined_output: str
@@ -129,22 +143,23 @@ class AutonomousCodingLoop:
 
     def __init__(self, max_iterations: int = 10):
         self.max_iterations = max_iterations
-        self.active_loops: Dict[str, AutonomousResult] = {}
+        self.active_loops: dict[str, AutonomousResult] = {}
         self._router = None
         self._shell = None
 
     def _get_router(self):
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
     async def run(
         self,
         goal: str,
-        context: Optional[Dict] = None,
+        context: Optional[dict] = None,
         validation_fn: Optional[Callable] = None,
-        max_iterations: Optional[int] = None
+        max_iterations: Optional[int] = None,
     ) -> AutonomousResult:
         """
         Run the autonomous coding/refinement loop.
@@ -159,14 +174,11 @@ class AutonomousCodingLoop:
             AutonomousResult with final output and iteration history
         """
         import time
+
         start_time = time.time()
         max_iter = max_iterations or self.max_iterations
 
-        result = AutonomousResult(
-            loop_id=str(uuid.uuid4()),
-            goal=goal,
-            status=LoopStatus.RUNNING
-        )
+        result = AutonomousResult(loop_id=str(uuid.uuid4()), goal=goal, status=LoopStatus.RUNNING)
 
         self.active_loops[result.loop_id] = result
         current_output = ""
@@ -183,7 +195,9 @@ class AutonomousCodingLoop:
                 # Step 1: Generate or refine
                 if iteration == 1:
                     # Initial generation
-                    gen_prompt = f"""You are in an autonomous coding loop. Generate a solution for this goal.
+                    gen_prompt = f"""\
+You are in an autonomous coding loop. \
+Generate a solution for this goal.
 
 Goal: {goal}
 
@@ -199,7 +213,7 @@ Goal: {goal}
 
 Current solution:
 ```
-{current_output[:self.MAX_OUTPUT_DISPLAY_LENGTH]}
+{current_output[: self.MAX_OUTPUT_DISPLAY_LENGTH]}
 ```
 
 Errors from previous iteration:
@@ -208,8 +222,7 @@ Errors from previous iteration:
 Fix the errors and improve the solution. Provide the complete updated solution."""
 
                 decision, gen_result = await self._get_router().execute_with_routing(
-                    task=gen_prompt,
-                    context={"requires_reasoning": True}
+                    task=gen_prompt, context={"requires_reasoning": True}
                 )
 
                 current_output = gen_result.get("content", "")
@@ -229,17 +242,14 @@ Fix the errors and improve the solution. Provide the complete updated solution."
                         break
                     else:
                         iter_result.errors.append(feedback)
-                        error_history.append({
-                            "iteration": iteration,
-                            "error": feedback
-                        })
+                        error_history.append({"iteration": iteration, "error": feedback})
                 else:
                     # Self-validate: ask the model to critique its own output
                     critique_prompt = f"""Critically evaluate this solution for the goal: {goal}
 
 Solution:
 ```
-{current_output[:self.MAX_OUTPUT_DISPLAY_LENGTH]}
+{current_output[: self.MAX_OUTPUT_DISPLAY_LENGTH]}
 ```
 
 Are there any bugs, errors, or improvements needed?
@@ -252,8 +262,7 @@ Respond in JSON:
 }}"""
 
                     _, critique_result = await self._get_router().execute_with_routing(
-                        task=critique_prompt,
-                        context={"requires_reasoning": True}
+                        task=critique_prompt, context={"requires_reasoning": True}
                     )
 
                     critique_content = critique_result.get("content", "")
@@ -273,10 +282,9 @@ Respond in JSON:
                             break
                         else:
                             iter_result.errors = issues
-                            error_history.extend([
-                                {"iteration": iteration, "error": issue}
-                                for issue in issues
-                            ])
+                            error_history.extend(
+                                [{"iteration": iteration, "error": issue} for issue in issues]
+                            )
                     else:
                         # Can't parse critique, assume done after a few iterations
                         if iteration >= 3:
@@ -308,7 +316,7 @@ Respond in JSON:
 
         return result
 
-    def _parse_json(self, content: str) -> Optional[Dict]:
+    def _parse_json(self, content: str) -> Optional[dict]:
         """Parse JSON from response content"""
         try:
             return json.loads(content)
@@ -342,15 +350,13 @@ class EvaluatorOptimizer:
     def _get_router(self):
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
     async def generate_and_refine(
-        self,
-        task: str,
-        context: Optional[Dict] = None,
-        criteria: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+        self, task: str, context: Optional[dict] = None, criteria: Optional[list[str]] = None
+    ) -> dict[str, Any]:
         """
         Generate, evaluate, and refine output through multiple cycles.
 
@@ -367,7 +373,7 @@ class EvaluatorOptimizer:
             "Completeness",
             "Clarity and readability",
             "Efficiency",
-            "Error handling"
+            "Error handling",
         ]
 
         history = []
@@ -397,8 +403,7 @@ Critique:
 Improve the output to address ALL critique points while maintaining quality."""
 
             decision, gen_result = await self._get_router().execute_with_routing(
-                task=gen_prompt,
-                context={"requires_reasoning": True}
+                task=gen_prompt, context={"requires_reasoning": True}
             )
 
             current_output = gen_result.get("content", "")
@@ -429,8 +434,7 @@ Respond in JSON:
 }}"""
 
             _, eval_result = await self._get_router().execute_with_routing(
-                task=eval_prompt,
-                context={"requires_reasoning": True}
+                task=eval_prompt, context={"requires_reasoning": True}
             )
 
             eval_content = eval_result.get("content", "")
@@ -452,14 +456,16 @@ Respond in JSON:
                 critique = eval_content
                 overall_score = 0.5
 
-            history.append(EvalResult(
-                original_output=current_output[:1000],
-                critique=critique,
-                refined_output="",  # Will be set in next cycle
-                improvement_score=overall_score,
-                iteration=cycle + 1,
-                cost=decision.estimated_cost
-            ))
+            history.append(
+                EvalResult(
+                    original_output=current_output[:1000],
+                    critique=critique,
+                    refined_output="",  # Will be set in next cycle
+                    improvement_score=overall_score,
+                    iteration=cycle + 1,
+                    cost=decision.estimated_cost,
+                )
+            )
 
             # Check if quality threshold met
             if overall_score >= self.quality_threshold:
@@ -478,15 +484,15 @@ Respond in JSON:
                     "iteration": h.iteration,
                     "score": h.improvement_score,
                     "critique": h.critique[:500],
-                    "cost": h.cost
+                    "cost": h.cost,
                 }
                 for h in history
             ],
             "total_cost": sum(h.cost for h in history),
-            "threshold_met": overall_score >= self.quality_threshold
+            "threshold_met": overall_score >= self.quality_threshold,
         }
 
-    def _parse_json(self, content: str) -> Optional[Dict]:
+    def _parse_json(self, content: str) -> Optional[dict]:
         """Parse JSON from response"""
         try:
             return json.loads(content)

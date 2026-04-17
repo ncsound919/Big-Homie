@@ -22,13 +22,13 @@ Usage:
   )
 """
 
-import os
 import asyncio
-import uuid
 import logging
+import os
+import uuid
 from dataclasses import dataclass, field
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,9 @@ PLATFORM_SPECS = {
     },
     "linkedin": {
         "name": "LinkedIn",
-        "format": "Thought leadership post, first line hook, 5-7 short paragraphs, professional insights",
+        "format": (
+            "Thought leadership post, first line hook, 5-7 short paragraphs, professional insights"
+        ),
         "word_count": "400-800 words",
         "model_tier": "general",
         "output_keys": ["post", "hook_line", "hashtags"],
@@ -122,7 +124,9 @@ class ContentFactory:
         self.image_enabled = os.getenv("COMFYUI_ENABLED", "false").lower() == "true"
         self.pexels_key = os.getenv("PEXELS_API_KEY", "")
         self.unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY", "")
-        self.output_dir = Path(os.getenv("MEDIA_OUTPUT_DIR", "~/.big_homie/media_outputs")).expanduser()
+        self.output_dir = Path(
+            os.getenv("MEDIA_OUTPUT_DIR", "~/.big_homie/media_outputs")
+        ).expanduser()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     async def create_package(
@@ -152,13 +156,17 @@ class ContentFactory:
             platforms = list(PLATFORM_SPECS.keys())
 
         job_id = str(uuid.uuid4())[:8]
-        logger.info(f"[ContentFactory:{job_id}] Starting package — topic='{topic}' platforms={platforms}")
+        logger.info(
+            f"[ContentFactory:{job_id}] Starting package — topic='{topic}' platforms={platforms}"
+        )
 
         # ── Optional: Research pass ──────────────────────────────────────────
         research_context = ""
         if research_first:
             research_context = await self._research_topic(topic)
-            logger.info(f"[ContentFactory:{job_id}] Research complete ({len(research_context)} chars)")
+            logger.info(
+                f"[ContentFactory:{job_id}] Research complete ({len(research_context)} chars)"
+            )
 
         # ── Generate all platforms in parallel ───────────────────────────────
         tasks = [
@@ -210,6 +218,7 @@ class ContentFactory:
         """Run a research pass on the topic using Brave Search or Perplexity."""
         try:
             import httpx
+
             brave_key = os.getenv("BRAVE_API_KEY", "")
             if brave_key:
                 async with httpx.AsyncClient() as client:
@@ -227,28 +236,34 @@ class ContentFactory:
             logger.warning(f"Research pass failed: {e}")
         return ""
 
-    async def _generate_piece(self, job_id: str, topic: str, brand_voice: str, platform: str, research_context: str) -> ContentPiece:
+    async def _generate_piece(
+        self, job_id: str, topic: str, brand_voice: str, platform: str, research_context: str
+    ) -> ContentPiece:
         """Generate content for a single platform."""
         spec = PLATFORM_SPECS[platform]
         piece = ContentPiece(platform=platform, topic=topic, brand_voice=brand_voice)
 
         try:
-            from llm_gateway import llm, TaskType
+            from llm_gateway import TaskType, llm
 
             task_type = TaskType.FAST if spec["model_tier"] == "fast" else TaskType.GENERAL
 
-            research_block = f"\n\nRecent context about this topic:\n{research_context}" if research_context else ""
+            research_block = (
+                f"\n\nRecent context about this topic:\n{research_context}"
+                if research_context
+                else ""
+            )
 
-            prompt = f"""Generate {spec['name']} content.
+            prompt = f"""Generate {spec["name"]} content.
 
 Topic: {topic}
 Brand Voice: {brand_voice}
-Format: {spec['format']}
-Target length: {spec['word_count']}
-Required output keys: {', '.join(spec['output_keys'])}
+Format: {spec["format"]}
+Target length: {spec["word_count"]}
+Required output keys: {", ".join(spec["output_keys"])}
 {research_block}
 
-Return a JSON object with keys: {spec['output_keys']}.
+Return a JSON object with keys: {spec["output_keys"]}.
 Write as if you ARE the brand — not describing what they should say.
 Be specific, vivid, and authentic. No filler. No generic phrases."""
 
@@ -258,7 +273,9 @@ Be specific, vivid, and authentic. No filler. No generic phrases."""
             )
 
             # Parse JSON response
-            import json, re
+            import json
+            import re
+
             raw = response.content if hasattr(response, "content") else str(response)
             # Extract JSON block if wrapped in markdown
             json_match = re.search(r"```(?:json)?\s*({[\s\S]+?})\s*```", raw)
@@ -280,18 +297,16 @@ Be specific, vivid, and authentic. No filler. No generic phrases."""
 
         return piece
 
-    async def _generate_thumbnail(
-        self, job_id: str, topic: str, piece: ContentPiece
-    ) -> str:
+    async def _generate_thumbnail(self, job_id: str, topic: str, piece: ContentPiece) -> str:
         """Generate thumbnail image via ComfyUI."""
         try:
-            from media_generation import media_manager, MediaType
+            from media_generation import MediaType, media_manager
 
             title = piece.content.get("title", topic)
             prompt = (
                 piece.content.get("thumbnail_prompt")
                 or f"Professional {piece.platform} thumbnail for: {title}. "
-                   f"Eye-catching, high contrast, bold typography space."
+                f"Eye-catching, high contrast, bold typography space."
             )
 
             result = await media_manager.generate_media(
@@ -350,6 +365,7 @@ Be specific, vivid, and authentic. No filler. No generic phrases."""
 # ─── Convenience wrapper ──────────────────────────────────────────────────────
 
 _factory = ContentFactory()
+
 
 async def create_content_package(
     topic: str,

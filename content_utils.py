@@ -2,21 +2,25 @@
 Content Utilities for Big Homie
 Smart truncation, markdown export, and content formatting
 """
+
 import re
-from typing import List, Tuple, Optional
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
+
 from loguru import logger
+
 from config import settings
+
 
 class SmartTruncator:
     """Intelligently truncates long content while preserving context"""
 
     MAX_LINES_FULL = 50  # Show full content if under this
-    CONTEXT_LINES = 5    # Lines of context around changes
+    CONTEXT_LINES = 5  # Lines of context around changes
 
     @staticmethod
-    def truncate_code(content: str, changed_lines: Optional[List[int]] = None) -> str:
+    def truncate_code(content: str, changed_lines: Optional[list[int]] = None) -> str:
         """
         Truncate code to show only relevant portions
 
@@ -27,7 +31,7 @@ class SmartTruncator:
         Returns:
             Truncated content with context
         """
-        lines = content.split('\n')
+        lines = content.split("\n")
         total_lines = len(lines)
 
         # If small enough, return as-is
@@ -42,25 +46,20 @@ class SmartTruncator:
         return SmartTruncator._show_changed_sections(lines, changed_lines, total_lines)
 
     @staticmethod
-    def _truncate_generic(lines: List[str], total_lines: int) -> str:
+    def _truncate_generic(lines: list[str], total_lines: int) -> str:
         """Truncate by showing beginning and end"""
         show_lines = SmartTruncator.MAX_LINES_FULL // 2
         beginning = lines[:show_lines]
         end = lines[-show_lines:]
 
-        truncated = '\n'.join(beginning)
+        truncated = "\n".join(beginning)
         truncated += f"\n\n... [{total_lines - (2 * show_lines)} lines omitted] ...\n\n"
-        truncated += '\n'.join(end)
+        truncated += "\n".join(end)
         return truncated
 
     @staticmethod
-    def _show_changed_sections(
-        lines: List[str],
-        changed_lines: List[int],
-        total_lines: int
-    ) -> str:
+    def _show_changed_sections(lines: list[str], changed_lines: list[int], total_lines: int) -> str:
         """Show only sections with changes plus context"""
-        sections = []
         context = SmartTruncator.CONTEXT_LINES
 
         # Group changed lines into sections
@@ -87,7 +86,7 @@ class SmartTruncator:
         result = []
         for i, (start, end) in enumerate(sections_to_show):
             if i > 0:
-                prev_end = sections_to_show[i-1][1]
+                prev_end = sections_to_show[i - 1][1]
                 omitted = start - prev_end - 1
                 if omitted > 0:
                     result.append(f"\n... [{omitted} lines omitted] ...\n")
@@ -101,7 +100,7 @@ class SmartTruncator:
 
         header = f"Showing changed sections (total: {total_lines} lines)\n"
         header += "Lines marked with * were modified\n\n"
-        return header + '\n'.join(result)
+        return header + "\n".join(result)
 
     @staticmethod
     def truncate_text(text: str, max_length: int = 500) -> str:
@@ -111,12 +110,12 @@ class SmartTruncator:
 
         # Try to break at sentence
         truncated = text[:max_length]
-        last_period = truncated.rfind('.')
-        last_newline = truncated.rfind('\n')
+        last_period = truncated.rfind(".")
+        last_newline = truncated.rfind("\n")
 
         break_point = max(last_period, last_newline)
         if break_point > max_length * 0.7:  # At least 70% of target
-            truncated = text[:break_point + 1]
+            truncated = text[: break_point + 1]
 
         return truncated + f"\n\n[... {len(text) - len(truncated)} chars truncated]"
 
@@ -129,11 +128,7 @@ class MarkdownExporter:
         self.export_dir.mkdir(parents=True, exist_ok=True)
 
     def export_thought(
-        self,
-        title: str,
-        content: str,
-        category: str = "general",
-        metadata: Optional[dict] = None
+        self, title: str, content: str, category: str = "general", metadata: Optional[dict] = None
     ) -> Path:
         """Export a thought or analysis to markdown"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -143,17 +138,13 @@ class MarkdownExporter:
 
         markdown = self._format_markdown(title, content, category, metadata)
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(markdown)
 
         logger.info(f"Exported thought to {filepath}")
         return filepath
 
-    def export_conversation(
-        self,
-        messages: List[dict],
-        title: str = "Conversation Export"
-    ) -> Path:
+    def export_conversation(self, messages: list[dict], title: str = "Conversation Export") -> Path:
         """Export a conversation to markdown"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{timestamp}_conversation.md"
@@ -175,17 +166,13 @@ class MarkdownExporter:
             markdown += f"{content}\n\n"
             markdown += "---\n\n"
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(markdown)
 
         logger.info(f"Exported conversation to {filepath}")
         return filepath
 
-    def export_analysis(
-        self,
-        title: str,
-        sections: dict
-    ) -> Path:
+    def export_analysis(self, title: str, sections: dict) -> Path:
         """Export structured analysis to markdown"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_title = self._sanitize_filename(title)
@@ -208,18 +195,14 @@ class MarkdownExporter:
             else:
                 markdown += f"{section_content}\n\n"
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(markdown)
 
         logger.info(f"Exported analysis to {filepath}")
         return filepath
 
     def _format_markdown(
-        self,
-        title: str,
-        content: str,
-        category: str,
-        metadata: Optional[dict]
+        self, title: str, content: str, category: str, metadata: Optional[dict]
     ) -> str:
         """Format content as markdown with frontmatter"""
         md = f"# {title}\n\n"
@@ -242,8 +225,8 @@ class MarkdownExporter:
     def _sanitize_filename(title: str) -> str:
         """Create safe filename from title"""
         # Remove/replace unsafe characters
-        safe = re.sub(r'[^\w\s-]', '', title)
-        safe = re.sub(r'[\s]+', '_', safe)
+        safe = re.sub(r"[^\w\s-]", "", title)
+        safe = re.sub(r"[\s]+", "_", safe)
         safe = safe[:50]  # Limit length
         return safe.lower()
 

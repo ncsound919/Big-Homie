@@ -2,22 +2,24 @@
 Database Operations - Tier 4 Tool Use
 Autonomous SQL/NoSQL/Vector database operations
 """
+
 import json
 import sqlite3
-from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
+from typing import Any, Optional
+
 from loguru import logger
+
 from config import settings
 
 
 @dataclass
 class QueryResult:
     """Result of a database query"""
+
     success: bool
-    data: Optional[List[Dict]] = None
-    columns: Optional[List[str]] = None
+    data: Optional[list[dict]] = None
+    columns: Optional[list[str]] = None
     row_count: int = 0
     error: Optional[str] = None
     execution_time_ms: float = 0.0
@@ -27,7 +29,8 @@ class QueryResult:
 @dataclass
 class SchemaInfo:
     """Database schema information"""
-    tables: List[Dict[str, Any]] = field(default_factory=list)
+
+    tables: list[dict[str, Any]] = field(default_factory=list)
     total_tables: int = 0
     database_type: str = ""
     database_path: str = ""
@@ -47,8 +50,8 @@ class DatabaseOperations:
     """
 
     def __init__(self):
-        self._connections: Dict[str, Any] = {}
-        self.query_history: List[QueryResult] = []
+        self._connections: dict[str, Any] = {}
+        self.query_history: list[QueryResult] = []
 
     # ===== SQLite Operations =====
 
@@ -75,15 +78,12 @@ class DatabaseOperations:
         """
         conn = self.get_sqlite_connection(db_path)
         info = SchemaInfo(
-            database_type="sqlite",
-            database_path=db_path or str(settings.memory_db_path)
+            database_type="sqlite", database_path=db_path or str(settings.memory_db_path)
         )
 
         try:
             # Get all tables
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             tables = [row[0] for row in cursor.fetchall()]
 
             for table_name in tables:
@@ -95,25 +95,27 @@ class DatabaseOperations:
                         "type": row[2],
                         "not_null": bool(row[3]),
                         "default": row[4],
-                        "primary_key": bool(row[5])
+                        "primary_key": bool(row[5]),
                     }
                     for row in cursor.fetchall()
                 ]
 
                 # Get row count
-                cursor = conn.execute(f"SELECT COUNT(*) FROM '{table_name}'")
+                cursor = conn.execute(f"SELECT COUNT(*) FROM '{table_name}'")  # noqa: S608
                 row_count = cursor.fetchone()[0]
 
                 # Get indexes
                 cursor = conn.execute(f"PRAGMA index_list('{table_name}')")
                 indexes = [row[1] for row in cursor.fetchall()]
 
-                info.tables.append({
-                    "name": table_name,
-                    "columns": columns,
-                    "row_count": row_count,
-                    "indexes": indexes
-                })
+                info.tables.append(
+                    {
+                        "name": table_name,
+                        "columns": columns,
+                        "row_count": row_count,
+                        "indexes": indexes,
+                    }
+                )
 
             info.total_tables = len(tables)
 
@@ -127,7 +129,7 @@ class DatabaseOperations:
         query: str,
         params: Optional[tuple] = None,
         db_path: Optional[str] = None,
-        read_only: bool = False
+        read_only: bool = False,
     ) -> QueryResult:
         """
         Execute a SQL query.
@@ -142,6 +144,7 @@ class DatabaseOperations:
             QueryResult with data and metadata
         """
         import time
+
         start = time.time()
 
         result = QueryResult(success=False, query=query)
@@ -185,10 +188,7 @@ class DatabaseOperations:
         return result
 
     def bulk_insert(
-        self,
-        table: str,
-        rows: List[Dict[str, Any]],
-        db_path: Optional[str] = None
+        self, table: str, rows: list[dict[str, Any]], db_path: Optional[str] = None
     ) -> QueryResult:
         """
         Bulk insert rows into a table.
@@ -205,6 +205,7 @@ class DatabaseOperations:
             return QueryResult(success=True, row_count=0, query="bulk_insert")
 
         import time
+
         start = time.time()
 
         result = QueryResult(success=False, query=f"BULK INSERT INTO {table}")
@@ -216,7 +217,7 @@ class DatabaseOperations:
             placeholders = ", ".join(["?"] * len(columns))
             column_names = ", ".join(columns)
 
-            query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"
+            query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"  # noqa: S608
             values = [tuple(row.get(col) for col in columns) for row in rows]
 
             conn.executemany(query, values)
@@ -233,10 +234,8 @@ class DatabaseOperations:
         return result
 
     def execute_transaction(
-        self,
-        queries: List[Dict[str, Any]],
-        db_path: Optional[str] = None
-    ) -> List[QueryResult]:
+        self, queries: list[dict[str, Any]], db_path: Optional[str] = None
+    ) -> list[QueryResult]:
         """
         Execute multiple queries in a single transaction.
 
@@ -263,30 +262,30 @@ class DatabaseOperations:
 
                     if query.strip().upper().startswith("SELECT"):
                         rows = cursor.fetchall()
-                        columns = [description[0] for description in cursor.description] if cursor.description else []
+                        columns = (
+                            [description[0] for description in cursor.description]
+                            if cursor.description
+                            else []
+                        )
                         data = [dict(zip(columns, row)) for row in rows]
                         result = QueryResult(
                             success=True,
                             data=data,
                             columns=columns,
                             row_count=len(data),
-                            query=query
+                            query=query,
                         )
                     else:
                         result = QueryResult(
                             success=True,
                             row_count=cursor.rowcount if cursor.rowcount != -1 else 0,
-                            query=query
+                            query=query,
                         )
 
                     results.append(result)
 
                 except Exception as e:
-                    result = QueryResult(
-                        success=False,
-                        error=str(e),
-                        query=query
-                    )
+                    result = QueryResult(success=False, error=str(e), query=query)
                     results.append(result)
                     conn.execute("ROLLBACK")
                     logger.warning(f"Transaction rolled back due to: {result.error}")
@@ -298,23 +297,16 @@ class DatabaseOperations:
         except Exception as e:
             conn.execute("ROLLBACK")
             logger.error(f"Transaction failed: {e}")
-            results.append(QueryResult(
-                success=False,
-                error=str(e),
-                query="TRANSACTION"
-            ))
+            results.append(QueryResult(success=False, error=str(e), query="TRANSACTION"))
 
         return results
 
     # ===== PostgreSQL Operations =====
 
-    async def execute_postgres(
-        self,
-        query: str,
-        params: Optional[tuple] = None
-    ) -> QueryResult:
+    async def execute_postgres(self, query: str, params: Optional[tuple] = None) -> QueryResult:
         """Execute query on configured PostgreSQL database"""
         import time
+
         start = time.time()
 
         result = QueryResult(success=False, query=query)
@@ -334,9 +326,7 @@ class DatabaseOperations:
             if query.strip().upper().startswith("SELECT"):
                 rows = cursor.fetchall()
                 columns = [desc[0] for desc in cursor.description] if cursor.description else []
-                result.data = [
-                    dict(zip(columns, row)) for row in rows
-                ]
+                result.data = [dict(zip(columns, row)) for row in rows]
                 result.columns = columns
                 result.row_count = len(rows)
             else:
@@ -359,10 +349,7 @@ class DatabaseOperations:
     # ===== Vector Database Operations =====
 
     def vector_search(
-        self,
-        query: str,
-        collection: str = "knowledge",
-        n_results: int = 10
+        self, query: str, collection: str = "knowledge", n_results: int = 10
     ) -> QueryResult:
         """
         Semantic search in vector database.
@@ -376,15 +363,14 @@ class DatabaseOperations:
             QueryResult with matching documents
         """
         import time
+
         start = time.time()
 
-        result = QueryResult(
-            success=False,
-            query=f"VECTOR_SEARCH({collection}): {query}"
-        )
+        result = QueryResult(success=False, query=f"VECTOR_SEARCH({collection}): {query}")
 
         try:
             from vector_memory import get_vector_memory
+
             vm = get_vector_memory()
 
             search_func = {
@@ -410,7 +396,7 @@ class DatabaseOperations:
 
     # ===== Utility Methods =====
 
-    def format_results(self, result: QueryResult, format: str = "table") -> str:
+    def format_results(self, result: QueryResult, fmt: str = "table") -> str:
         """
         Format query results for display.
 
@@ -427,10 +413,10 @@ class DatabaseOperations:
         if not result.data:
             return f"No results ({result.row_count} rows affected)"
 
-        if format == "json":
+        if fmt == "json":
             return json.dumps(result.data, indent=2, default=str)
 
-        elif format == "csv":
+        elif fmt == "csv":
             if not result.columns:
                 return json.dumps(result.data, default=str)
             lines = [",".join(result.columns)]

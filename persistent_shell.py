@@ -2,30 +2,35 @@
 Persistent Shell Environments for Big Homie
 Maintains shell sessions that don't reset between commands
 """
+
 import asyncio
 import os
 import sys
 import uuid
-from pathlib import Path
-from typing import Dict, Optional, List
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
 from loguru import logger
+
 
 @dataclass
 class ShellSession:
     """Represents a persistent shell session"""
+
     session_id: str
     process: asyncio.subprocess.Process
     created_at: datetime
     last_used: datetime
     cwd: str
-    env: Dict[str, str]
-    history: List[str]
+    env: dict[str, str]
+    history: list[str]
 
     def __post_init__(self):
         if not self.history:
             self.history = []
+
 
 class PersistentShellManager:
     """
@@ -46,7 +51,7 @@ class PersistentShellManager:
         Args:
             session_timeout: Seconds before idle sessions are cleaned up (default: 1 hour)
         """
-        self.sessions: Dict[str, ShellSession] = {}
+        self.sessions: dict[str, ShellSession] = {}
         self.session_timeout = session_timeout
         self._cleanup_task: Optional[asyncio.Task] = None
 
@@ -71,9 +76,7 @@ class PersistentShellManager:
         logger.info("Persistent shell manager stopped")
 
     async def create_session(
-        self,
-        cwd: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None
+        self, cwd: Optional[str] = None, env: Optional[dict[str, str]] = None
     ) -> str:
         """
         Create a new persistent shell session
@@ -111,7 +114,7 @@ class PersistentShellManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=cwd,
-                env=env
+                env=env,
             )
 
             session = ShellSession(
@@ -121,29 +124,26 @@ class PersistentShellManager:
                 last_used=datetime.now(),
                 cwd=cwd or ".",
                 env=env or {},
-                history=[]
+                history=[],
             )
 
             self.sessions[session_id] = session
             logger.info(f"Created persistent shell session: {session_id}")
 
             return session_id
-        except Exception as e:
+        except Exception:
             # Clean up the process if session creation fails
             if process is not None:
                 try:
                     process.kill()
                     await process.wait()
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
             raise
 
     async def execute_command(
-        self,
-        session_id: str,
-        command: str,
-        timeout: float = 30.0
-    ) -> Dict[str, str]:
+        self, session_id: str, command: str, timeout: float = 30.0
+    ) -> dict[str, str]:
         """
         Execute a command in a persistent session
 
@@ -182,7 +182,7 @@ class PersistentShellManager:
                         if not line:
                             break
 
-                        line_str = line.decode('utf-8', errors='replace').rstrip()
+                        line_str = line.decode("utf-8", errors="replace").rstrip()
 
                         # Check for completion marker
                         if marker in line_str:
@@ -201,7 +201,7 @@ class PersistentShellManager:
             return {
                 "stdout": "\n".join(output_lines),
                 "stderr": "Command timed out",
-                "exit_code": "timeout"
+                "exit_code": "timeout",
             }
 
         output = "\n".join(output_lines)
@@ -211,10 +211,10 @@ class PersistentShellManager:
         return {
             "stdout": output,
             "stderr": "",
-            "exit_code": str(exit_code) if exit_code is not None else "0"
+            "exit_code": str(exit_code) if exit_code is not None else "0",
         }
 
-    async def get_session_info(self, session_id: str) -> Dict:
+    async def get_session_info(self, session_id: str) -> dict:
         """Get information about a session"""
         if session_id not in self.sessions:
             raise ValueError(f"Session {session_id} not found")
@@ -227,15 +227,12 @@ class PersistentShellManager:
             "last_used": session.last_used.isoformat(),
             "cwd": session.cwd,
             "command_count": len(session.history),
-            "recent_commands": session.history[-5:] if session.history else []
+            "recent_commands": session.history[-5:] if session.history else [],
         }
 
-    async def list_sessions(self) -> List[Dict]:
+    async def list_sessions(self) -> list[dict]:
         """List all active sessions"""
-        return [
-            await self.get_session_info(session_id)
-            for session_id in self.sessions.keys()
-        ]
+        return [await self.get_session_info(session_id) for session_id in self.sessions.keys()]
 
     async def terminate_session(self, session_id: str):
         """Terminate a session"""
@@ -283,6 +280,7 @@ class PersistentShellManager:
                 break
             except Exception as e:
                 logger.error(f"Error in cleanup loop: {e}")
+
 
 # Global shell manager instance
 shell_manager = PersistentShellManager()

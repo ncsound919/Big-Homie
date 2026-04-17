@@ -9,22 +9,24 @@ The Dream System operates during idle periods to:
 - Build and optimize knowledge graphs
 - Prune stale or low-value memories
 """
-import asyncio
+
 import json
 import uuid
-from datetime import datetime, timedelta, time as time_of_day
-from typing import Dict, List, Any, Optional, Set, Tuple
-from dataclasses import dataclass, field
-from enum import Enum
 from collections import defaultdict
-from pathlib import Path
+from dataclasses import dataclass, field
+from datetime import datetime
+from datetime import time as time_of_day
+from enum import Enum
+from typing import Any, Optional
+
 from loguru import logger
-from config import settings
+
 from memory import memory
 
 
 class DreamPhase(str, Enum):
     """Phases of the dream consolidation process"""
+
     INITIALIZATION = "initialization"
     COLLECTION = "collection"
     ANALYSIS = "analysis"
@@ -38,6 +40,7 @@ class DreamPhase(str, Enum):
 
 class MemoryCluster(str, Enum):
     """Types of memory clusters"""
+
     FACTS = "facts"
     SKILLS = "skills"
     PREFERENCES = "preferences"
@@ -49,14 +52,15 @@ class MemoryCluster(str, Enum):
 @dataclass
 class MemoryNode:
     """A node in the knowledge graph"""
+
     id: str
     content: str
     category: str
     importance: float
     access_count: int
-    connections: List[str] = field(default_factory=list)
-    embedding: Optional[List[float]] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    connections: list[str] = field(default_factory=list)
+    embedding: Optional[list[float]] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: Optional[datetime] = None
     last_accessed: Optional[datetime] = None
 
@@ -64,16 +68,18 @@ class MemoryNode:
 @dataclass
 class MemoryConnection:
     """A connection between memory nodes"""
+
     source_id: str
     target_id: str
     relationship: str
     strength: float  # 0.0 to 1.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class DreamCycle:
     """A complete dream consolidation cycle"""
+
     id: str
     started_at: datetime
     completed_at: Optional[datetime] = None
@@ -83,18 +89,19 @@ class DreamCycle:
     memories_pruned: int = 0
     connections_created: int = 0
     space_saved_bytes: int = 0
-    insights_generated: List[Dict[str, Any]] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    insights_generated: list[dict[str, Any]] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class DreamConfig:
     """Configuration for the dream system"""
+
     enabled: bool = True
     # Scheduling
-    dream_hours_start: time_of_day = time_of_day(2, 0)   # 2 AM
-    dream_hours_end: time_of_day = time_of_day(5, 0)     # 5 AM
+    dream_hours_start: time_of_day = time_of_day(2, 0)  # 2 AM
+    dream_hours_end: time_of_day = time_of_day(5, 0)  # 5 AM
     min_idle_minutes: int = 30  # Minimum idle time before dreaming
     # Consolidation settings
     consolidation_threshold: int = 100  # Min memories before consolidation
@@ -131,15 +138,15 @@ class DreamSystem:
         self.config = config or DreamConfig()
         self.is_dreaming = False
         self.current_cycle: Optional[DreamCycle] = None
-        self.cycle_history: List[DreamCycle] = []
+        self.cycle_history: list[DreamCycle] = []
 
         # Knowledge graph
-        self.nodes: Dict[str, MemoryNode] = {}
-        self.connections: List[MemoryConnection] = []
+        self.nodes: dict[str, MemoryNode] = {}
+        self.connections: list[MemoryConnection] = []
 
         # Caches
-        self._memory_cache: Dict[str, Any] = {}
-        self._similarity_cache: Dict[Tuple[str, str], float] = {}
+        self._memory_cache: dict[str, Any] = {}
+        self._similarity_cache: dict[tuple[str, str], float] = {}
 
         # Router for LLM operations
         self._router = None
@@ -150,6 +157,7 @@ class DreamSystem:
         """Lazy-load router"""
         if self._router is None:
             from router import router
+
             self._router = router
         return self._router
 
@@ -195,7 +203,9 @@ class DreamSystem:
                 return False
         # Check if enough memories to consolidate
         all_memories = memory.search_memory(limit=10)
-        if len(all_memories) < self.config.consolidation_threshold:  # Need some memories to work with
+        if (
+            len(all_memories) < self.config.consolidation_threshold
+        ):  # Need some memories to work with
             return False
 
         return True
@@ -211,10 +221,7 @@ class DreamSystem:
             return self.current_cycle
 
         self.is_dreaming = True
-        self.current_cycle = DreamCycle(
-            id=str(uuid.uuid4()),
-            started_at=datetime.now()
-        )
+        self.current_cycle = DreamCycle(id=str(uuid.uuid4()), started_at=datetime.now())
 
         logger.info("💤 autoDream: Starting memory consolidation cycle...")
 
@@ -267,7 +274,7 @@ class DreamSystem:
                 key=f"dream_cycle_{self.current_cycle.id}",
                 value=self._cycle_to_dict(self.current_cycle),
                 category="dream_system",
-                importance=6
+                importance=6,
             )
 
             logger.info(
@@ -297,7 +304,7 @@ class DreamSystem:
         # Record cycle start
         memory.set_preference("last_dream_cycle_start", datetime.now().isoformat())
 
-    async def _collect_memories(self) -> List[Dict[str, Any]]:
+    async def _collect_memories(self) -> list[dict[str, Any]]:
         """Collect all memories for processing"""
         memories = []
 
@@ -308,29 +315,33 @@ class DreamSystem:
         # Collect skills
         skills = memory.list_skills()
         for skill in skills:
-            memories.append({
-                "key": f"skill_{skill['name']}",
-                "value": skill,
-                "category": "skill",
-                "importance": 7,
-                "access_count": skill.get("success_count", 0)
-            })
+            memories.append(
+                {
+                    "key": f"skill_{skill['name']}",
+                    "value": skill,
+                    "category": "skill",
+                    "importance": 7,
+                    "access_count": skill.get("success_count", 0),
+                }
+            )
 
         # Collect task history
         task_history = memory.get_task_history(limit=100)
         for i, task in enumerate(task_history):
-            memories.append({
-                "key": f"task_history_{i}",
-                "value": task,
-                "category": "task_history",
-                "importance": 4,
-                "access_count": 1
-            })
+            memories.append(
+                {
+                    "key": f"task_history_{i}",
+                    "value": task,
+                    "category": "task_history",
+                    "importance": 4,
+                    "access_count": 1,
+                }
+            )
 
         logger.info(f"Collected {len(memories)} memories for processing")
         return memories
 
-    async def _analyze_memories(self, memories: List[Dict]) -> Dict[str, Any]:
+    async def _analyze_memories(self, memories: list[dict]) -> dict[str, Any]:
         """Analyze patterns and relationships in memories"""
         analysis = {
             "categories": defaultdict(list),
@@ -369,7 +380,7 @@ class DreamSystem:
 
         return analysis
 
-    async def _identify_clusters(self, memories: List[Dict]) -> List[Dict]:
+    async def _identify_clusters(self, memories: list[dict]) -> list[dict]:
         """Use LLM to identify memory clusters"""
         memory_summaries = [
             f"- {mem.get('key', 'unknown')}: {str(mem.get('value', ''))[:100]}"
@@ -399,8 +410,7 @@ Respond in JSON:
 
         try:
             decision, result = await self._get_router().execute_with_routing(
-                task=prompt,
-                context={"requires_reasoning": True}
+                task=prompt, context={"requires_reasoning": True}
             )
 
             content = result.get("content", "")
@@ -416,7 +426,7 @@ Respond in JSON:
 
         return []
 
-    async def _find_redundant(self, memories: List[Dict]) -> List[Tuple[str, str]]:
+    async def _find_redundant(self, memories: list[dict]) -> list[tuple[str, str]]:
         """Find potentially redundant memories"""
         redundant = []
 
@@ -426,9 +436,9 @@ Respond in JSON:
             by_category[mem.get("category", "general")].append(mem)
 
         # Check within categories for similar keys/values
-        for category, mems in by_category.items():
+        for _category, mems in by_category.items():
             for i, m1 in enumerate(mems):
-                for m2 in mems[i+1:]:
+                for m2 in mems[i + 1 :]:
                     # Simple similarity check
                     v1 = str(m1.get("value", ""))[:200]
                     v2 = str(m2.get("value", ""))[:200]
@@ -466,11 +476,7 @@ Respond in JSON:
 
         return len(intersection) / len(union) if union else 0.0
 
-    async def _consolidate_memories(
-        self,
-        memories: List[Dict],
-        analysis: Dict[str, Any]
-    ) -> int:
+    async def _consolidate_memories(self, memories: list[dict], analysis: dict[str, Any]) -> int:
         """Consolidate similar memories"""
         consolidated_count = 0
 
@@ -481,10 +487,14 @@ Respond in JSON:
 
             if mem1 and mem2:
                 # Keep the more important/accessed one
-                keep = mem1 if (
-                    mem1.get("importance", 0) >= mem2.get("importance", 0) and
-                    mem1.get("access_count", 0) >= mem2.get("access_count", 0)
-                ) else mem2
+                keep = (
+                    mem1
+                    if (
+                        mem1.get("importance", 0) >= mem2.get("importance", 0)
+                        and mem1.get("access_count", 0) >= mem2.get("access_count", 0)
+                    )
+                    else mem2
+                )
 
                 remove = mem2 if keep == mem1 else mem1
 
@@ -493,7 +503,7 @@ Respond in JSON:
                     "consolidated_from": [mem1["key"], mem2["key"]],
                     "primary": keep.get("value"),
                     "secondary_notes": str(remove.get("value", ""))[:200],
-                    "consolidated_at": datetime.now().isoformat()
+                    "consolidated_at": datetime.now().isoformat(),
                 }
 
                 # Update the kept memory
@@ -501,10 +511,7 @@ Respond in JSON:
                     key=keep["key"],
                     value=merged_value,
                     category=keep.get("category", "consolidated"),
-                    importance=max(
-                        keep.get("importance", 5),
-                        remove.get("importance", 5)
-                    )
+                    importance=max(keep.get("importance", 5), remove.get("importance", 5)),
                 )
 
                 consolidated_count += 1
@@ -520,10 +527,10 @@ Respond in JSON:
                         "name": cluster_name,
                         "description": cluster.get("description", ""),
                         "members": cluster.get("memory_keys", []),
-                        "created_at": datetime.now().isoformat()
+                        "created_at": datetime.now().isoformat(),
                     },
                     category="memory_cluster",
-                    importance=6
+                    importance=6,
                 )
                 consolidated_count += 1
 
@@ -548,10 +555,10 @@ Respond in JSON:
                         value={
                             "compressed": True,
                             "summary": compressed,
-                            "original_length": len(value)
+                            "original_length": len(value),
                         },
                         category=mem.get("category", "general"),
-                        importance=mem.get("importance", 5)
+                        importance=mem.get("importance", 5),
                     )
 
         return space_saved
@@ -561,17 +568,19 @@ Respond in JSON:
         if len(text) < 300:
             return text
 
-        prompt = f"""Compress this text to its essential information. Keep key facts and remove redundancy.
+        prompt = (
+            f"""Compress this text to its essential """
+            f"""information. Keep key facts and remove redundancy.
 
 Text:
 {text[:2000]}
 
 Provide a compressed version (max 200 words) that preserves all important information."""
+        )
 
         try:
             decision, result = await self._get_router().execute_with_routing(
-                task=prompt,
-                context={"simple_task": True}
+                task=prompt, context={"simple_task": True}
             )
             return result.get("content", text[:500])
 
@@ -579,7 +588,7 @@ Provide a compressed version (max 200 words) that preserves all important inform
             logger.warning(f"Text compression failed: {e}")
             return text[:500]
 
-    async def _update_knowledge_graph(self, memories: List[Dict]) -> int:
+    async def _update_knowledge_graph(self, memories: list[dict]) -> int:
         """Update the knowledge graph with new connections"""
         connections_created = 0
 
@@ -592,14 +601,12 @@ Provide a compressed version (max 200 words) that preserves all important inform
                     content=str(mem.get("value", ""))[:500],
                     category=mem.get("category", "general"),
                     importance=mem.get("importance", 5),
-                    access_count=mem.get("access_count", 0)
+                    access_count=mem.get("access_count", 0),
                 )
 
         # Find connections using LLM
         if len(self.nodes) > 5:
-            new_connections = await self._discover_connections(
-                list(self.nodes.values())[:30]
-            )
+            new_connections = await self._discover_connections(list(self.nodes.values())[:30])
             connections_created = len(new_connections)
 
             for conn in new_connections:
@@ -616,14 +623,10 @@ Provide a compressed version (max 200 words) that preserves all important inform
 
         return connections_created
 
-    async def _discover_connections(
-        self,
-        nodes: List[MemoryNode]
-    ) -> List[MemoryConnection]:
+    async def _discover_connections(self, nodes: list[MemoryNode]) -> list[MemoryConnection]:
         """Use LLM to discover connections between memory nodes"""
         node_summaries = [
-            f"- {node.id}: [{node.category}] {node.content[:100]}"
-            for node in nodes[:20]
+            f"- {node.id}: [{node.category}] {node.content[:100]}" for node in nodes[:20]
         ]
 
         prompt = f"""Analyze these memory nodes and identify meaningful connections between them.
@@ -653,8 +656,7 @@ List up to 10 connections in JSON:
 
         try:
             decision, result = await self._get_router().execute_with_routing(
-                task=prompt,
-                context={"requires_reasoning": True}
+                task=prompt, context={"requires_reasoning": True}
             )
 
             content = result.get("content", "")
@@ -670,13 +672,15 @@ List up to 10 connections in JSON:
 
                     # Validate nodes exist
                     if source in self.nodes and target in self.nodes:
-                        connections.append(MemoryConnection(
-                            source_id=source,
-                            target_id=target,
-                            relationship=conn_data.get("relationship", "relates_to"),
-                            strength=min(1.0, max(0.0, conn_data.get("strength", 0.5))),
-                            metadata={"description": conn_data.get("description", "")}
-                        ))
+                        connections.append(
+                            MemoryConnection(
+                                source_id=source,
+                                target_id=target,
+                                relationship=conn_data.get("relationship", "relates_to"),
+                                strength=min(1.0, max(0.0, conn_data.get("strength", 0.5))),
+                                metadata={"description": conn_data.get("description", "")},
+                            )
+                        )
 
         except Exception as e:
             logger.warning(f"Connection discovery failed: {e}")
@@ -711,10 +715,10 @@ List up to 10 connections in JSON:
                             "archived": True,
                             "original_value": mem["value"],
                             "archived_at": datetime.now().isoformat(),
-                            "reason": "low_importance_decay"
+                            "reason": "low_importance_decay",
                         },
                         category="archived",
-                        importance=0
+                        importance=0,
                     )
                     pruned_count += 1
                 elif new_importance < importance:
@@ -723,7 +727,7 @@ List up to 10 connections in JSON:
                         key=mem["key"],
                         value=mem["value"],
                         category=category,
-                        importance=int(new_importance)
+                        importance=int(new_importance),
                     )
 
         return pruned_count
@@ -740,16 +744,15 @@ List up to 10 connections in JSON:
                 datetime.now() - self.current_cycle.started_at
             ).total_seconds(),
             "memories_per_second": (
-                self.current_cycle.memories_processed /
-                max(1, (datetime.now() - self.current_cycle.started_at).total_seconds())
+                self.current_cycle.memories_processed
+                / max(1, (datetime.now() - self.current_cycle.started_at).total_seconds())
             ),
             "consolidation_ratio": (
-                self.current_cycle.memories_consolidated /
-                max(1, self.current_cycle.memories_processed)
+                self.current_cycle.memories_consolidated
+                / max(1, self.current_cycle.memories_processed)
             ),
             "prune_ratio": (
-                self.current_cycle.memories_pruned /
-                max(1, self.current_cycle.memories_processed)
+                self.current_cycle.memories_pruned / max(1, self.current_cycle.memories_processed)
             ),
         }
 
@@ -757,7 +760,7 @@ List up to 10 connections in JSON:
         memory.set_preference("last_dream_cycle_complete", datetime.now().isoformat())
         memory.set_preference("last_dream_metrics", self.current_cycle.metrics)
 
-    async def _generate_insights(self) -> List[Dict[str, Any]]:
+    async def _generate_insights(self) -> list[dict[str, Any]]:
         """Generate insights from the dream cycle"""
         insights = []
 
@@ -767,27 +770,29 @@ List up to 10 connections in JSON:
         for mem in all_memories:
             categories[mem.get("category", "general")] += 1
 
-        insights.append({
-            "type": "memory_distribution",
-            "description": "Memory distribution by category",
-            "data": dict(categories)
-        })
+        insights.append(
+            {
+                "type": "memory_distribution",
+                "description": "Memory distribution by category",
+                "data": dict(categories),
+            }
+        )
 
         # Insight: Knowledge graph density
         if self.nodes:
-            avg_connections = sum(
-                len(n.connections) for n in self.nodes.values()
-            ) / len(self.nodes)
+            avg_connections = sum(len(n.connections) for n in self.nodes.values()) / len(self.nodes)
 
-            insights.append({
-                "type": "knowledge_graph",
-                "description": "Knowledge graph statistics",
-                "data": {
-                    "total_nodes": len(self.nodes),
-                    "total_connections": len(self.connections),
-                    "average_connections": round(avg_connections, 2)
+            insights.append(
+                {
+                    "type": "knowledge_graph",
+                    "description": "Knowledge graph statistics",
+                    "data": {
+                        "total_nodes": len(self.nodes),
+                        "total_connections": len(self.connections),
+                        "average_connections": round(avg_connections, 2),
+                    },
                 }
-            })
+            )
 
         return insights
 
@@ -799,22 +804,17 @@ List up to 10 connections in JSON:
                     "content": node.content[:200],
                     "category": node.category,
                     "importance": node.importance,
-                    "connections": node.connections[:10]
+                    "connections": node.connections[:10],
                 }
                 for nid, node in list(self.nodes.items())[:100]
             },
             "connections_count": len(self.connections),
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now().isoformat(),
         }
 
-        memory.store(
-            key="knowledge_graph",
-            value=graph_data,
-            category="dream_system",
-            importance=8
-        )
+        memory.store(key="knowledge_graph", value=graph_data, category="dream_system", importance=8)
 
-    def _cycle_to_dict(self, cycle: DreamCycle) -> Dict[str, Any]:
+    def _cycle_to_dict(self, cycle: DreamCycle) -> dict[str, Any]:
         """Convert cycle to dictionary for storage"""
         return {
             "id": cycle.id,
@@ -828,10 +828,10 @@ List up to 10 connections in JSON:
             "space_saved_bytes": cycle.space_saved_bytes,
             "insights_generated": cycle.insights_generated,
             "errors": cycle.errors,
-            "metrics": cycle.metrics
+            "metrics": cycle.metrics,
         }
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current dream system status"""
         return {
             "enabled": self.config.enabled,
@@ -841,39 +841,33 @@ List up to 10 connections in JSON:
             "knowledge_graph_nodes": len(self.nodes),
             "knowledge_graph_connections": len(self.connections),
             "last_cycle": self.cycle_history[-1].id if self.cycle_history else None,
-            "should_dream": self.should_dream()
+            "should_dream": self.should_dream(),
         }
 
-    def get_knowledge_graph_summary(self) -> Dict[str, Any]:
+    def get_knowledge_graph_summary(self) -> dict[str, Any]:
         """Get a summary of the knowledge graph"""
         if not self.nodes:
             return {"status": "empty", "nodes": 0, "connections": 0}
 
         # Get most connected nodes
-        sorted_nodes = sorted(
-            self.nodes.values(),
-            key=lambda n: len(n.connections),
-            reverse=True
-        )[:10]
+        sorted_nodes = sorted(self.nodes.values(), key=lambda n: len(n.connections), reverse=True)[
+            :10
+        ]
 
         return {
             "status": "active",
             "nodes": len(self.nodes),
             "connections": len(self.connections),
             "top_connected_nodes": [
-                {
-                    "id": n.id,
-                    "category": n.category,
-                    "connections": len(n.connections)
-                }
+                {"id": n.id, "category": n.category, "connections": len(n.connections)}
                 for n in sorted_nodes
             ],
-            "categories": self._count_node_categories()
+            "categories": self._count_node_categories(),
         }
 
-    def _count_node_categories(self) -> Dict[str, int]:
+    def _count_node_categories(self) -> dict[str, int]:
         """Count nodes by category"""
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         for node in self.nodes.values():
             category = node.category
             counts[category] = counts.get(category, 0) + 1

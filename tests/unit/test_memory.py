@@ -3,6 +3,7 @@ Unit tests for memory.py and correction_ledger.py
 
 Covers: store, recall, forget, correction tracking, and persistence.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -14,6 +15,7 @@ class TestMemory:
     @pytest.fixture
     def mem(self, tmp_db):
         from memory import Memory
+
         return Memory(db_path=tmp_db)
 
     def test_store_and_recall(self, mem):
@@ -50,6 +52,7 @@ class TestMemory:
 
     def test_persistence_across_instances(self, tmp_db):
         from memory import Memory
+
         m1 = Memory(db_path=tmp_db)
         m1.store(key="persistent", value="yes")
         m2 = Memory(db_path=tmp_db)
@@ -62,13 +65,14 @@ class TestCorrectionLedger:
     @pytest.fixture
     def ledger(self, tmp_db):
         from correction_ledger import CorrectionLedger
+
         return CorrectionLedger(db_path=tmp_db)
 
     def test_record_correction(self, ledger):
         ledger.record(
             original_action="wrong_answer",
             corrected_action="right_answer",
-            context={"task": "math"}
+            context={"task": "math"},
         )
         entries = ledger.get_all()
         assert len(entries) >= 1
@@ -76,7 +80,7 @@ class TestCorrectionLedger:
     def test_correction_has_timestamp(self, ledger):
         ledger.record(original_action="a", corrected_action="b", context={})
         entries = ledger.get_all()
-        assert "timestamp" in entries[-1] or hasattr(entries[-1], 'timestamp')
+        assert "timestamp" in entries[-1] or hasattr(entries[-1], "timestamp")
 
     def test_correction_count(self, ledger):
         for i in range(5):
@@ -94,8 +98,8 @@ class TestCorrectionLedger:
         ledger.record(
             original_action="use_expensive_model",
             corrected_action="use_cheap_model",
-            context={"task_type": "simple_summary"}
+            context={"task_type": "simple_summary"},
         )
-        if hasattr(ledger, 'find_similar'):
+        if hasattr(ledger, "find_similar"):
             results = ledger.find_similar(context={"task_type": "simple_summary"})
             assert len(results) >= 1
