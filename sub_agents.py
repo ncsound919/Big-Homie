@@ -550,10 +550,7 @@ Format as JSON:
                         role_context["previous_results"],
                         indent=2,
                     )
-                    prev = (
-                        "Results from other team members: "
-                        f"{prev_json}"
-                    )
+                    prev = f"Results from other team members: {prev_json}"
 
                 role_prompt = f"""You are a specialist {role.value} on a coordinated team.
 

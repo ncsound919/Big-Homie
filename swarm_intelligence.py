@@ -411,10 +411,7 @@ class SwarmIntelligence:
         task.status = "completed"
         task.completed_at = datetime.now().isoformat()
 
-        ok = [
-            r for aid, r in task.results.items()
-            if not aid.startswith('_') and 'error' not in r
-        ]
+        ok = [r for aid, r in task.results.items() if not aid.startswith("_") and "error" not in r]
         logger.info(
             f"Swarm task completed: {task.task_id} "
             f"({len(task.assigned_agents)} agents, "

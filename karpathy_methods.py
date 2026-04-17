@@ -635,18 +635,14 @@ class FewShotLibrary:
                 " Bloops definitely Lazzies?"
             ),
             "output": (
-                "Yes. By transitivity: Bloop → Razzie"
-                " → Lazzie. Therefore all Bloops"
-                " are Lazzies."
+                "Yes. By transitivity: Bloop → Razzie → Lazzie. Therefore all Bloops are Lazzies."
             ),
             "tags": ["logic", "reasoning", "syllogism"],
         },
         {
             "task_type": "data_extraction",
             "input": (
-                "Extract name and email: 'Contact"
-                " John Smith at john@example.com"
-                " for more info.'"
+                "Extract name and email: 'Contact John Smith at john@example.com for more info.'"
             ),
             "output": '{"name": "John Smith", "email": "john@example.com"}',
             "tags": ["extraction", "structured", "json"],
@@ -667,9 +663,7 @@ class FewShotLibrary:
         {
             "task_type": "classification",
             "input": (
-                "Classify sentiment: 'The product"
-                " was absolutely terrible and broke"
-                " after one day.'"
+                "Classify sentiment: 'The product was absolutely terrible and broke after one day.'"
             ),
             "output": '{"sentiment": "negative", "intensity": "strong", "confidence": 0.97}',
             "tags": ["classification", "sentiment", "json"],

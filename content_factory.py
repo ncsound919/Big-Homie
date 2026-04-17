@@ -73,9 +73,7 @@ PLATFORM_SPECS = {
     "linkedin": {
         "name": "LinkedIn",
         "format": (
-            "Thought leadership post, first line hook,"
-            " 5-7 short paragraphs,"
-            " professional insights"
+            "Thought leadership post, first line hook, 5-7 short paragraphs, professional insights"
         ),
         "word_count": "400-800 words",
         "model_tier": "general",

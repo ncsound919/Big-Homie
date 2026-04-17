@@ -471,8 +471,7 @@ class RevenueEngine:
                 f"signals targeting ${goal_usd:.2f}"
             ),
             RevenueStream.OPTIONS: (
-                "Scan options chain for high-probability"
-                f" plays targeting ${goal_usd:.2f} credit"
+                f"Scan options chain for high-probability plays targeting ${goal_usd:.2f} credit"
             ),
             RevenueStream.BETTING: (
                 "Identify +EV sports betting "
@@ -480,15 +479,13 @@ class RevenueEngine:
                 f"${settings.revenue_max_single_trade_usd}"
             ),
             RevenueStream.FREELANCE: (
-                "Check active freelance platform "
-                "jobs and submit qualified proposals"
+                "Check active freelance platform jobs and submit qualified proposals"
             ),
             RevenueStream.ECOMMERCE: "Process pending Shopify orders and optimize product listings",
             RevenueStream.SAAS: "Review SaaS subscription metrics and follow up on churned users",
             RevenueStream.MAAS: "Monitor MaaS API usage and billing",
             RevenueStream.SUPPLY_CHAIN: (
-                "Check supply chain pipeline "
-                "and flag arbitrage opportunities"
+                "Check supply chain pipeline and flag arbitrage opportunities"
             ),
             RevenueStream.CALL_CENTER: "Process call queue and route inbound leads",
         }

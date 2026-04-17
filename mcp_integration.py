@@ -196,8 +196,7 @@ class MCPIntegration:
                 name="shell_session_create",
                 type=ToolType.SHELL,
                 description=(
-                    "Create a persistent shell session that"
-                    " maintains state across commands"
+                    "Create a persistent shell session that maintains state across commands"
                 ),
                 parameters={
                     "cwd": {"type": "string", "description": "Working directory", "optional": True}
@@ -260,15 +259,13 @@ class MCPIntegration:
                 name="vision_analyze_image",
                 type=ToolType.CUSTOM,
                 description=(
-                    "Analyze an image using vision AI"
-                    " (image must be in the screenshots directory)"
+                    "Analyze an image using vision AI (image must be in the screenshots directory)"
                 ),
                 parameters={
                     "image_path": {
                         "type": "string",
                         "description": (
-                            "Path to image file (must be within"
-                            " the screenshots data directory)"
+                            "Path to image file (must be within the screenshots data directory)"
                         ),
                     },
                     "prompt": {"type": "string", "description": "Analysis question or prompt"},
@@ -296,8 +293,7 @@ class MCPIntegration:
                     "image_path": {
                         "type": "string",
                         "description": (
-                            "Path to image file (must be within"
-                            " the screenshots data directory)"
+                            "Path to image file (must be within the screenshots data directory)"
                         ),
                     }
                 },
@@ -426,8 +422,7 @@ class MCPIntegration:
                     "durationSeconds": {
                         "type": "number",
                         "description": (
-                            "Desired duration in seconds"
-                            " (may be ignored by some providers)"
+                            "Desired duration in seconds (may be ignored by some providers)"
                         ),
                         "optional": True,
                     },
@@ -1377,9 +1372,7 @@ class MCPIntegration:
             "success": True,
             "session_id": session_id,
             "message": (
-                "Persistent shell session created."
-                " Use this session_id for subsequent"
-                " commands."
+                "Persistent shell session created. Use this session_id for subsequent commands."
             ),
         }
 

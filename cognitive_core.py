@@ -695,15 +695,15 @@ Respond in JSON:
 Question: {query}
 
 Answers from independent reasoning paths:
-{json.dumps(
-    [
-        {"path": i + 1, "answer": a, "reasoning": r[:300]}
-        for i, (a, r) in enumerate(
-            zip(answers, reasoning_paths)
-        )
-    ],
-    indent=2,
-)}
+{
+            json.dumps(
+                [
+                    {"path": i + 1, "answer": a, "reasoning": r[:300]}
+                    for i, (a, r) in enumerate(zip(answers, reasoning_paths))
+                ],
+                indent=2,
+            )
+        }
 
 Select the BEST answer based on:
 1. Consistency - Which answer appears most frequently or similarly across paths?

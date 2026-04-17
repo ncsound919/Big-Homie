@@ -238,28 +238,20 @@ class LogReviewSystem:
                 "Add retry logic with exponential backoff."
             ),
             "llm": (
-                "Verify model availability and API key. "
-                "Check token limits and request formatting."
+                "Verify model availability and API key. Check token limits and request formatting."
             ),
             "memory": (
-                "Check database file permissions. "
-                "Verify ChromaDB installation and storage path."
+                "Check database file permissions. Verify ChromaDB installation and storage path."
             ),
-            "file": (
-                "Verify file paths exist. "
-                "Add proper error handling for file operations."
-            ),
+            "file": ("Verify file paths exist. Add proper error handling for file operations."),
             "network": (
-                "Add timeout and retry logic. "
-                "Check network connectivity and firewall settings."
+                "Add timeout and retry logic. Check network connectivity and firewall settings."
             ),
             "parsing": (
-                "Add JSON validation before parsing. "
-                "Handle malformed responses gracefully."
+                "Add JSON validation before parsing. Handle malformed responses gracefully."
             ),
             "config": (
-                "Verify .env file exists and contains required keys. "
-                "Check settings validation."
+                "Verify .env file exists and contains required keys. Check settings validation."
             ),
             "browser": (
                 "Check Playwright installation. "

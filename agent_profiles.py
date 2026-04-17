@@ -102,8 +102,7 @@ class AgentProfileManager:
             name="Big Homie Default",
             role="General Purpose AI Assistant",
             system_prompt=(
-                "You are Big Homie, a helpful AI assistant"
-                " with access to tools and capabilities."
+                "You are Big Homie, a helpful AI assistant with access to tools and capabilities."
             ),
             model=settings.default_model,
             temperature=settings.temperature,

@@ -292,10 +292,7 @@ class AuditTrail:
 
         # Create hash for integrity
         details_json = json.dumps(details, sort_keys=True)
-        entry_data = (
-            f"{timestamp}:{event_type}:{actor}"
-            f":{action}:{target}:{details_json}"
-        )
+        entry_data = f"{timestamp}:{event_type}:{actor}:{action}:{target}:{details_json}"
         entry_hash = self._compute_hash(entry_data, self._last_hash)
 
         entry = AuditEntry(
