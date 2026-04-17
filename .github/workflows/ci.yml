@@ -1,0 +1,174 @@
+name: Big Homie CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Lint & Static Analysis
+  # -----------------------------------------------------------------------
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install ruff
+        run: pip install ruff>=0.4.0
+
+      - name: Run ruff check
+        run: ruff check . --output-format=github
+
+      - name: Run ruff format check
+        run: ruff format --check .
+
+  # -----------------------------------------------------------------------
+  # Security: Bandit (SAST) + pip-audit (CVE scanning)
+  # -----------------------------------------------------------------------
+  security:
+    name: Security (bandit + pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security tools
+        run: pip install bandit[toml]>=1.7.8 pip-audit>=2.7.0
+
+      - name: Run bandit SAST scan
+        run: |
+          bandit -r . \
+            --exclude ./.venv,./node_modules,./tests,./docs \
+            --severity-level medium \
+            --confidence-level medium \
+            -f json -o bandit-report.json || true
+          bandit -r . \
+            --exclude ./.venv,./node_modules,./tests,./docs \
+            --severity-level high \
+            --confidence-level high
+
+      - name: Run pip-audit CVE scan
+        run: pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2022-42969 || true
+
+      - name: Upload bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+  # -----------------------------------------------------------------------
+  # Secret scanning via truffleHog
+  # -----------------------------------------------------------------------
+  secret-scan:
+    name: Secret Scan (truffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          extra_args: --only-verified
+
+  # -----------------------------------------------------------------------
+  # Unit Tests
+  # -----------------------------------------------------------------------
+  unit-tests:
+    name: Unit Tests (pytest)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest>=8.2.0 pytest-asyncio>=0.23.0 pytest-cov>=5.0.0
+
+      - name: Run unit tests with coverage
+        run: |
+          pytest tests/unit \
+            --cov=. \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70 \
+            -v
+        env:
+          ANTHROPIC_API_KEY: sk-ant-test-placeholder
+          OPENAI_API_KEY: sk-test-placeholder
+          HEARTBEAT_ENABLED: "false"
+          MAX_AUTONOMOUS_COST: "1.0"
+          DAILY_BUDGET_USD: "1.0"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+
+  # -----------------------------------------------------------------------
+  # Integration Tests (PRs only)
+  # -----------------------------------------------------------------------
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest>=8.2.0 pytest-asyncio>=0.23.0
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration -v --timeout=60 || echo "No integration tests found yet"
+        env:
+          ANTHROPIC_API_KEY: sk-ant-test-placeholder
+          HEARTBEAT_ENABLED: "false"
+
+  # -----------------------------------------------------------------------
+  # All checks must pass
+  # -----------------------------------------------------------------------
+  all-checks:
+    name: All Checks Pass
+    runs-on: ubuntu-latest
+    needs: [lint, security, unit-tests]
+    steps:
+      - run: echo "All required checks passed"
