@@ -130,13 +130,19 @@ class TestRoutingDecision:
 
     def test_prefer_cost_selects_cheapest(self, router):
         decision = router.route_task("Summarize this paragraph", prefer_cost=True)
-        # When preferring cost, the cheapest model should be selected
-        assert decision.estimated_cost >= 0.0
+        # The chosen model must be the cheapest option for the detected role
+        role_models = router.role_models[decision.role]
+        min_cost_entry = min(role_models, key=lambda x: x[2])
+        assert decision.provider == min_cost_entry[0]
+        assert decision.model == min_cost_entry[1]
 
     def test_prefer_quality_selects_best(self, router):
         decision = router.route_task("Design a complex distributed system", prefer_quality=True)
-        # Quality route should pick the first (most capable) model for the role
-        assert decision.model is not None
+        # The chosen model must be the first (highest-quality) option for the detected role
+        role_models = router.role_models[decision.role]
+        best_entry = role_models[0]
+        assert decision.provider == best_entry[0]
+        assert decision.model == best_entry[1]
 
     def test_estimated_cost_is_non_negative(self, router):
         decision = router.route_task("Do something")
