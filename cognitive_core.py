@@ -57,6 +57,10 @@ class ThoughtBranch:
     is_pruned: bool = False
 
 
+REFLECTION_CONFIDENCE_THRESHOLD = 0.6
+MAX_REFLECTION_ROUNDS = 2
+
+
 class CognitiveCore:
     """
     The reasoning engine at the heart of Big Homie.
@@ -66,6 +70,10 @@ class CognitiveCore:
     2. ReAct Loop - Think → Act → Observe iterative cycle
     3. Tree-of-Thought (ToT) - Multi-branch exploration with backtracking
     4. Self-Consistency (CoT-SC) - Multi-path consensus voting
+
+    Enhanced with:
+    - Self-reflection / skeptic loop for answer validation
+    - Karpathy-method integration (temperature calibration, PRM, debate)
     """
 
     MAX_OBSERVATION_LENGTH = 2000
@@ -76,6 +84,7 @@ class CognitiveCore:
         self._llm = None
         self._router = None
         self._thoughts_logger = None
+        self._karpathy = None
 
     def _get_llm(self):
         """Lazy-load LLM gateway to avoid circular imports"""
@@ -99,6 +108,13 @@ class CognitiveCore:
                 from thoughts_logger import thoughts_logger
                 self._thoughts_logger = thoughts_logger
         return self._thoughts_logger
+
+    def _get_karpathy_engine(self):
+        """Lazy-load KarpathyEngine to avoid circular imports"""
+        if self._karpathy is None:
+            from karpathy_methods import KarpathyEngine
+            self._karpathy = KarpathyEngine()
+        return self._karpathy
 
     # ===== Chain-of-Thought Reasoning =====
 
@@ -702,6 +718,117 @@ Respond in JSON:
         # Fallback: return most common answer or first one
         return answers[0], 0.6
 
+    # ===== Self-Reflection / Skeptic Loop =====
+
+    async def self_reflect(self, trace: ReasoningTrace) -> ReasoningTrace:
+        """
+        Challenge the trace's conclusions with an internal skeptic sub-process.
+
+        Takes the final answer and asks "What could be wrong?". If the skeptic
+        identifies significant issues (confidence < REFLECTION_CONFIDENCE_THRESHOLD),
+        re-runs reasoning with corrections appended as context.
+
+        Args:
+            trace: The ReasoningTrace to reflect on
+
+        Returns:
+            The original trace (if it holds up) or an improved trace with
+            reflection metadata attached.
+        """
+        if not trace.final_answer:
+            return trace
+
+        for reflection_round in range(MAX_REFLECTION_ROUNDS):
+            skeptic_prompt = f"""You are a rigorous skeptic reviewing an AI agent's reasoning.
+
+Question / Task: {trace.query}
+
+Proposed answer:
+{trace.final_answer}
+
+Reasoning steps taken:
+{json.dumps([{"step": s.step_number, "thought": s.thought[:300]} for s in trace.steps], indent=2)}
+
+Your job:
+1. Identify logical errors, unsupported assumptions, or factual mistakes.
+2. Note anything important that was overlooked.
+3. Rate your confidence that the original answer is correct (0.0 – 1.0).
+
+Respond in JSON:
+{{
+    "issues": ["issue 1", "issue 2"],
+    "overlooked": ["thing 1"],
+    "confidence_in_original": 0.75,
+    "suggested_correction": "If confidence is low, suggest a better answer here.",
+    "reasoning": "Explain your assessment."
+}}"""
+
+            decision, result = await self._get_router().execute_with_routing(
+                task=skeptic_prompt,
+                context={"requires_reasoning": True}
+            )
+
+            content = result.get("content", "")
+            parsed = self._parse_json_response(content)
+
+            reflection_meta = {
+                "reflection_round": reflection_round + 1,
+                "raw_skeptic_response": content[:500],
+            }
+
+            if parsed:
+                skeptic_confidence = float(parsed.get("confidence_in_original", 0.8))
+                issues = parsed.get("issues", [])
+                suggested_correction = parsed.get("suggested_correction", "")
+
+                reflection_meta.update({
+                    "skeptic_confidence": skeptic_confidence,
+                    "issues_found": issues,
+                    "suggested_correction": suggested_correction[:300],
+                })
+
+                if skeptic_confidence >= REFLECTION_CONFIDENCE_THRESHOLD:
+                    # Answer holds up — accept it
+                    trace.metadata.setdefault("reflections", []).append(reflection_meta)
+                    logger.info(
+                        f"Self-reflect round {reflection_round + 1}: "
+                        f"answer accepted (skeptic confidence={skeptic_confidence:.2f})"
+                    )
+                    break
+
+                # Skeptic found significant issues — re-run reasoning with corrections
+                logger.warning(
+                    f"Self-reflect round {reflection_round + 1}: skeptic confidence "
+                    f"{skeptic_confidence:.2f} < {REFLECTION_CONFIDENCE_THRESHOLD}, re-reasoning"
+                )
+
+                correction_context = {
+                    "previous_answer": trace.final_answer,
+                    "issues_found": issues,
+                    "suggested_correction": suggested_correction,
+                    "instruction": "Address the issues identified and provide a corrected answer.",
+                }
+
+                corrected_trace = await self.chain_of_thought(
+                    query=trace.query,
+                    context=correction_context,
+                )
+
+                # Carry forward reflection history
+                corrected_trace.metadata["reflections"] = trace.metadata.get("reflections", [])
+                corrected_trace.metadata["reflections"].append(reflection_meta)
+                corrected_trace.metadata["original_trace_id"] = trace.trace_id
+                trace = corrected_trace
+            else:
+                # Could not parse skeptic response — keep the original answer
+                reflection_meta["parse_error"] = True
+                trace.metadata.setdefault("reflections", []).append(reflection_meta)
+                logger.warning("Self-reflect: could not parse skeptic response, keeping original")
+                break
+
+        trace.metadata["reflection_completed"] = True
+        return trace
+
     # ===== Auto-Select Strategy =====
 
     async def reason(
@@ -709,6 +836,9 @@ Respond in JSON:
         query: str,
         context: Optional[Dict] = None,
         strategy: Optional[ReasoningStrategy] = None,
+        enable_reflection: bool = True,
+        use_karpathy: bool = False,
+        high_stakes: bool = False,
         **kwargs
     ) -> ReasoningTrace:
         """
@@ -718,6 +848,9 @@ Respond in JSON:
             query: The problem/task
             context: Additional context
             strategy: Force a specific strategy (auto-selects if None)
+            enable_reflection: Run self-reflection skeptic loop after reasoning
+            use_karpathy: Use KarpathyEngine enhancements (temperature calibration, PRM)
+            high_stakes: Use self-play debate for critical decisions
             **kwargs: Additional arguments for the specific strategy
 
         Returns:
@@ -728,16 +861,68 @@ Respond in JSON:
 
         logger.info(f"Using reasoning strategy: {strategy.value}")
 
+        karpathy_meta: Dict[str, Any] = {}
+
+        # --- Karpathy pre-reasoning: temperature calibration ---
+        if use_karpathy:
+            engine = self._get_karpathy_engine()
+            calibrated_temp = engine.temperature.get_temperature(query)
+            karpathy_meta["calibrated_temperature"] = calibrated_temp
+            logger.info(f"Karpathy temperature calibration: {calibrated_temp}")
+
+        # --- High-stakes: run self-play debate instead of normal strategy ---
+        if high_stakes and use_karpathy:
+            engine = self._get_karpathy_engine()
+            debate_result = await engine.debate(topic=query, rounds=2, context=context)
+            karpathy_meta["debate_verdict"] = debate_result.final_verdict[:300]
+            karpathy_meta["debate_confidence"] = debate_result.confidence
+            karpathy_meta["debate_cost"] = debate_result.cost
+            logger.info(
+                f"Karpathy debate completed: confidence={debate_result.confidence:.2f}"
+            )
+            # Enrich context with debate findings for the main strategy
+            context = context or {}
+            context["debate_verdict"] = debate_result.final_verdict
+
+        # --- Core reasoning ---
         if strategy == ReasoningStrategy.CHAIN_OF_THOUGHT:
-            return await self.chain_of_thought(query, context, **kwargs)
+            trace = await self.chain_of_thought(query, context, **kwargs)
         elif strategy == ReasoningStrategy.REACT:
-            return await self.react_loop(query, context=context, **kwargs)
+            trace = await self.react_loop(query, context=context, **kwargs)
         elif strategy == ReasoningStrategy.TREE_OF_THOUGHT:
-            return await self.tree_of_thought(query, context, **kwargs)
+            trace = await self.tree_of_thought(query, context, **kwargs)
         elif strategy == ReasoningStrategy.SELF_CONSISTENCY:
-            return await self.self_consistency(query, context, **kwargs)
+            trace = await self.self_consistency(query, context, **kwargs)
         else:
-            return await self.chain_of_thought(query, context, **kwargs)
+            trace = await self.chain_of_thought(query, context, **kwargs)
+
+        # --- Karpathy post-reasoning: Process Reward Model verification ---
+        if use_karpathy and trace.steps:
+            try:
+                engine = self._get_karpathy_engine()
+                step_texts = [s.thought for s in trace.steps if s.thought]
+                if step_texts:
+                    prm_result = await engine.verify_reasoning(query, step_texts)
+                    karpathy_meta["prm_overall_score"] = prm_result.overall_score
+                    karpathy_meta["prm_passed"] = prm_result.passed_threshold
+                    if prm_result.weakest_step:
+                        karpathy_meta["prm_weakest_step"] = prm_result.weakest_step.step_number
+                    logger.info(
+                        f"Karpathy PRM score: {prm_result.overall_score:.2f}, "
+                        f"passed={prm_result.passed_threshold}"
+                    )
+            except Exception as e:
+                logger.warning(f"Karpathy PRM verification failed: {e}")
+                karpathy_meta["prm_error"] = str(e)
+
+        if karpathy_meta:
+            trace.metadata["karpathy"] = karpathy_meta
+
+        # --- Self-reflection skeptic loop ---
+        if enable_reflection:
+            trace = await self.self_reflect(trace)
+
+        return trace
 
     def _select_strategy(self, query: str, context: Optional[Dict] = None) -> ReasoningStrategy:
         """Auto-select the best reasoning strategy based on query characteristics"""
