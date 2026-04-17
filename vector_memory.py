@@ -485,7 +485,7 @@ class VectorMemory:
                 meta["importance_score"] = round(new_importance, 4)
 
                 if new_importance < archive_threshold:
-                    meta["flagged_for_archival"] = "true"
+                    meta["flagged_for_archival"] = True
                     flagged.append(entry_id)
 
                 ids_to_update.append(entry_id)
@@ -547,7 +547,7 @@ class VectorMemory:
                 "last_accessed": datetime.now().isoformat(),
                 "chunk_index": i,
                 "total_chunks": len(chunks),
-                "is_chunked": "true",
+                "is_chunked": True,
             })
 
             collection.add(
