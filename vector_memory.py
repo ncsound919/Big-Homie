@@ -398,7 +398,11 @@ class VectorMemory:
                 "distance": chroma_results["distances"][0][i] if "distances" in chroma_results else None,
             }
             # Compute importance-boosted score (lower distance = better match)
-            importance = float(entry["metadata"].get("importance_score", 0.5))
+            try:
+                importance = float(entry["metadata"].get("importance_score", 0.5))
+            except (ValueError, TypeError):
+                importance = 0.5
+            importance = max(0.0, min(1.0, importance))
             if entry["distance"] is not None:
                 entry["boosted_score"] = entry["distance"] * (1.0 - 0.5 * importance)
             else:
