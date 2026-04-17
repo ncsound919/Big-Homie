@@ -57,6 +57,14 @@ class ReinforcementFeedback:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self.session_signals: List[FeedbackSignal] = []
+        self._correction_ledger = None
+
+    def _get_correction_ledger(self):
+        """Lazy-load the correction ledger to avoid circular imports"""
+        if self._correction_ledger is None:
+            from correction_ledger import correction_ledger
+            self._correction_ledger = correction_ledger
+        return self._correction_ledger
 
     def _conn(self):
         return sqlite3.connect(str(self.db_path))
@@ -154,6 +162,19 @@ class ReinforcementFeedback:
 
         # Update patterns
         self._update_patterns(signal)
+
+        # Auto-log negative feedback to correction ledger
+        if signal.reward < 0:
+            try:
+                ledger = self._get_correction_ledger()
+                ledger.add_correction(
+                    mistake=signal.decision_context,
+                    correction=signal.reasoning or "Negative outcome detected",
+                    category=self._derive_category(signal.action_taken),
+                    context=f"Action: {signal.action_taken} | Reward: {signal.reward:+.2f}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log correction for negative feedback: {e}")
 
         logger.debug(
             f"RL feedback recorded: {action_taken} → {outcome} (reward: {reward:+.2f})"
@@ -311,6 +332,9 @@ class ReinforcementFeedback:
         """
         Get a recommendation based on learned patterns.
 
+        Also checks correction ledger for relevant past mistakes
+        and marks them as patterns to avoid.
+
         Args:
             context: The current decision context
 
@@ -352,7 +376,52 @@ class ReinforcementFeedback:
                         last_updated=row[6]
                     )
 
+        # Enrich recommendation with correction ledger "avoid" patterns
+        if best_pattern is not None:
+            avoid_patterns = self._get_avoid_patterns(context)
+            if avoid_patterns:
+                best_pattern.recommended_action += (
+                    " | AVOID: " + "; ".join(avoid_patterns)
+                )
+
         return best_pattern
+
+    def _get_avoid_patterns(self, context: str) -> List[str]:
+        """Check correction ledger for past mistakes relevant to this context"""
+        try:
+            ledger = self._get_correction_ledger()
+            keywords = self._extract_keywords(context)
+            avoid = []
+            for keyword in keywords[:5]:
+                matches = ledger.search_corrections(keyword)
+                for match in matches:
+                    entry = f"{match['mistake'][:80]} → {match['correction'][:80]}"
+                    if entry not in avoid:
+                        avoid.append(entry)
+                    if len(avoid) >= 5:
+                        return avoid
+            return avoid
+        except Exception as e:
+            logger.warning(f"Failed to fetch avoid patterns from correction ledger: {e}")
+            return []
+
+    def _derive_category(self, action_taken: str) -> str:
+        """Derive a correction category from the strategy/action name"""
+        action_lower = action_taken.lower()
+        category_map = {
+            "code": "coding",
+            "search": "research",
+            "write": "content",
+            "deploy": "deployment",
+            "api": "integration",
+            "test": "testing",
+            "debug": "debugging",
+            "plan": "planning",
+        }
+        for key, category in category_map.items():
+            if key in action_lower:
+                return category
+        return "general"
 
     def get_strategy_rankings(self) -> List[Dict[str, Any]]:
         """Get strategy rankings by average reward"""
@@ -410,6 +479,148 @@ class ReinforcementFeedback:
             "positive_rate": round(positive / max(total, 1) * 100, 1),
             "strategy_rankings": self.get_strategy_rankings()[:5]
         }
+
+    # ===== Closed-Loop Learning =====
+
+    def close_feedback_loop(
+        self,
+        task: str,
+        strategy: str,
+        success: bool,
+        cost: float = 0.0,
+        duration: float = 0.0,
+        user_satisfaction: Optional[float] = None
+    ) -> float:
+        """
+        End-to-end closed-loop learning from a task result.
+
+        Computes reward, records feedback, and if negative, logs a
+        correction to the ledger automatically.
+
+        Args:
+            task: Description of the task performed
+            strategy: Strategy/action used
+            success: Whether the task succeeded
+            cost: Monetary cost incurred
+            duration: Time taken in seconds
+            user_satisfaction: Optional 0.0-1.0 satisfaction score
+
+        Returns:
+            The computed reward value for transparency
+        """
+        # Compute reward signal
+        reward = 0.0
+        if success:
+            reward += 0.5
+            if cost < 0.10:
+                reward += 0.2
+            if duration < 10:
+                reward += 0.1
+        else:
+            reward -= 0.5
+            if cost > 1.0:
+                reward -= 0.2
+
+        if user_satisfaction is not None:
+            reward = reward * 0.5 + (user_satisfaction - 0.5) * 0.5
+
+        reward = max(-1.0, min(1.0, reward))
+
+        outcome = "positive" if success else "negative"
+        reasoning = f"Success: {success}, Cost: ${cost:.4f}, Duration: {duration:.1f}s"
+        if user_satisfaction is not None:
+            reasoning += f", Satisfaction: {user_satisfaction:.2f}"
+
+        # Record feedback (this auto-logs to correction ledger if negative)
+        self.record_feedback(
+            decision_context=task[:200],
+            action_taken=strategy,
+            outcome=outcome,
+            reward=reward,
+            reasoning=reasoning,
+            metadata={
+                "success": success,
+                "cost": cost,
+                "duration": duration,
+                "user_satisfaction": user_satisfaction,
+                "closed_loop": True
+            }
+        )
+
+        # Update strategy scores
+        self._update_strategy_score(strategy, reward)
+
+        logger.info(
+            f"Feedback loop closed: {strategy} → {outcome} "
+            f"(reward: {reward:+.2f})"
+        )
+
+        return reward
+
+    def score_task_outcome(
+        self,
+        task_type: str,
+        result: Dict[str, Any]
+    ) -> FeedbackSignal:
+        """
+        Score a task outcome and return a FeedbackSignal with computed reward.
+
+        Args:
+            task_type: Type of task (e.g. "code_generation", "research", "deployment")
+            result: Dict with keys like "success", "cost", "duration",
+                    "quality", "error", "user_satisfaction"
+
+        Returns:
+            FeedbackSignal with appropriate reward calculated from the result
+        """
+        success = result.get("success", False)
+        cost = result.get("cost", 0.0)
+        duration = result.get("duration", 0.0)
+        quality = result.get("quality", None)
+        error = result.get("error", None)
+        user_satisfaction = result.get("user_satisfaction", None)
+
+        # Base reward from success/failure
+        reward = 0.5 if success else -0.5
+
+        # Cost factor
+        if cost > 1.0:
+            reward -= 0.2
+        elif cost < 0.10:
+            reward += 0.1
+
+        # Duration factor
+        if duration < 10:
+            reward += 0.1
+        elif duration > 120:
+            reward -= 0.1
+
+        # Quality factor (0.0 - 1.0)
+        if quality is not None:
+            reward += (quality - 0.5) * 0.4
+
+        # User satisfaction override blends in
+        if user_satisfaction is not None:
+            reward = reward * 0.6 + (user_satisfaction - 0.5) * 0.4
+
+        reward = max(-1.0, min(1.0, reward))
+
+        outcome = "positive" if reward > 0 else ("negative" if reward < 0 else "neutral")
+        reasoning_parts = [f"Task type: {task_type}"]
+        if error:
+            reasoning_parts.append(f"Error: {error}")
+        reasoning_parts.append(f"Success: {success}, Cost: ${cost:.4f}, Duration: {duration:.1f}s")
+        if quality is not None:
+            reasoning_parts.append(f"Quality: {quality:.2f}")
+
+        return self.record_feedback(
+            decision_context=f"[{task_type}] {result.get('description', task_type)[:180]}",
+            action_taken=result.get("strategy", task_type),
+            outcome=outcome,
+            reward=reward,
+            reasoning=" | ".join(reasoning_parts),
+            metadata=result
+        )
 
 
 # Global RL feedback instance
