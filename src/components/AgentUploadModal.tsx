@@ -22,12 +22,12 @@ const EXTENSIONLESS_TEXT_FILES = new Set([
 
 function isTextFile(name: string): boolean {
   const lower = name.toLowerCase();
-  const dot = lower.lastIndexOf('.');
+  const base = lower.split('/').pop() ?? '';
+  const dot = base.lastIndexOf('.');
   if (dot === -1) {
-    const base = lower.split('/').pop() ?? '';
     return EXTENSIONLESS_TEXT_FILES.has(base);
   }
-  return TEXT_EXTENSIONS.has(lower.substring(dot));
+  return TEXT_EXTENSIONS.has(base.substring(dot));
 }
 
 export default function AgentUploadModal({ onUpload, onClose }: AgentUploadModalProps) {
