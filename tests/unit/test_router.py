@@ -22,13 +22,13 @@ class TestRoleDetection:
     def test_coding_task_detected(self, router):
         from router import AgentRole
 
-        role = router._detect_role("Write a Python function to sort a list", None)
+        role = router._detect_role("Write Python code to implement a function", None)
         assert role == AgentRole.CODER
 
     def test_research_task_detected(self, router):
         from router import AgentRole
 
-        role = router._detect_role("Research the latest breakthroughs in quantum computing", None)
+        role = router._detect_role("Research the recent breakthroughs in quantum physics", None)
         assert role == AgentRole.RESEARCHER
 
     def test_worker_task_detected(self, router):

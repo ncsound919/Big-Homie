@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, X, FileJson, FileCode, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, X, FileJson, FileCode, FolderOpen, AlertCircle, CheckCircle } from 'lucide-react';
 
 import { type CustomAgent } from '../types/agent';
 
@@ -8,15 +8,36 @@ interface AgentUploadModalProps {
   onClose: () => void;
 }
 
+const TEXT_EXTENSIONS = new Set([
+  '.json', '.js', '.ts', '.jsx', '.tsx', '.py', '.md', '.txt', '.yaml', '.yml',
+  '.toml', '.cfg', '.ini', '.env', '.sh', '.bat', '.css', '.html', '.xml',
+  '.csv', '.sql', '.graphql', '.proto', '.rs', '.go', '.java', '.kt', '.rb',
+  '.php', '.c', '.cpp', '.h', '.hpp', '.cs', '.swift', '.r', '.lua',
+  '.dockerfile', '.gitignore', '.editorconfig', '.prettierrc', '.eslintrc',
+]);
+
+function isTextFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  const dot = lower.lastIndexOf('.');
+  if (dot === -1) {
+    // Extensionless files often found in projects (Makefile, Dockerfile, etc.)
+    const base = lower.split('/').pop() ?? '';
+    return ['makefile', 'dockerfile', 'procfile', 'gemfile', 'rakefile', 'license', 'readme'].includes(base);
+  }
+  return TEXT_EXTENSIONS.has(lower.substring(dot));
+}
+
 export default function AgentUploadModal({ onUpload, onClose }: AgentUploadModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [type, setType] = useState<'config' | 'code'>('config');
+  const [type, setType] = useState<'config' | 'code' | 'folder'>('config');
   const [securityTier, setSecurityTier] = useState<'full' | 'reduced' | 'custom'>('reduced');
   const [file, setFile] = useState<File | null>(null);
+  const [folderFiles, setFolderFiles] = useState<File[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -44,19 +65,67 @@ export default function AgentUploadModal({ onUpload, onClose }: AgentUploadModal
     setFile(selectedFile);
   };
 
-  const handleTypeChange = (newType: 'config' | 'code') => {
+  const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const selected = Array.from(files).filter((f) => isTextFile(f.webkitRelativePath || f.name));
+
+    if (selected.length === 0) {
+      setError('No scannable text files found in the selected folder');
+      setFolderFiles([]);
+      return;
+    }
+
+    setError('');
+    setSuccess(`${selected.length} file${selected.length === 1 ? '' : 's'} detected`);
+    setFolderFiles(selected);
+  };
+
+  const handleTypeChange = (newType: 'config' | 'code' | 'folder') => {
     setType(newType);
     setFile(null);
+    setFolderFiles([]);
     setError('');
     setSuccess('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (folderInputRef.current) {
+      folderInputRef.current.value = '';
     }
   };
 
   const validateAndUpload = async () => {
     if (!name.trim()) {
       setError('Please enter a name for the agent');
+      return;
+    }
+
+    if (type === 'folder') {
+      if (folderFiles.length === 0) {
+        setError('Please select a folder to upload');
+        return;
+      }
+
+      const filesMap: Record<string, string> = {};
+      for (const f of folderFiles) {
+        const relativePath = f.webkitRelativePath || f.name;
+        filesMap[relativePath] = await f.text();
+      }
+
+      const agent: CustomAgent = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        description: description.trim() || `Folder with ${folderFiles.length} files`,
+        type: 'folder',
+        files: filesMap,
+        securityTier,
+        enabled: true,
+        addedAt: new Date().toISOString(),
+      };
+
+      onUpload(agent);
       return;
     }
 
@@ -156,6 +225,18 @@ export default function AgentUploadModal({ onUpload, onClose }: AgentUploadModal
                 <FileCode className="w-3.5 h-3.5" />
                 Code (.js/.ts)
               </button>
+              <button
+                type="button"
+                onClick={() => handleTypeChange('folder')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                  type === 'folder'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border/30 text-muted-foreground hover:bg-background/20'
+                }`}
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                Folder
+              </button>
             </div>
           </div>
 
@@ -173,18 +254,42 @@ export default function AgentUploadModal({ onUpload, onClose }: AgentUploadModal
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1.5">File</label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={type === 'config' ? '.json' : '.js,.ts,.jsx,.tsx'}
-              onChange={handleFileChange}
-              className="w-full px-3 py-2 rounded-lg border border-border/30 bg-background/20 text-sm text-foreground file:mr-2 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-            />
-            {file && (
-              <p className="mt-1.5 text-[10px] text-muted-foreground">
-                Selected: {file.name}
-              </p>
+            <label className="block text-xs font-medium text-foreground mb-1.5">
+              {type === 'folder' ? 'Folder' : 'File'}
+            </label>
+            {type === 'folder' ? (
+              <>
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  /* @ts-expect-error webkitdirectory is a non-standard but widely supported attribute */
+                  webkitdirectory=""
+                  directory=""
+                  multiple
+                  onChange={handleFolderChange}
+                  className="w-full px-3 py-2 rounded-lg border border-border/30 bg-background/20 text-sm text-foreground file:mr-2 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                />
+                {folderFiles.length > 0 && (
+                  <p className="mt-1.5 text-[10px] text-muted-foreground">
+                    {folderFiles.length} text file{folderFiles.length === 1 ? '' : 's'} ready for scan
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={type === 'config' ? '.json' : '.js,.ts,.jsx,.tsx'}
+                  onChange={handleFileChange}
+                  className="w-full px-3 py-2 rounded-lg border border-border/30 bg-background/20 text-sm text-foreground file:mr-2 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                />
+                {file && (
+                  <p className="mt-1.5 text-[10px] text-muted-foreground">
+                    Selected: {file.name}
+                  </p>
+                )}
+              </>
             )}
           </div>
 

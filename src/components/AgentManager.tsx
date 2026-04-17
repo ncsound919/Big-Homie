@@ -1,6 +1,6 @@
 import { type CustomAgent } from '../types/agent';
 import { useState, useEffect } from 'react';
-import { Upload, Trash2, Bot, FileJson, FileCode } from 'lucide-react';
+import { Upload, Trash2, Bot, FileJson, FileCode, FolderOpen } from 'lucide-react';
 import AgentUploadModal from './AgentUploadModal';
 import { getAgents, deleteAgent, toggleAgent, saveAgent } from '@/lib/agent-persistence';
 
@@ -70,6 +70,8 @@ export default function AgentManager() {
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary/10">
                 {agent.type === 'config' ? (
                   <FileJson className="w-4 h-4 text-primary" />
+                ) : agent.type === 'folder' ? (
+                  <FolderOpen className="w-4 h-4 text-primary" />
                 ) : (
                   <FileCode className="w-4 h-4 text-primary" />
                 )}
