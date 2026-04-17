@@ -340,7 +340,7 @@ async def quick_navigate(url: str, screenshot: bool = False) -> BrowserResult:
     return result
 
 
-async def quick_scrape(url: str, selectors: dict[str, str]) -> dict[str, str]:
+async def quick_scrape(url: str, selectors: dict[str, str]) -> dict[str, Optional[str]]:
     """
     Quick scraping helper
 
