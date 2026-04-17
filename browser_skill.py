@@ -209,7 +209,8 @@ class BrowserSkill:
                     if await elem.get_attribute(attribute)
                 ]
             else:
-                return [await elem.text_content() for elem in elements if await elem.text_content()]
+                texts = [await elem.text_content() for elem in elements]
+                return [text for text in texts if text]
 
         except Exception as e:
             logger.error(f"Extract multiple failed: {selector} - {e}")
