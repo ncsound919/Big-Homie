@@ -104,7 +104,9 @@ class MemorySystem:
         """Add message to session memory"""
         with self._conn() as db:
             db.execute(
-                "INSERT INTO sessions (session_id, timestamp, role, content, metadata) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO sessions (session_id, timestamp,"
+                " role, content, metadata)"
+                " VALUES (?, ?, ?, ?, ?)",
                 (
                     session_id,
                     datetime.utcnow().isoformat(),
@@ -119,7 +121,9 @@ class MemorySystem:
         """Get recent messages from session"""
         with self._conn() as db:
             rows = db.execute(
-                "SELECT role, content, metadata, timestamp FROM sessions WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+                "SELECT role, content, metadata, timestamp"
+                " FROM sessions WHERE session_id = ?"
+                " ORDER BY id DESC LIMIT ?",
                 (session_id, limit),
             ).fetchall()
 
@@ -168,12 +172,19 @@ class MemorySystem:
         with self._conn() as db:
             if category:
                 rows = db.execute(
-                    "SELECT key, value, category, importance, access_count FROM long_term_memory WHERE category = ? ORDER BY importance DESC, access_count DESC LIMIT ?",
+                    "SELECT key, value, category, importance,"
+                    " access_count FROM long_term_memory"
+                    " WHERE category = ? ORDER BY"
+                    " importance DESC,"
+                    " access_count DESC LIMIT ?",
                     (category, limit),
                 ).fetchall()
             else:
                 rows = db.execute(
-                    "SELECT key, value, category, importance, access_count FROM long_term_memory ORDER BY importance DESC, access_count DESC LIMIT ?",
+                    "SELECT key, value, category, importance,"
+                    " access_count FROM long_term_memory"
+                    " ORDER BY importance DESC,"
+                    " access_count DESC LIMIT ?",
                     (limit,),
                 ).fetchall()
 
@@ -232,7 +243,9 @@ class MemorySystem:
         """List all skills"""
         with self._conn() as db:
             rows = db.execute(
-                "SELECT name, description, success_count, last_used FROM skills ORDER BY success_count DESC"
+                "SELECT name, description, success_count,"
+                " last_used FROM skills"
+                " ORDER BY success_count DESC"
             ).fetchall()
 
         return [
@@ -245,7 +258,9 @@ class MemorySystem:
         with self._conn() as db:
             if success:
                 db.execute(
-                    "UPDATE skills SET success_count = success_count + 1, last_used = ? WHERE name = ?",
+                    "UPDATE skills SET"
+                    " success_count = success_count + 1,"
+                    " last_used = ? WHERE name = ?",
                     (datetime.utcnow().isoformat(), name),
                 )
             else:
@@ -268,7 +283,10 @@ class MemorySystem:
         """Log task execution"""
         with self._conn() as db:
             db.execute(
-                "INSERT INTO task_history (task, domain, status, result, cost, duration, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO task_history (task, domain,"
+                " status, result, cost, duration,"
+                " timestamp)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     task,
                     domain,
@@ -285,7 +303,9 @@ class MemorySystem:
         """Get recent task history"""
         with self._conn() as db:
             rows = db.execute(
-                "SELECT task, domain, status, result, cost, duration, timestamp FROM task_history ORDER BY id DESC LIMIT ?",
+                "SELECT task, domain, status, result, cost,"
+                " duration, timestamp FROM task_history"
+                " ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
 

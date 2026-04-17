@@ -195,7 +195,10 @@ class MCPIntegration:
             ToolDefinition(
                 name="shell_session_create",
                 type=ToolType.SHELL,
-                description="Create a persistent shell session that maintains state across commands",
+                description=(
+                    "Create a persistent shell session that"
+                    " maintains state across commands"
+                ),
                 parameters={
                     "cwd": {"type": "string", "description": "Working directory", "optional": True}
                 },
@@ -256,11 +259,17 @@ class MCPIntegration:
             ToolDefinition(
                 name="vision_analyze_image",
                 type=ToolType.CUSTOM,
-                description="Analyze an image using vision AI (image must be in the screenshots directory)",
+                description=(
+                    "Analyze an image using vision AI"
+                    " (image must be in the screenshots directory)"
+                ),
                 parameters={
                     "image_path": {
                         "type": "string",
-                        "description": "Path to image file (must be within the screenshots data directory)",
+                        "description": (
+                            "Path to image file (must be within"
+                            " the screenshots data directory)"
+                        ),
                     },
                     "prompt": {"type": "string", "description": "Analysis question or prompt"},
                     "quality": {
@@ -278,11 +287,18 @@ class MCPIntegration:
             ToolDefinition(
                 name="vision_extract_text",
                 type=ToolType.CUSTOM,
-                description="Extract text from an image using OCR (image must be in the screenshots directory)",
+                description=(
+                    "Extract text from an image using OCR"
+                    " (image must be in the screenshots"
+                    " directory)"
+                ),
                 parameters={
                     "image_path": {
                         "type": "string",
-                        "description": "Path to image file (must be within the screenshots data directory)",
+                        "description": (
+                            "Path to image file (must be within"
+                            " the screenshots data directory)"
+                        ),
                     }
                 },
                 handler=self._vision_extract_text,
@@ -294,11 +310,19 @@ class MCPIntegration:
             ToolDefinition(
                 name="vision_audit_ui",
                 type=ToolType.CUSTOM,
-                description="Perform UI/UX audit on a design or screenshot (image must be in the screenshots directory)",
+                description=(
+                    "Perform UI/UX audit on a design or"
+                    " screenshot (image must be in the"
+                    " screenshots directory)"
+                ),
                 parameters={
                     "image_path": {
                         "type": "string",
-                        "description": "Path to UI screenshot or mockup (must be within the screenshots data directory)",
+                        "description": (
+                            "Path to UI screenshot or mockup"
+                            " (must be within the screenshots"
+                            " data directory)"
+                        ),
                     },
                     "focus_areas": {
                         "type": "array",
@@ -401,7 +425,10 @@ class MCPIntegration:
                     },
                     "durationSeconds": {
                         "type": "number",
-                        "description": "Desired duration in seconds (may be ignored by some providers)",
+                        "description": (
+                            "Desired duration in seconds"
+                            " (may be ignored by some providers)"
+                        ),
                         "optional": True,
                     },
                     "genre": {
@@ -430,7 +457,11 @@ class MCPIntegration:
             ToolDefinition(
                 name="web_search",
                 type=ToolType.API,
-                description="Search the web using natural language queries to find current information, news, articles, and websites",
+                description=(
+                    "Search the web using natural language"
+                    " queries to find current information,"
+                    " news, articles, and websites"
+                ),
                 parameters={
                     "query": {"type": "string", "description": "Natural language search query"},
                     "num_results": {
@@ -1345,7 +1376,11 @@ class MCPIntegration:
         return {
             "success": True,
             "session_id": session_id,
-            "message": "Persistent shell session created. Use this session_id for subsequent commands.",
+            "message": (
+                "Persistent shell session created."
+                " Use this session_id for subsequent"
+                " commands."
+            ),
         }
 
     async def _shell_session_execute(self, args: dict, context: dict) -> dict:

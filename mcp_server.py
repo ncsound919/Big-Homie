@@ -318,7 +318,15 @@ class MCPServer:
                         "role": "user",
                         "content": {
                             "type": "text",
-                            "text": f"Please analyze this {arguments.get('language', '')} code for potential issues, improvements, and best practices:\n\n```\n{arguments.get('code', '')}\n```",
+                            "text": (
+                                "Please analyze this "
+                                f"{arguments.get('language', '')}"
+                                " code for potential issues,"
+                                " improvements, and best"
+                                " practices:\n\n```\n"
+                                f"{arguments.get('code', '')}"
+                                "\n```"
+                            ),
                         },
                     }
                 ],
@@ -330,7 +338,11 @@ class MCPServer:
                         "role": "user",
                         "content": {
                             "type": "text",
-                            "text": f"Please explain the following technical concept in clear, accessible terms:\n\n{arguments.get('concept', '')}",
+                            "text": (
+                                "Please explain the following technical"
+                                " concept in clear, accessible"
+                                f" terms:\n\n{arguments.get('concept', '')}"
+                            ),
                         },
                     }
                 ],
@@ -343,13 +355,16 @@ class MCPServer:
                         "content": {
                             "type": "text",
                             "text": (
-                                f"I'm getting the following error:\n\n{arguments.get('error', '')}\n\n"
+                                "I'm getting the following"
+                                " error:\n\n"
+                                f"{arguments.get('error', '')}\n\n"
                                 + (
                                     f"Context: {arguments.get('context', '')}\n\n"
                                     if arguments.get("context")
                                     else ""
                                 )
-                                + "Can you help me understand what's causing this and how to fix it?"
+                                + "Can you help me understand what's"
+                                " causing this and how to fix it?"
                             ),
                         },
                     }
