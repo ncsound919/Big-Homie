@@ -690,7 +690,7 @@ class ReinforcementFeedback:
             outcome=outcome,
             reward=reward,
             reasoning=" | ".join(reasoning_parts),
-            metadata=result,
+            metadata=json.loads(json.dumps(result, default=str)),
         )
 
 
